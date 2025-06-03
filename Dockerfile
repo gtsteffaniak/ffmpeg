@@ -71,9 +71,9 @@ RUN apk add glib-dev glib-static
 
 # Skip cairo, librsvg, pango if DECODE_ONLY is true (for smaller text rendering footprint if desired)
 RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
-  echo "Skipping cairo build"; \
-else \
-  apk add cairo-dev cairo-static; \
+    echo "Skipping cairo build"; \
+  else \
+    apk add cairo-dev cairo-static; \
   fi
 
 RUN apk add harfbuzz-dev harfbuzz-static
@@ -81,13 +81,7 @@ RUN apk add harfbuzz-dev harfbuzz-static
 RUN if [ "$(uname -m)" = "armv7l" ]; then \
     echo "Skipping Pango build"; \
   else \
-    cd pango-* && \
-    meson setup build \
-      -Dbuildtype=release \
-      -Ddefault_library=both \
-      -Dintrospection=disabled \
-      -Dgtk_doc=false && \
-    ninja -j$(nproc) -vC build install; \
+    apk add pango-dev pango; \
   fi
 
 RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
@@ -133,12 +127,6 @@ RUN cd vmaf-*/libvmaf && \
     ninja -j$(nproc) -vC build install; \
     sed -i 's/-lvmaf /-lvmaf -lstdc++ /' /usr/local/lib/pkgconfig/libvmaf.pc;
 
-RUN cd libass-* && \
-  ./configure \
-    --disable-shared \
-    --enable-static && \
-  make -j$(nproc) && make install
-
 # Remove libbluray (niche)
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping libbluray build"; \
@@ -161,48 +149,15 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
   fi
 
 # Keep aom (AV1 decoder)
-RUN cd aom && \
-    if [[ $(uname -m) == "armv7l" ]]; then GENERIC_CPU="-DAOM_TARGET_CPU=generic "; else GENERIC_CPU=""; fi && \
-    mkdir build_tmp && cd build_tmp && \
-    cmake \
-        -G "Unix Makefiles" \
-        -DCMAKE_VERBOSE_MAKEFILE=ON \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DBUILD_SHARED_LIBS=OFF \
-        -DENABLE_EXAMPLES=NO \
-        -DENABLE_DOCS=NO \
-        -DENABLE_TESTS=NO \
-        -DENABLE_TOOLS=NO \
-        -DCONFIG_TUNE_VMAF=1 \
-        -DENABLE_NASM=ON \
-        -DCMAKE_INSTALL_LIBDIR=lib \
-        $GENERIC_CPU \
-        .. && \
-    make -j$(nproc) install
+RUN apk add aom-dev aom-static
 
-RUN cd libogg-* && \
-  ./configure \
-    --disable-shared \
-    --enable-static && \
-  make -j$(nproc) install
+RUN apk add libogg-dev libogg-static
 
 # Remove libtheora (older, niche video codec)
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping libtheora build"; \
   else \
-    # 1.2.0 does not build
-    if [ "$(uname -m)" = "armv7l" ]; then \
-        rm -rf libtheora-* && \
-        curl -Lo libtheora.tar.gz "http://downloads.xiph.org/releases/theora/libtheora-1.1.0.tar.gz" && \
-        tar --no-same-owner --extract --file libtheora.tar.gz && rm -f libtheora.tar.gz && \
-        cd libtheora-* && \
-        ./configure --build=$(arch)-unknown-linux-gnu --disable-examples --disable-oggtest --disable-shared --enable-static && \
-        make -j$(nproc) install; \
-      else \
-        cd libtheora-* && \
-        ./configure --build=$(arch)-unknown-linux-gnu --disable-examples --disable-oggtest --disable-shared --enable-static && \
-        make -j$(nproc) install; \
-      fi; \
+    apk add libtheora-dev libtheora-static; \
   fi
 
 # Remove davs2 (very niche)
@@ -343,8 +298,7 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping rtmpdump build"; \
   else \
-    cd rtmpdump && \
-    make SYS=posix SHARED=off -j$(nproc) install; \
+    apk add rtmpdump-dev rtmpdump-static; \
   fi
 
 # Remove rubberband (audio processing)
@@ -514,9 +468,7 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping xvidcore build"; \
   else \
-    cd xvidcore-*/build/generic && \
-    CFLAGS="$CFLAGS -fstrength-reduce -ffast-math" ./configure && \
-    make -j$(nproc) && make install; \
+    apk add xvidcore-dev xvidcore-static; \
   fi
 
 # Remove xeve (HEVC encoder)
@@ -555,38 +507,7 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
 RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
   echo "Skipping libjxl build"; \
   else \
-    set -e && \
-    cd "$(echo libjxl-*)" && \
-    ./deps.sh && \
-    cmake -B build \
-      -G"Unix Makefiles" \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_VERBOSE_MAKEFILE=ON \
-      -DCMAKE_INSTALL_LIBDIR=lib \
-      -DCMAKE_INSTALL_PREFIX=/usr/local \
-      -DBUILD_SHARED_LIBS=OFF \
-      -DBUILD_TESTING=OFF \
-      -DJPEGXL_ENABLE_PLUGINS=OFF \
-      -DJPEGXL_ENABLE_BENCHMARK=OFF \
-      -DJPEGXL_ENABLE_COVERAGE=OFF \
-      -DJPEGXL_ENABLE_EXAMPLES=OFF \
-      -DJPEGXL_ENABLE_FUZZERS=OFF \
-      -DJPEGXL_ENABLE_SJPEG=OFF \
-      -DJPEGXL_ENABLE_SKCMS=OFF \
-      -DJPEGXL_ENABLE_VIEWERS=OFF \
-      -DJPEGXL_FORCE_SYSTEM_GTEST=ON \
-      -DJPEGXL_FORCE_SYSTEM_BROTLI=ON \
-      -DJPEGXL_FORCE_SYSTEM_HWY=OFF && \
-    cmake --build build -j$(nproc) && \
-    cmake --install build; \
-  fi
-
-RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
-    echo "Skipping libjxl build"; \
-  else \
-    sed -i 's/-ljxl/-ljxl -lstdc++ /' /usr/local/lib/pkgconfig/libjxl.pc && \
-    sed -i 's/-ljxl_cms/-ljxl_cms -lstdc++ /' /usr/local/lib/pkgconfig/libjxl_cms.pc && \
-    sed -i 's/-ljxl_threads/-ljxl_threads -lstdc++ /' /usr/local/lib/pkgconfig/libjxl_threads.pc; \
+    apk add libjxl-dev libjxl-static; \
   fi
 
 # hardware acceleration for intel cpu
@@ -646,11 +567,7 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping libmodplug build"; \
   else \
-    cd libmodplug-* && \
-    ./configure \
-      --disable-shared \
-      --enable-static && \
-    make -j$(nproc) install; \
+    apk add libmodplug-dev libmodplug-static; \
   fi
 
 # Remove rav1e (AV1 encoder)
@@ -660,13 +577,7 @@ RUN apk add rav1e-static rav1e-dev
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping zeromq build"; \
   else \
-    cd zeromq-* && \
-    # fix sha1_init symbol collision with libssh
-    grep -r -l sha1_init external/sha1* | xargs sed -i 's/sha1_init/zeromq_sha1_init/g' && \
-    ./configure \
-      --disable-shared \
-      --enable-static && \
-    make -j$(nproc) install; \
+    apk add zeromq-dev zeromq-static; \
   fi
 
 # Keep zimg (image processing for decode, scaling etc.)
@@ -701,22 +612,7 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
   fi
 
 # Keep libwebp (decoder)
-RUN cd libwebp-* && \
-  ./autogen.sh && \
-  ./configure \
-    --disable-shared \
-    --enable-static \
-    --with-pic \
-    --enable-libwebpmux \
-    --disable-libwebpextras \
-    --disable-libwebpdemux \
-    --disable-sdl \
-    --disable-gl \
-    --disable-png \
-    --disable-jpeg \
-    --disable-tiff \
-    --disable-gif && \
-  make -j$(nproc) install
+RUN apk add libwebp-dev libwebp-static
 
 # Keep libvpx (VP8/VP9 decoder)
 RUN cd libvpx-* && \
@@ -729,12 +625,7 @@ RUN cd libvpx-* && \
     make -j$(nproc) install;
 
 # Keep libvorbis (decoder)
-RUN cd libvorbis-* && \
-  ./configure \
-    --disable-shared \
-    --enable-static \
-    --disable-oggtest && \
-  make -j$(nproc) install
+RUN apk add libvorbis-dev libvorbis-static
 
 # Remove libmysofa (niche audio)
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
@@ -751,11 +642,6 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
       .. && \
     make -j$(nproc) install; \
   fi
-
-
-# =======================================================================================
-# FFmpeg Configure step (this is the most important part for decode-only)
-# =======================================================================================
 
 RUN cd ffmpeg* && \
   sed -i 's/svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc, &svt_enc->enc_params)/svt_av1_enc_init_handle(\&svt_enc->svt_handle, \&svt_enc->enc_params)/g' libavcodec/libsvtav1.c && \
@@ -824,7 +710,6 @@ RUN cd ffmpeg* && \
     --enable-lcms2 \
     --enable-libaom \
     $LIBKVZ_FLAG \
-    --enable-libass \
     $LIBBLURAY_FLAG \
     --enable-libdav1d \
     $LIBDAVS2_FLAG \
@@ -1006,5 +891,4 @@ COPY --from=builder /usr/share/fonts/ /usr/share/fonts/
 COPY --from=builder /usr/share/consolefonts/ /usr/share/consolefonts/
 COPY --from=builder /var/cache/fontconfig/ /var/cache/fontconfig/
 
-LABEL maintainer="Mattias Wadman mattias.wadman@gmail.com"
 ENTRYPOINT ["/ffmpeg"]

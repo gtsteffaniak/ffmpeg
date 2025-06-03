@@ -159,10 +159,10 @@ fetch_and_unpack srt SRT_VERSION SRT_URL SRT_SHA256
 # bump: ogg after ./hashupdate Dockerfile OGG $LATEST
 # bump: ogg link "CHANGES" https://github.com/xiph/ogg/blob/master/CHANGES
 # bump: ogg link "Source diff $CURRENT..$LATEST" https://github.com/xiph/ogg/compare/v$CURRENT..v$LATEST
-: "${OGG_VERSION:=1.3.5}"
-: "${OGG_URL:=https://downloads.xiph.org/releases/ogg/libogg-${OGG_VERSION}.tar.gz}"
-: "${OGG_SHA256:=0eb4b4b9420a0f51db142ba3f9c64b333f826532dc0f48c6410ae51f4799b664}"
-fetch_and_unpack libogg OGG_VERSION OGG_URL OGG_SHA256
+#: "${OGG_VERSION:=1.3.5}"
+#: "${OGG_URL:=https://downloads.xiph.org/releases/ogg/libogg-${OGG_VERSION}.tar.gz}"
+#: "${OGG_SHA256:=0eb4b4b9420a0f51db142ba3f9c64b333f826532dc0f48c6410ae51f4799b664}"
+#fetch_and_unpack libogg OGG_VERSION OGG_URL OGG_SHA256
 
 # bump: zimg /ZIMG_VERSION=([\d.]+)/ https://github.com/sekrit-twc/zimg.git|*
 # bump: zimg after ./hashupdate Dockerfile ZIMG $LATEST
@@ -175,10 +175,10 @@ fetch_and_unpack zimg ZIMG_VERSION ZIMG_URL ZIMG_SHA256
 # bump: libzmq /LIBZMQ_VERSION=([\d.]+)/ https://github.com/zeromq/libzmq.git|*
 # bump: libzmq after ./hashupdate Dockerfile LIBZMQ $LATEST
 # bump: libzmq link "NEWS" https://github.com/zeromq/libzmq/blob/master/NEWS
-: "${LIBZMQ_VERSION:=4.3.5}"
-: "${LIBZMQ_URL:=https://github.com/zeromq/libzmq/releases/download/v${LIBZMQ_VERSION}/zeromq-${LIBZMQ_VERSION}.tar.gz}"
-: "${LIBZMQ_SHA256:=6653ef5910f17954861fe72332e68b03ca6e4d9c7160eb3a8de5a5a913bfab43}"
-fetch_and_unpack zeromq LIBZMQ_VERSION LIBZMQ_URL LIBZMQ_SHA256
+#: "${LIBZMQ_VERSION:=4.3.5}"
+#: "${LIBZMQ_URL:=https://github.com/zeromq/libzmq/releases/download/v${LIBZMQ_VERSION}/zeromq-$#{LIBZMQ_VERSION}.tar.gz}"
+#: "${LIBZMQ_SHA256:=6653ef5910f17954861fe72332e68b03ca6e4d9c7160eb3a8de5a5a913bfab43}"
+#fetch_and_unpack zeromq LIBZMQ_VERSION LIBZMQ_URL LIBZMQ_SHA256
 
 # bump: libgme /LIBGME_COMMIT=([[:xdigit:]]+)/ gitrefs:https://github.com/libgme/game-music-emu.git|re:#^refs/heads/master$#|@commit
 # bump: libgme after ./hashupdate Dockerfile LIBGME $LATEST
@@ -190,10 +190,10 @@ fetch_and_unpack_git game-music-emu "" LIBGME_URL "" LIBGME_COMMIT
 # bump: libmodplug /LIBMODPLUG_VERSION=([\d.]+)/ fetch:https://sourceforge.net/projects/modplug-xmms/files/|/libmodplug-([\d.]+).tar.gz/
 # bump: libmodplug after ./hashupdate Dockerfile LIBMODPLUG $LATEST
 # bump: libmodplug link "NEWS" https://sourceforge.net/p/modplug-xmms/git/ci/master/tree/libmodplug/NEWS
-: "${LIBMODPLUG_VERSION:=0.8.9.0}"
-: "${LIBMODPLUG_URL:=https://downloads.sourceforge.net/modplug-xmms/libmodplug-${LIBMODPLUG_VERSION}.tar.gz}"
-: "${LIBMODPLUG_SHA256:=457ca5a6c179656d66c01505c0d95fafaead4329b9dbaa0f997d00a3508ad9de}"
-fetch_and_unpack libmodplug LIBMODPLUG_VERSION LIBMODPLUG_URL LIBMODPLUG_SHA256
+#: "${LIBMODPLUG_VERSION:=0.8.9.0}"
+#: "${LIBMODPLUG_URL:=https://downloads.sourceforge.net/modplug-xmms/libmodplug-${LIBMODPLUG_VERSION}.tar.gz}"
+#: "${LIBMODPLUG_SHA256:=457ca5a6c179656d66c01505c0d95fafaead4329b9dbaa0f997d00a3508ad9de}"
+#fetch_and_unpack libmodplug LIBMODPLUG_VERSION LIBMODPLUG_URL LIBMODPLUG_SHA256
 
 # preferring rav1e-static rav1e-dev from apk (0.7.1)
 # bump: rav1e /RAV1E_VERSION=([\d.]+)/ https://github.com/xiph/rav1e.git|/\d+\./|*
@@ -294,10 +294,10 @@ fetch_and_unpack libvpl LIBVPL_VERSION LIBVPL_URL LIBVPL_SHA256
 # bump: libjxl after ./hashupdate Dockerfile LIBJXL $LATEST
 # bump: libjxl link "Changelog" https://github.com/libjxl/libjxl/blob/main/CHANGELOG.md
 # use bundled highway library as its static build is not available in alpine
-: "${LIBJXL_VERSION:=0.11.1}"
-: "${LIBJXL_URL:=https://github.com/libjxl/libjxl/archive/refs/tags/v${LIBJXL_VERSION}.tar.gz}"
-: "${LIBJXL_SHA256:=1492dfef8dd6c3036446ac3b340005d92ab92f7d48ee3271b5dac1d36945d3d9}"
-fetch_and_unpack libjxl LIBJXL_VERSION LIBJXL_URL LIBJXL_SHA256
+#: "${LIBJXL_VERSION:=0.11.1}"
+#: "${LIBJXL_URL:=https://github.com/libjxl/libjxl/archive/refs/tags/v${LIBJXL_VERSION}.tar.gz}"
+#: "${LIBJXL_SHA256:=1492dfef8dd6c3036446ac3b340005d92ab92f7d48ee3271b5dac1d36945d3d9}"
+#fetch_and_unpack libjxl LIBJXL_VERSION LIBJXL_URL LIBJXL_SHA256
 
 # bump: xevd /XEVD_VERSION=([\d.]+)/ https://github.com/mpeg5/xevd.git|*
 # bump: xevd after ./hashupdate Dockerfile XEVD $LATEST
@@ -352,11 +352,11 @@ fi
 # bump: xvid /XVID_VERSION=([\d.]+)/ svn:https://anonymous:@svn.xvid.org|/^release-(.*)$/|/_/./|^1
 # bump: xvid after ./hashupdate Dockerfile XVID $LATEST
 # add extra CFLAGS that are not enabled by -O3
-: "${XVID_VERSION:=1.3.7}"
-: "${XVID_URL:=https://downloads.xvid.com/downloads/xvidcore-$XVID_VERSION.tar.gz}"
-: "${XVID_SHA256:=abbdcbd39555691dd1c9b4d08f0a031376a3b211652c0d8b3b8aa9be1303ce2d}"
-# Use 'xvidcore' as name to match extracted directory
-fetch_and_unpack xvidcore XVID_VERSION XVID_URL XVID_SHA256
+#: "${XVID_VERSION:=1.3.7}"
+#: "${XVID_URL:=https://downloads.xvid.com/downloads/xvidcore-$XVID_VERSION.tar.gz}"
+#: "${XVID_SHA256:=abbdcbd39555691dd1c9b4d08f0a031376a3b211652c0d8b3b8aa9be1303ce2d}"
+## Use 'xvidcore' as name to match extracted directory
+#fetch_and_unpack xvidcore XVID_VERSION XVID_URL XVID_SHA256
 
 # bump: x265 /X265_VERSION=([\d.]+)/ https://bitbucket.org/multicoreware/x265_git.git|*
 # bump: x265 after ./hashupdate Dockerfile X265 $LATEST
@@ -410,22 +410,22 @@ fetch_and_unpack twolame TWOLAME_VERSION TWOLAME_URL TWOLAME_SHA256
 # bump: theora after ./hashupdate Dockerfile THEORA $LATEST
 # bump: theora link "Release notes" https://github.com/xiph/theora/releases/tag/v$LATEST
 # bump: theora link "Source diff $CURRENT..$LATEST" https://github.com/xiph/theora/compare/v$CURRENT..v$LATEST
-: "${THEORA_VERSION:=1.2.0}"
-: "${THEORA_URL:=http://downloads.xiph.org/releases/theora/libtheora-$THEORA_VERSION.tar.gz}"
-# NOTE: Original script saved this as .tar.bz2. URL is .tar.gz. Using .tar.gz URL.
-# Provided SHA might be for the .tar.bz2 and could fail verification.
-: "${THEORA_SHA256:=279327339903b544c28a92aeada7d0dcfd0397b59c2f368cc698ac56f515906e}"
-# Use 'libtheora' as name to match extracted directory
-fetch_and_unpack libtheora THEORA_VERSION THEORA_URL THEORA_SHA256
+#: "${THEORA_VERSION:=1.2.0}"
+#: "${THEORA_URL:=http://downloads.xiph.org/releases/theora/libtheora-$THEORA_VERSION.tar.gz}"
+## NOTE: Original script saved this as .tar.bz2. URL is .tar.gz. Using .tar.gz URL.
+## Provided SHA might be for the .tar.bz2 and could fail verification.
+#: "${THEORA_SHA256:=279327339903b544c28a92aeada7d0dcfd0397b59c2f368cc698ac56f515906e}"
+## Use 'libtheora' as name to match extracted directory
+#fetch_and_unpack libtheora THEORA_VERSION THEORA_URL THEORA_SHA256
 
 # bump: svtav1 /SVTAV1_VERSION=([\d.]+)/ https://gitlab.com/AOMediaCodec/SVT-AV1.git|*
 # bump: svtav1 after ./hashupdate Dockerfile SVTAV1 $LATEST
 # bump: svtav1 link "Release notes" https://gitlab.com/AOMediaCodec/SVT-AV1/-/releases/v$LATEST
-: "${SVTAV1_VERSION:=3.0.2}"
-: "${SVTAV1_URL:=https://gitlab.com/AOMediaCodec/SVT-AV1/-/archive/v$SVTAV1_VERSION/SVT-AV1-v$SVTAV1_VERSION.tar.bz2}"
-: "${SVTAV1_SHA256:=7548a380cd58a46998ab4f1a02901ef72c37a7c6317c930cde5df2e6349e437b}"
-# Use 'SVT-AV1' as name to match extracted directory
-fetch_and_unpack SVT-AV1 SVTAV1_VERSION SVTAV1_URL SVTAV1_SHA256
+#: "${SVTAV1_VERSION:=3.0.2}"
+#: "${SVTAV1_URL:=https://gitlab.com/AOMediaCodec/SVT-AV1/-/archive/v$SVTAV1_VERSION/SVT-AV1-v$SVTAV1_VERSION.#tar.bz2}"
+#: "${SVTAV1_SHA256:=7548a380cd58a46998ab4f1a02901ef72c37a7c6317c930cde5df2e6349e437b}"
+## Use 'SVT-AV1' as name to match extracted directory
+#fetch_and_unpack SVT-AV1 SVTAV1_VERSION SVTAV1_URL SVTAV1_SHA256
 
 # bump: libssh /LIBSSH_VERSION=([\d.]+)/ https://gitlab.com/libssh/libssh-mirror.git|*
 # bump: libssh after ./hashupdate Dockerfile LIBSSH $LATEST
@@ -469,10 +469,10 @@ fetch_and_unpack rubberband RUBBERBAND_VERSION RUBBERBAND_URL RUBBERBAND_SHA256
 # bump: librtmp /LIBRTMP_COMMIT=([[:xdigit:]]+)/ gitrefs:https://git.ffmpeg.org/rtmpdump.git|re:#^refs/heads/master$#|@commit
 # bump: librtmp after ./hashupdate Dockerfile LIBRTMP $LATEST
 # bump: librtmp link "Commit diff $CURRENT..$LATEST" https://git.ffmpeg.org/gitweb/rtmpdump.git/commitdiff/$LATEST?ds=sidebyside
-: "${LIBRTMP_URL:=https://git.ffmpeg.org/rtmpdump.git}"
-: "${LIBRTMP_COMMIT:=6f6bb1353fc84f4cc37138baa99f586750028a01}"
-# Use 'rtmpdump' as name to match cloned directory
-fetch_and_unpack_git rtmpdump "" LIBRTMP_URL "" LIBRTMP_COMMIT
+#: "${LIBRTMP_URL:=https://git.ffmpeg.org/rtmpdump.git}"
+#: "${LIBRTMP_COMMIT:=6f6bb1353fc84f4cc37138baa99f586750028a01}"
+## Use 'rtmpdump' as name to match cloned directory
+#fetch_and_unpack_git rtmpdump "" LIBRTMP_URL "" LIBRTMP_COMMIT
 
 # bump: librabbitmq /LIBRABBITMQ_VERSION=([\d.]+)/ https://github.com/alanxz/rabbitmq-c.git|*
 # bump: librabbitmq after ./hashupdate Dockerfile LIBRABBITMQ $LATEST
@@ -565,10 +565,10 @@ git clone --depth 1 --branch v$AOM_VERSION "$AOM_URL" && cd aom && test $(git re
 # bump: harfbuzz /LIBHARFBUZZ_VERSION=([\d.]+)/ https://github.com/harfbuzz/harfbuzz.git|*
 # bump: harfbuzz after ./hashupdate Dockerfile LIBHARFBUZZ $LATEST
 # bump: harfbuzz link "NEWS" https://github.com/harfbuzz/harfbuzz/blob/main/NEWS
-: "${LIBHARFBUZZ_VERSION:=11.2.0}"
-: "${LIBHARFBUZZ_URL:=https://github.com/harfbuzz/harfbuzz/releases/download/$LIBHARFBUZZ_VERSION/harfbuzz-$LIBHARFBUZZ_VERSION.tar.xz}"
-: "${LIBHARFBUZZ_SHA256:=50f7d0a208367e606dbf6eecc5cfbecc01a47be6ee837ae7aff2787e24b09b45}"
-fetch_and_unpack harfbuzz LIBHARFBUZZ_VERSION LIBHARFBUZZ_URL LIBHARFBUZZ_SHA256
+#: "${LIBHARFBUZZ_VERSION:=11.2.0}"
+#: "${LIBHARFBUZZ_URL:=https://github.com/harfbuzz/harfbuzz/releases/download/$LIBHARFBUZZ_VERSION/#harfbuzz-$LIBHARFBUZZ_VERSION.tar.xz}"
+#: "${LIBHARFBUZZ_SHA256:=50f7d0a208367e606dbf6eecc5cfbecc01a47be6ee837ae7aff2787e24b09b45}"
+#fetch_and_unpack harfbuzz LIBHARFBUZZ_VERSION LIBHARFBUZZ_URL LIBHARFBUZZ_SHA256
 
 # bump: vmaf /VMAF_VERSION=([\d.]+)/ https://github.com/Netflix/vmaf.git|*
 # bump: vmaf after ./hashupdate Dockerfile VMAF $LATEST
@@ -590,10 +590,10 @@ fetch_and_unpack vvenc VVENC_VERSION VVENC_URL VVENC_SHA256
 # bump: cairo /CAIRO_VERSION=([\d.]+)/ https://gitlab.freedesktop.org/cairo/cairo.git|^1
 # bump: cairo after ./hashupdate Dockerfile CAIRO $LATEST
 # bump: cairo link "NEWS" https://gitlab.freedesktop.org/cairo/cairo/-/blob/master/NEWS?ref_type=heads
-: "${CAIRO_VERSION:=1.18.4}"
-: "${CAIRO_URL:=https://cairographics.org/releases/cairo-$CAIRO_VERSION.tar.xz}"
-: "${CAIRO_SHA256:=445ed8208a6e4823de1226a74ca319d3600e83f6369f99b14265006599c32ccb}"
-fetch_and_unpack cairo CAIRO_VERSION CAIRO_URL CAIRO_SHA256
+#: "${CAIRO_VERSION:=1.18.4}"
+#: "${CAIRO_URL:=https://cairographics.org/releases/cairo-$CAIRO_VERSION.tar.xz}"
+#: "${CAIRO_SHA256:=445ed8208a6e4823de1226a74ca319d3600e83f6369f99b14265006599c32ccb}"
+#fetch_and_unpack cairo CAIRO_VERSION CAIRO_URL CAIRO_SHA256
 
 # TODO: there is weird "1.90" tag, skip it
 # bump: pango /PANGO_VERSION=([\d.]+)/ https://github.com/GNOME/pango.git|/\d+\.\d+\.\d+/|*
