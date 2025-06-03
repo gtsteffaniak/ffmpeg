@@ -164,6 +164,7 @@ fetch_and_unpack srt SRT_VERSION SRT_URL SRT_SHA256
 #: "${OGG_SHA256:=0eb4b4b9420a0f51db142ba3f9c64b333f826532dc0f48c6410ae51f4799b664}"
 #fetch_and_unpack libogg OGG_VERSION OGG_URL OGG_SHA256
 
+
 # bump: zimg /ZIMG_VERSION=([\d.]+)/ https://github.com/sekrit-twc/zimg.git|*
 # bump: zimg after ./hashupdate Dockerfile ZIMG $LATEST
 # bump: zimg link "ChangeLog" https://github.com/sekrit-twc/zimg/blob/master/ChangeLog
@@ -194,6 +195,7 @@ fetch_and_unpack_git game-music-emu "" LIBGME_URL "" LIBGME_COMMIT
 #: "${LIBMODPLUG_URL:=https://downloads.sourceforge.net/modplug-xmms/libmodplug-${LIBMODPLUG_VERSION}.tar.gz}"
 #: "${LIBMODPLUG_SHA256:=457ca5a6c179656d66c01505c0d95fafaead4329b9dbaa0f997d00a3508ad9de}"
 #fetch_and_unpack libmodplug LIBMODPLUG_VERSION LIBMODPLUG_URL LIBMODPLUG_SHA256
+
 
 # preferring rav1e-static rav1e-dev from apk (0.7.1)
 # bump: rav1e /RAV1E_VERSION=([\d.]+)/ https://github.com/xiph/rav1e.git|/\d+\./|*
@@ -298,6 +300,7 @@ fetch_and_unpack libvpl LIBVPL_VERSION LIBVPL_URL LIBVPL_SHA256
 #: "${LIBJXL_URL:=https://github.com/libjxl/libjxl/archive/refs/tags/v${LIBJXL_VERSION}.tar.gz}"
 #: "${LIBJXL_SHA256:=1492dfef8dd6c3036446ac3b340005d92ab92f7d48ee3271b5dac1d36945d3d9}"
 #fetch_and_unpack libjxl LIBJXL_VERSION LIBJXL_URL LIBJXL_SHA256
+
 
 # bump: xevd /XEVD_VERSION=([\d.]+)/ https://github.com/mpeg5/xevd.git|*
 # bump: xevd after ./hashupdate Dockerfile XEVD $LATEST
@@ -418,6 +421,7 @@ fetch_and_unpack twolame TWOLAME_VERSION TWOLAME_URL TWOLAME_SHA256
 ## Use 'libtheora' as name to match extracted directory
 #fetch_and_unpack libtheora THEORA_VERSION THEORA_URL THEORA_SHA256
 
+
 # bump: svtav1 /SVTAV1_VERSION=([\d.]+)/ https://gitlab.com/AOMediaCodec/SVT-AV1.git|*
 # bump: svtav1 after ./hashupdate Dockerfile SVTAV1 $LATEST
 # bump: svtav1 link "Release notes" https://gitlab.com/AOMediaCodec/SVT-AV1/-/releases/v$LATEST
@@ -473,6 +477,7 @@ fetch_and_unpack rubberband RUBBERBAND_VERSION RUBBERBAND_URL RUBBERBAND_SHA256
 #: "${LIBRTMP_COMMIT:=6f6bb1353fc84f4cc37138baa99f586750028a01}"
 ## Use 'rtmpdump' as name to match cloned directory
 #fetch_and_unpack_git rtmpdump "" LIBRTMP_URL "" LIBRTMP_COMMIT
+
 
 # bump: librabbitmq /LIBRABBITMQ_VERSION=([\d.]+)/ https://github.com/alanxz/rabbitmq-c.git|*
 # bump: librabbitmq after ./hashupdate Dockerfile LIBRABBITMQ $LATEST
@@ -569,6 +574,7 @@ git clone --depth 1 --branch v$AOM_VERSION "$AOM_URL" && cd aom && test $(git re
 #: "${LIBHARFBUZZ_URL:=https://github.com/harfbuzz/harfbuzz/releases/download/$LIBHARFBUZZ_VERSION/#harfbuzz-$LIBHARFBUZZ_VERSION.tar.xz}"
 #: "${LIBHARFBUZZ_SHA256:=50f7d0a208367e606dbf6eecc5cfbecc01a47be6ee837ae7aff2787e24b09b45}"
 #fetch_and_unpack harfbuzz LIBHARFBUZZ_VERSION LIBHARFBUZZ_URL LIBHARFBUZZ_SHA256
+
 
 # bump: vmaf /VMAF_VERSION=([\d.]+)/ https://github.com/Netflix/vmaf.git|*
 # bump: vmaf after ./hashupdate Dockerfile VMAF $LATEST
