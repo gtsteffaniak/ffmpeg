@@ -56,8 +56,8 @@ RUN apk add $APK_OPTS \
 # -static-libgcc is needed to make gcc not include gcc_s as "as-needed" shared library which
 # cmake will include as a implicit library.
 # other options to get hardened build (same as ffmpeg hardened)
-ARG CFLAGS="-O3 -static-libgcc -fno-strict-overflow -fstack-protector-all -fPIC"
-ARG CXXFLAGS="-O3 -static-libgcc -fno-strict-overflow -fstack-protector-all -fPIC"
+ARG CFLAGS="-static-libgcc -fno-strict-overflow -fPIC"
+ARG CXXFLAGS="-static-libgcc -fno-strict-overflow -fPIC"
 ARG LDFLAGS="-Wl,-z,relro,-z,now"
 # Add a DECODE_ONLY argument
 ARG DECODE_ONLY="false" # Set "true" for decode-only, "false" for full build
@@ -72,6 +72,22 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
   fi
 
 RUN apk add $APK_OPTS harfbuzz-dev harfbuzz-static
+
+# Skip cairo, librsvg, pango if DECODE_ONLY is true (for smaller text rendering footprint if desired)
+RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+  echo "Skipping cairo build"; \
+else \
+  cd cairo-* && \
+  meson setup build \
+    -Dbuildtype=release \
+    -Ddefault_library=static \
+    -Dtests=disabled \
+    -Dquartz=disabled \
+    -Dxcb=disabled \
+    -Dxlib=disabled \
+    -Dxlib-xcb=disabled && \
+  ninja -j$(nproc) -v -C build install; \
+fi
 
 RUN if [ "$(uname -m)" = "armv7l" ]; then \
     echo "Skipping Pango build"; \
@@ -152,6 +168,7 @@ RUN apk add $APK_OPTS aom-dev aom-static
 
 # libogg (niche audio codec)
 RUN apk add $APK_OPTS libogg-dev libogg-static
+
 
 # Remove libtheora (older, niche video codec)
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
