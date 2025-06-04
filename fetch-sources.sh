@@ -101,6 +101,11 @@ fetch_and_unpack() {
   echo "--- Finished $dir ---"
 }
 
+: "${SVT-AV1_VERSION:=3.0.2}"
+: "${SVT-AV1_URL:=https://gitlab.com/AOMediaCodec/SVT-AV1/-/archive/v$SVTAV1_VERSION/SVT-AV1-v$SVTAV1_VERSION.tar.bz2}"
+: "${SVT-AV1_SHA256:=7548a380cd58a46998ab4f1a02901ef72c37a7c6317c930cde5df2e6349e437b}"
+fetch_and_unpack SVT-AV1 SVT-AV1_VERSION SVT-AV1_URL SVT-AV1_SHA256
+
 # --- Library Definitions and Fetching ---
 
 # bump: ffmpeg /FFMPEG_VERSION=([\d.]+)/ https://github.com/FFmpeg/FFmpeg.git|*
@@ -294,10 +299,10 @@ fetch_and_unpack libvpl LIBVPL_VERSION LIBVPL_URL LIBVPL_SHA256
 # bump: libjxl after ./hashupdate Dockerfile LIBJXL $LATEST
 # bump: libjxl link "Changelog" https://github.com/libjxl/libjxl/blob/main/CHANGELOG.md
 # use bundled highway library as its static build is not available in alpine
-#: "${LIBJXL_VERSION:=0.11.1}"
-#: "${LIBJXL_URL:=https://github.com/libjxl/libjxl/archive/refs/tags/v${LIBJXL_VERSION}.tar.gz}"
-#: "${LIBJXL_SHA256:=1492dfef8dd6c3036446ac3b340005d92ab92f7d48ee3271b5dac1d36945d3d9}"
-#fetch_and_unpack libjxl LIBJXL_VERSION LIBJXL_URL LIBJXL_SHA256
+: "${LIBJXL_VERSION:=0.11.1}"
+: "${LIBJXL_URL:=https://github.com/libjxl/libjxl/archive/refs/tags/v${LIBJXL_VERSION}.tar.gz}"
+: "${LIBJXL_SHA256:=1492dfef8dd6c3036446ac3b340005d92ab92f7d48ee3271b5dac1d36945d3d9}"
+fetch_and_unpack libjxl LIBJXL_VERSION LIBJXL_URL LIBJXL_SHA256
 
 # bump: xevd /XEVD_VERSION=([\d.]+)/ https://github.com/mpeg5/xevd.git|*
 # bump: xevd after ./hashupdate Dockerfile XEVD $LATEST
@@ -417,15 +422,6 @@ fetch_and_unpack twolame TWOLAME_VERSION TWOLAME_URL TWOLAME_SHA256
 #: "${THEORA_SHA256:=279327339903b544c28a92aeada7d0dcfd0397b59c2f368cc698ac56f515906e}"
 ## Use 'libtheora' as name to match extracted directory
 #fetch_and_unpack libtheora THEORA_VERSION THEORA_URL THEORA_SHA256
-
-# bump: svtav1 /SVTAV1_VERSION=([\d.]+)/ https://gitlab.com/AOMediaCodec/SVT-AV1.git|*
-# bump: svtav1 after ./hashupdate Dockerfile SVTAV1 $LATEST
-# bump: svtav1 link "Release notes" https://gitlab.com/AOMediaCodec/SVT-AV1/-/releases/v$LATEST
-#: "${SVTAV1_VERSION:=3.0.2}"
-#: "${SVTAV1_URL:=https://gitlab.com/AOMediaCodec/SVT-AV1/-/archive/v$SVTAV1_VERSION/SVT-AV1-v$SVTAV1_VERSION.#tar.bz2}"
-#: "${SVTAV1_SHA256:=7548a380cd58a46998ab4f1a02901ef72c37a7c6317c930cde5df2e6349e437b}"
-## Use 'SVT-AV1' as name to match extracted directory
-#fetch_and_unpack SVT-AV1 SVTAV1_VERSION SVTAV1_URL SVTAV1_SHA256
 
 # bump: libssh /LIBSSH_VERSION=([\d.]+)/ https://gitlab.com/libssh/libssh-mirror.git|*
 # bump: libssh after ./hashupdate Dockerfile LIBSSH $LATEST
@@ -565,10 +561,10 @@ git clone --depth 1 --branch v$AOM_VERSION "$AOM_URL" && cd aom && test $(git re
 # bump: harfbuzz /LIBHARFBUZZ_VERSION=([\d.]+)/ https://github.com/harfbuzz/harfbuzz.git|*
 # bump: harfbuzz after ./hashupdate Dockerfile LIBHARFBUZZ $LATEST
 # bump: harfbuzz link "NEWS" https://github.com/harfbuzz/harfbuzz/blob/main/NEWS
-#: "${LIBHARFBUZZ_VERSION:=11.2.0}"
-#: "${LIBHARFBUZZ_URL:=https://github.com/harfbuzz/harfbuzz/releases/download/$LIBHARFBUZZ_VERSION/#harfbuzz-$LIBHARFBUZZ_VERSION.tar.xz}"
-#: "${LIBHARFBUZZ_SHA256:=50f7d0a208367e606dbf6eecc5cfbecc01a47be6ee837ae7aff2787e24b09b45}"
-#fetch_and_unpack harfbuzz LIBHARFBUZZ_VERSION LIBHARFBUZZ_URL LIBHARFBUZZ_SHA256
+: "${LIBHARFBUZZ_VERSION:=11.2.0}"
+: "${LIBHARFBUZZ_URL:=https://github.com/harfbuzz/harfbuzz/releases/download/$LIBHARFBUZZ_VERSION/harfbuzz-$LIBHARFBUZZ_VERSION.tar.xz}"
+: "${LIBHARFBUZZ_SHA256:=50f7d0a208367e606dbf6eecc5cfbecc01a47be6ee837ae7aff2787e24b09b45}"
+fetch_and_unpack harfbuzz LIBHARFBUZZ_VERSION LIBHARFBUZZ_URL LIBHARFBUZZ_SHA256
 
 # bump: vmaf /VMAF_VERSION=([\d.]+)/ https://github.com/Netflix/vmaf.git|*
 # bump: vmaf after ./hashupdate Dockerfile VMAF $LATEST
