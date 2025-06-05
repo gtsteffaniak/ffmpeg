@@ -1,0 +1,54 @@
+name: Multi arch build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  push_release_to_registry:
+    name: Push release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Fetch sources
+        run: ./fetch-sources.sh
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3.0.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3.0.0
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Extract metadata (tags, labels) for Docker and GHCR
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            gtstef/static-ffmpeg
+            ghcr.io/gtsteffaniak/static-ffmpeg
+      - name: Modify tags (strip 'v')
+        id: modify-json
+        run: |
+          JSON='${{ steps.meta.outputs.json }}'
+          MODIFIED_JSON=$(echo "$JSON" | jq '.tags |= map(sub(":v"; ":"))')
+          TAGS_CSV=$(echo "$MODIFIED_JSON" | jq -r '.tags | join(",")')
+          echo "$TAGS_CSV" > modified_tags.txt  # Optional debug output
+          echo "cleaned_tag=$TAGS_CSV" >> $GITHUB_OUTPUT
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.PAT }}
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          push: true
+          tags: ${{ steps.modify-json.outputs.cleaned_tag }}
+          labels: ${{ steps.meta.outputs.labels }}
