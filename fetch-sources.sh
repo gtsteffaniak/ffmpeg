@@ -101,10 +101,10 @@ fetch_and_unpack() {
   echo "--- Finished $dir ---"
 }
 
-: "${SVT-AV1_VERSION:=3.0.2}"
-: "${SVT-AV1_URL:=https://gitlab.com/AOMediaCodec/SVT-AV1/-/archive/v$SVTAV1_VERSION/SVT-AV1-v$SVTAV1_VERSION.tar.bz2}"
-: "${SVT-AV1_SHA256:=7548a380cd58a46998ab4f1a02901ef72c37a7c6317c930cde5df2e6349e437b}"
-fetch_and_unpack SVT-AV1 SVT-AV1_VERSION SVT-AV1_URL SVT-AV1_SHA256
+: "${SVTAV1_VERSION:=3.0.2}"
+: "${SVTAV1_URL:=https://gitlab.com/AOMediaCodec/SVT-AV1/-/archive/v$SVTAV1_VERSION/SVT-AV1-v$SVTAV1_VERSION.tar.bz2}"
+: "${SVTAV1_SHA256:=7548a380cd58a46998ab4f1a02901ef72c37a7c6317c930cde5df2e6349e437b}"
+fetch_and_unpack SVT-AV1 SVTAV1_VERSION SVTAV1_URL SVTAV1_SHA256
 
 # --- Library Definitions and Fetching ---
 

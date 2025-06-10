@@ -73,22 +73,6 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
 
 RUN apk add $APK_OPTS harfbuzz-dev harfbuzz-static
 
-# Skip cairo, librsvg, pango if DECODE_ONLY is true (for smaller text rendering footprint if desired)
-RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
-  echo "Skipping cairo build"; \
-else \
-  cd cairo-* && \
-  meson setup build \
-    -Dbuildtype=release \
-    -Ddefault_library=static \
-    -Dtests=disabled \
-    -Dquartz=disabled \
-    -Dxcb=disabled \
-    -Dxlib=disabled \
-    -Dxlib-xcb=disabled && \
-  ninja -j$(nproc) -v -C build install; \
-fi
-
 RUN if [ "$(uname -m)" = "armv7l" ]; then \
     echo "Skipping Pango build"; \
   else \
@@ -169,14 +153,6 @@ RUN apk add $APK_OPTS aom-dev aom-static
 # libogg (niche audio codec)
 RUN apk add $APK_OPTS libogg-dev libogg-static
 
-
-# Remove libtheora (older, niche video codec)
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
-    echo "Skipping libtheora build"; \
-  else \
-    apk add $APK_OPTS libtheora-dev libtheora-static; \
-  fi
-
 # davs2 (very niche)
 COPY [ "src/davs2-*", "./davs2" ]
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
@@ -203,23 +179,6 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
       --disable-shared \
       --enable-static && \
     make -j$(nproc) install; \
-  fi
-
-# Remove libgsm (niche audio encoder/decoder)
-COPY [ "src/libgsm*", "./libgsm" ]
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
-    echo "Skipping libgsm build"; \
-  else \
-    cd libgsm && \
-    # Makefile is hard to use, hence use specific compile arguments and flags
-    # no need to build toast cli tool \
-    rm src/toast* && \
-    SRC=$(echo src/*.c) && \
-    gcc ${CFLAGS} -c -ansi -pedantic -s -DNeedFunctionPrototypes=1 -Wall -Wno-comment -DSASR -DWAV49 -DNDEBUG -I./inc ${SRC} && \
-    ar cr libgsm.a *.o && ranlib libgsm.a && \
-    mkdir -p /usr/local/include/gsm && \
-    cp inc/*.h /usr/local/include/gsm && \
-    cp libgsm.a /usr/local/lib; \
   fi
 
 # Remove kvazaar (HEVC encoder)
@@ -342,19 +301,6 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Requires.private: fftw3 samplerate" >> /usr/local/lib/pkgconfig/rubberband.pc; \
   fi
 
-# Remove shine (MP3 encoder)
-COPY [ "src/shine-*", "./shine" ]
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
-    echo "Skipping shine build"; \
-  else \
-    cd shine && \
-    ./configure \
-      --with-pic \
-      --enable-static \
-      --disable-shared \
-      --disable-fast-install && \
-    make -j$(nproc) install; \
-  fi
 
 # Remove speex (voice codec)
 COPY [ "src/speex-*", "./speex" ]
@@ -422,20 +368,6 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
     make -j$(nproc) install; \
   fi
 
-# twolame (MP2 encoder)
-COPY [ "src/twolame-*", "./twolame" ]
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
-    echo "Skipping twolame build"; \
-  else \
-    cd twolame && \
-    ./configure \
-      --disable-shared \
-      --enable-static \
-      --disable-sndfile \
-      --with-pic && \
-    make -j$(nproc) install; \
-  fi
-
 # uavs3d (AVS3 decoder - niche, already in your DECODE_ONLY section)
 COPY [ "src/uavs3d*", "./uavs3d" ]
 RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
@@ -500,13 +432,6 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
       CMAKEFLAGS="-DENABLE_SHARED=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_AGGRESSIVE_CHECKS=ON -DENABLE_NASM=ON -DCMAKE_BUILD_TYPE=Release" \
       ./multilib.sh && \
       make -C 8bit -j$(nproc) install; \
-  fi
-
-# xvidcore (old video encoder)
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
-    echo "Skipping xvidcore build"; \
-  else \
-    apk add $APK_OPTS xvidcore-dev xvidcore-static; \
   fi
 
 # xeve (HEVC encoder)
@@ -702,25 +627,9 @@ RUN if [ "$(uname -m)" = "armv7l" ]; then \
 # libvorbis (decoder)
 RUN apk add $APK_OPTS libvorbis-dev libvorbis-static
 
-# libmysofa (niche audio)
-COPY [ "src/libmysofa-*", "./libmysofa" ]
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
-    echo "Skipping libmysofa build"; \
-  else \
-    cd libmysofa/build && \
-    cmake \
-      -G"Unix Makefiles" \
-      -DCMAKE_VERBOSE_MAKEFILE=ON \
-      -DCMAKE_INSTALL_LIBDIR=lib \
-      -DBUILD_SHARED_LIBS=OFF \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DBUILD_TESTS=OFF \
-      .. && \
-    make -j$(nproc) install; \
-  fi
-
 COPY [ "src/ffmpeg*", "./ffmpeg" ]
 RUN cd ffmpeg && \
+  sed -i 's/svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc, &svt_enc->enc_params)/svt_av1_enc_init_handle(\&svt_enc->svt_handle, \&svt_enc->enc_params)/g' libavcodec/libsvtav1.c && \
   if [ "$(uname -m)" != "armv7l" ]; then \
     FEATURES="--enable-libvpx"; \
   fi; \
@@ -729,7 +638,7 @@ RUN cd ffmpeg && \
     FEATURES="$FEATURES --enable-libfdk-aac --enable-nonfree"; \
     FEATURES="$FEATURES --enable-libx264"; \
     FEATURES="$FEATURES --enable-librav1e"; \
-    #FEATURES="$FEATURES --enable-libsvtav1"; \
+    FEATURES="$FEATURES --enable-libsvtav1"; \
     FEATURES="$FEATURES --enable-libx265"; \
     FEATURES="$FEATURES --enable-libxeve"; \
     FEATURES="$FEATURES --enable-libxevd"; \
@@ -737,18 +646,25 @@ RUN cd ffmpeg && \
     FEATURES="$FEATURES --enable-libbluray"; \
     FEATURES="$FEATURES --enable-libdavs2"; \
     FEATURES="$FEATURES --enable-libgme"; \
-    FEATURES="$FEATURES --enable-libgsm"; \
+    # For the GSM audio codec, used in telephony.
+    #FEATURES="$FEATURES --enable-libgsm"; \
     FEATURES="$FEATURES --enable-libmodplug"; \
-    FEATURES="$FEATURES --enable-libmysofa"; \
-    FEATURES="$FEATURES --enable-libopencore-amrnb --enable-libopencore-amrwb"; \
+    # 3d audio support.
+    #FEATURES="$FEATURES --enable-libmysofa"; \
+    # AMR audio codecs for mobile.
+    #FEATURES="$FEATURES --enable-libopencore-amrnb --enable-libopencore-amrwb"; \
     #FEATURES="$FEATURES --enable-librtmp"; \
-    FEATURES="$FEATURES --enable-librubberband"; \
-    FEATURES="$FEATURES --enable-libshine"; \
-    FEATURES="$FEATURES --enable-libspeex"; \
-    FEATURES="$FEATURES --enable-libtheora"; \
-    FEATURES="$FEATURES --enable-libtwolame"; \
+    # High-quality audio pitch shifting.
+    #FEATURES="$FEATURES --enable-librubberband"; \
+    # libmp3lame is superior and already included.
+    #FEATURES="$FEATURES --enable-libshine"; \
+    # Voice audio codec, largely replaced by Opus.
+    #FEATURES="$FEATURES --enable-libspeex"; \
+    #FEATURES="$FEATURES --enable-libtheora"; \
+    #FEATURES="$FEATURES --enable-libtwolame"; \
     FEATURES="$FEATURES --enable-libuavs3d"; \
-    FEATURES="$FEATURES --enable-libvidstab"; \
+    # Video stabilization filter.
+    #FEATURES="$FEATURES --enable-libvidstab"; \
     FEATURES="$FEATURES --enable-libvmaf"; \
     FEATURES="$FEATURES --enable-libvo-amrwbenc"; \
     #FEATURES="$FEATURES --enable-libjxl"; \
@@ -759,8 +675,9 @@ RUN cd ffmpeg && \
     #FEATURES="$FEATURES --enable-libzmq"; \
     FEATURES="$FEATURES --enable-libkvazaar"; \
     FEATURES="$FEATURES --enable-libmp3lame"; \
-    FEATURES="$FEATURES --enable-libshine"; \
-    FEATURES="$FEATURES --enable-libxvid"; \
+    #FEATURES="$FEATURES --enable-libshine"; \
+    # replaced by x264
+    #FEATURES="$FEATURES --enable-libxvid"; \
   fi && \
     PKG_CONFIG_PATH="/usr/lib/pkgconfig/:${PKG_CONFIG_PATH}" && \
     ./configure \
@@ -778,7 +695,6 @@ RUN cd ffmpeg && \
     --enable-libvorbis \
     --enable-libopus \
     --enable-version3 \
-    #--enable-libsoxr \
     --enable-libzimg \
     --enable-fontconfig \
     --enable-gray \
@@ -787,11 +703,12 @@ RUN cd ffmpeg && \
     --enable-libaom \
     --enable-libwebp \
     --enable-libxml2 \
-    #--enable-libass \
     --enable-libdav1d \
-    --enable-libfreetype \
-    --enable-libfribidi \
+    #--enable-libass \
+    #--enable-libfreetype \
+    #--enable-libfribidi \
     #--enable-libharfbuzz \
+    #--enable-libsoxr \
     --enable-libopenjpeg \
     --enable-libsnappy \
     $FEATURES \
@@ -844,10 +761,10 @@ RUN \
   librtmp: env.LIBRTMP_COMMIT, \
   librubberband: env.RUBBERBAND_VERSION, \
   libsamplerate: env.LIBSAMPLERATE_VERSION, \
-  libshine: env.LIBSHINE_VERSION, \
+  #libshine: env.LIBSHINE_VERSION, \
   libsnappy: env.SNAPPY_VERSION, \
   libsoxr: env.SOXR_VERSION, \
-  libspeex: env.SPEEX_VERSION, \
+  #libspeex: env.SPEEX_VERSION, \
   libsrt: env.SRT_VERSION, \
   libssh: env.LIBSSH_VERSION, \
   libsvtav1: env.SVTAV1_VERSION, \
@@ -868,7 +785,7 @@ RUN \
   libxevd: env.XEVD_VERSION, \
   libxeve: env.XEVE_VERSION, \
   libxml2: env.LIBXML2_VERSION, \
-  libxvid: env.XVID_VERSION, \
+  #libxvid: env.XVID_VERSION, \
   libzimg: env.ZIMG_VERSION, \
   libzmq: env.LIBZMQ_VERSION, \
   openssl: env.OPENSSL_VERSION, \
