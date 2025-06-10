@@ -1,13 +1,10 @@
-# bump: alpine /ALPINE_VERSION=alpine:([\d.]+)/ docker:alpine|^3
-# bump: alpine link "Release notes" https://alpinelinux.org/posts/Alpine-$LATEST-released.html
 ARG ALPINE_VERSION=alpine:3.22
 FROM $ALPINE_VERSION AS builder
-# FROM ghcr.io/ffbuilds/static-libuavs3d-alpine_edge:main as libuavs3d
 
 # Alpine Package Keeper options
-ARG APK_OPTS="--repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing/"
+ARG APK_OPTS="--no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing/"
 
-RUN apk add --no-cache $APK_OPTS \
+RUN apk add $APK_OPTS \
   coreutils \
   pkgconfig \
   rust cargo cargo-c \
@@ -51,8 +48,6 @@ RUN apk add --no-cache $APK_OPTS \
   linux-headers \
   libdrm-dev
 
-COPY [ "src/", "./" ]
-
 # linux-headers need by rtmpdump
 # python3 py3-packaging needed by glib
 
@@ -67,44 +62,28 @@ ARG LDFLAGS="-Wl,-z,relro,-z,now"
 # Add a DECODE_ONLY argument
 ARG DECODE_ONLY="false" # Set "true" for decode-only, "false" for full build
 
-
-RUN apk add glib-dev glib-static
+RUN apk add $APK_OPTS glib-dev glib-static
 
 # Skip cairo, librsvg, pango if DECODE_ONLY is true (for smaller text rendering footprint if desired)
 RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping cairo build"; \
   else \
-    apk add cairo-dev cairo-static; \
+    apk add $APK_OPTS cairo-dev cairo-static; \
   fi
 
-RUN apk add harfbuzz-dev harfbuzz-static
-
-# Skip cairo, librsvg, pango if DECODE_ONLY is true (for smaller text rendering footprint if desired)
-RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
-  echo "Skipping cairo build"; \
-else \
-  cd cairo-* && \
-  meson setup build \
-    -Dbuildtype=release \
-    -Ddefault_library=static \
-    -Dtests=disabled \
-    -Dquartz=disabled \
-    -Dxcb=disabled \
-    -Dxlib=disabled \
-    -Dxlib-xcb=disabled && \
-  ninja -j$(nproc) -v -C build install; \
-fi
+RUN apk add $APK_OPTS harfbuzz-dev harfbuzz-static
 
 RUN if [ "$(uname -m)" = "armv7l" ]; then \
     echo "Skipping Pango build"; \
   else \
-    apk add pango-dev pango; \
+    apk add $APK_OPTS pango-dev pango; \
   fi
 
+COPY [ "src/librsvg-*", "./librsvg" ]
 RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
   echo "Skipping librsvg build"; \
   else \
-    cd librsvg-* && \
+    cd librsvg && \
     sed -i "/^if host_system in \['windows'/s/, 'linux'//" meson.build && \
     meson setup build \
       -Dbuildtype=release \
@@ -118,8 +97,9 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
     ninja -j$(nproc) -vC build install; \
   fi
 
-# Keep libva, vmaf is an analysis tool, likely not needed for pure decode unless for verification
-RUN cd libva-* && \
+COPY [ "src/libva-*", "./libva" ]
+# libva, vmaf is an analysis tool, likely not needed for pure decode unless for verification
+RUN cd libva && \
   meson setup build \
     -Dbuildtype=release \
     -Ddefault_library=static \
@@ -132,7 +112,8 @@ RUN cd libva-* && \
     -Denable_docs=false && \
   ninja -j$(nproc) -vC build install
 
-RUN cd vmaf-*/libvmaf && \
+COPY [ "src/vmaf-*", "./vmaf" ]
+RUN cd vmaf/libvmaf && \
     meson setup build \
       -Dbuildtype=release \
       -Ddefault_library=static \
@@ -144,19 +125,13 @@ RUN cd vmaf-*/libvmaf && \
     ninja -j$(nproc) -vC build install; \
     sed -i 's/-lvmaf /-lvmaf -lstdc++ /' /usr/local/lib/pkgconfig/libvmaf.pc;
 
-
-RUN cd libass-* && \
-  ./configure \
-    --disable-shared \
-    --enable-static && \
-  make -j$(nproc) && make install
-
-# Remove libbluray (niche)
+# libbluray (niche)
+COPY [ "src/libbluray-*", "./libbluray" ]
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping libbluray build"; \
   else \
     # dec_init rename is to workaround https://code.videolan.org/videolan/libbluray/-/issues/43
-    cd libbluray-* && \
+    cd libbluray && \
     sed -i 's/dec_init/libbluray_dec_init/' src/libbluray/disc/* && \
     git clone https://code.videolan.org/videolan/libudfread.git contrib/libudfread && \
     (cd contrib/libudfread && git checkout --recurse-submodules $LIBUDFREAD_COMMIT) && \
@@ -172,25 +147,19 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
     make -j$(nproc) install; \
   fi
 
+# aom (AV1 decoder)
+RUN apk add $APK_OPTS aom-dev aom-static
 
-RUN apk add aom-dev aom-static
+# libogg (niche audio codec)
+RUN apk add $APK_OPTS libogg-dev libogg-static
 
-RUN apk add libogg-dev libogg-static
-
-
-# Remove libtheora (older, niche video codec)
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
-    echo "Skipping libtheora build"; \
-  else \
-    apk add libtheora-dev libtheora-static; \
-  fi
-
-# Remove davs2 (very niche)
+# davs2 (very niche)
+COPY [ "src/davs2-*", "./davs2" ]
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping davs2 build"; \
   else \
     # TODO: seems to be issues with asm on musl
-    cd davs2-*/build/linux && \
+    cd davs2/build/linux && \
     ./configure \
       --disable-asm \
       --enable-pic \
@@ -199,11 +168,12 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
     make -j$(nproc) install; \
   fi
 
-# Remove fdk-aac (encoder)
+# fdk-aac (encoder)
+COPY [ "src/fdk-aac-*", "./fdk-aac" ]
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping fdk-aac build"; \
   else \
-    cd fdk-aac-* && \
+    cd fdk-aac && \
     ./autogen.sh && \
     ./configure \
       --disable-shared \
@@ -211,27 +181,12 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
     make -j$(nproc) install; \
   fi
 
-# Remove libgsm (niche audio encoder/decoder)
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
-    echo "Skipping libgsm build"; \
-  else \
-    cd libgsm && \
-    # Makefile is hard to use, hence use specific compile arguments and flags
-    # no need to build toast cli tool \
-    rm src/toast* && \
-    SRC=$(echo src/*.c) && \
-    gcc ${CFLAGS} -c -ansi -pedantic -s -DNeedFunctionPrototypes=1 -Wall -Wno-comment -DSASR -DWAV49 -DNDEBUG -I./inc ${SRC} && \
-    ar cr libgsm.a *.o && ranlib libgsm.a && \
-    mkdir -p /usr/local/include/gsm && \
-    cp inc/*.h /usr/local/include/gsm && \
-    cp libgsm.a /usr/local/lib; \
-  fi
-
 # Remove kvazaar (HEVC encoder)
+COPY [ "src/kvazaar-*", "./kvazaar" ]
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping kvazaar build"; \
   else \
-    cd kvazaar-* && \
+    cd kvazaar && \
     ./autogen.sh && \
     ./configure \
       --disable-shared \
@@ -240,10 +195,11 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
   fi
 
 # Remove lame (MP3 encoder)
+COPY [ "src/lame-*", "./lame" ]
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping lame build"; \
   else \
-    cd lame-* && \
+    cd lame && \
     ./configure \
       --disable-shared \
       --enable-static \
@@ -254,7 +210,8 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
     make -j$(nproc) install; \
   fi
 
-RUN cd lcms2-* && \
+COPY [ "src/lcms2-*", "./lcms2" ]
+RUN cd lcms2 && \
   ./autogen.sh && \
   ./configure \
     --enable-static \
@@ -262,10 +219,11 @@ RUN cd lcms2-* && \
   make -j$(nproc) install
 
 # Remove opencore-amr (niche audio)
+COPY [ "src/opencore-amr-*", "./opencore-amr" ]
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping opencore-amr build"; \
   else \
-    cd opencore-amr-* && \
+    cd opencore-amr && \
     ./configure \
       --enable-static \
       --disable-shared && \
@@ -273,7 +231,8 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
   fi
 
 # Keep openjpeg (JPEG 2000 decoder)
-RUN cd openjpeg-* && \
+COPY [ "src/openjpeg-*", "./openjpeg" ]
+RUN cd openjpeg && \
   mkdir build && cd build && \
   cmake \
     -G"Unix Makefiles" \
@@ -288,7 +247,8 @@ RUN cd openjpeg-* && \
   make -j$(nproc) install
 
 # Keep opus (decoder)
-RUN cd opus-* && \
+COPY [ "src/opus-*", "./opus" ]
+RUN cd opus && \
   ./configure \
     --disable-shared \
     --enable-static \
@@ -297,10 +257,11 @@ RUN cd opus-* && \
   make -j$(nproc) install
 
 # Remove rabbitmq-c (networking)
+COPY [ "src/rabbitmq-c-*", "./rabbitmq-c" ]
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping rabbitmq-c build"; \
   else \
-    cd rabbitmq-c-* && \
+    cd rabbitmq-c && \
     mkdir build && cd build && \
     cmake \
       -G"Unix Makefiles" \
@@ -323,14 +284,15 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping rtmpdump build"; \
   else \
-    apk add rtmpdump-dev rtmpdump-static; \
+    apk add $APK_OPTS rtmpdump-dev rtmpdump-static; \
   fi
 
 # Remove rubberband (audio processing)
+COPY [ "src/rubberband-*", "./rubberband" ]
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping rubberband build"; \
   else \
-    cd rubberband-* && \
+    cd rubberband && \
     meson setup build \
       -Ddefault_library=static \
       -Dfft=fftw \
@@ -339,24 +301,13 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Requires.private: fftw3 samplerate" >> /usr/local/lib/pkgconfig/rubberband.pc; \
   fi
 
-# Remove shine (MP3 encoder)
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
-    echo "Skipping shine build"; \
-  else \
-    cd shine* && \
-    ./configure \
-      --with-pic \
-      --enable-static \
-      --disable-shared \
-      --disable-fast-install && \
-    make -j$(nproc) install; \
-  fi
 
 # Remove speex (voice codec)
+COPY [ "src/speex-*", "./speex" ]
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping speex build"; \
   else \
-    cd speex-* && \
+    cd speex && \
     ./autogen.sh && \
     ./configure \
       --disable-shared \
@@ -365,10 +316,11 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
   fi
 
 # Remove libssh (networking)
+COPY [ "src/libssh-*", "./libssh" ]
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "DECODE_ONLY is true, skipping libssh build"; \
   else \
-    cd libssh* && \
+    cd libssh && \
     mkdir build && cd build && \
     echo -e 'Requires.private: libssl libcrypto zlib \nLibs.private: -DLIBSSH_STATIC=1 -lssh\nCflags.private: -DLIBSSH_STATIC=1 -I${CMAKE_INSTALL_FULL_INCLUDEDIR}' >> ../libssh.pc.cmake && \
     cmake \
@@ -398,11 +350,13 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
     make install; \
   fi
 
-# Remove SVT-AV1 (AV1 encoder)
+# SVT-AV1 (AV1 encoder)
+COPY [ "src/SVT-AV1-*", "./SVT-AV1" ]
 RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping SVT-AV1 build"; \
   else \
-    cd SVT-AV1-*/Build && \
+    cd SVT-AV1 && \
+    cd Build && \
     cmake \
       -G"Unix Makefiles" \
       -DCMAKE_VERBOSE_MAKEFILE=ON \
@@ -414,20 +368,8 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
     make -j$(nproc) install; \
   fi
 
-# Remove twolame (MP2 encoder)
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
-    echo "Skipping twolame build"; \
-  else \
-    cd twolame-* && \
-    ./configure \
-      --disable-shared \
-      --enable-static \
-      --disable-sndfile \
-      --with-pic && \
-    make -j$(nproc) install; \
-  fi
-
-# Remove uavs3d (AVS3 decoder - niche, already in your DECODE_ONLY section)
+# uavs3d (AVS3 decoder - niche, already in your DECODE_ONLY section)
+COPY [ "src/uavs3d*", "./uavs3d" ]
 RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
   echo "Skipping uavs3d build"; \
   else \
@@ -443,11 +385,12 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
       make -j$(nproc) install; \
   fi
 
-# Remove vid.stab (video processing)
+# vid.stab (video processing)
+COPY [ "src/vid.stab-*", "./vid.stab" ]
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping vid.stab build"; \
   else \
-    cd vid.stab-* && \
+    cd vid.stab && \
     mkdir build && cd build && \
     sed -i 's/include (FindSSE)/if(CMAKE_SYSTEM_ARCH MATCHES "amd64")\ninclude (FindSSE)\nendif()/' ../CMakeLists.txt && \
     cmake \
@@ -463,6 +406,7 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
   fi
 
 # Remove x264 (encoder)
+COPY [ "src/x264*", "./x264" ]
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping x264 build"; \
   else \
@@ -476,11 +420,12 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
     make -j$(nproc) install; \
   fi
 
-# Remove x265 (HEVC encoder)
+# x265 (HEVC encoder)
+COPY [ "src/x265*", "./x265" ]
 RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping x265 build"; \
   else \
-    cd x265-*/build/linux && \
+    cd x265/build/linux && \
       sed -i '/^cmake / s/$/ -G "Unix Makefiles" ${CMAKEFLAGS}/' ./multilib.sh && \
       sed -i 's/ -DENABLE_SHARED=OFF//g' ./multilib.sh && \
       MAKEFLAGS="-j$(nproc)" \
@@ -489,18 +434,12 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
       make -C 8bit -j$(nproc) install; \
   fi
 
-# Remove xvidcore (old video encoder)
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
-    echo "Skipping xvidcore build"; \
-  else \
-    apk add xvidcore-dev xvidcore-static; \
-  fi
-
-# Remove xeve (HEVC encoder)
+# xeve (HEVC encoder)
+COPY [ "src/xeve-*", "./xeve" ]
 RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
   echo "Skipping xeve build"; \
   else \
-    cd xeve-* && \
+    cd xeve && \
     sed -i 's/mc_filter_bilin/xevem_mc_filter_bilin/' src_main/sse/xevem_mc_sse.c && \
     mkdir build && cd build && \
     cmake \
@@ -512,11 +451,12 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
     ln -s /usr/local/lib/xeve/libxeve.a /usr/local/lib/libxeve.a; \
   fi
 
-# Remove xevd (VVC/H.266 encoder)
+# xevd (VVC/H.266 encoder)
+COPY [ "src/xevd-*", "./xevd" ]
 RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
   echo "Skipping xevd build"; \
   else \
-    cd xevd-* && \
+    cd xevd && \
     sed -i 's/mc_filter_bilin/xevdm_mc_filter_bilin/' src_main/sse/xevdm_mc_sse.c && \
     mkdir build && cd build && \
     cmake \
@@ -528,15 +468,40 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
     ln -s /usr/local/lib/xevd/libxevd.a /usr/local/lib/libxevd.a; \
   fi
 
-# Remove libjxl (image codec - already in your DECODE_ONLY)
+# libjxl (image codec)
+COPY [ "src/libjxl-*", "./libjxl" ]
 RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
   echo "Skipping libjxl build"; \
   else \
-    apk add libjxl-dev libjxl-static; \
+    set -e && \
+    cd libjxl && \
+    ./deps.sh && \
+    cmake -B build \
+      -G"Unix Makefiles" \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_VERBOSE_MAKEFILE=ON \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DBUILD_TESTING=OFF \
+      -DJPEGXL_ENABLE_PLUGINS=OFF \
+      -DJPEGXL_ENABLE_BENCHMARK=OFF \
+      -DJPEGXL_ENABLE_COVERAGE=OFF \
+      -DJPEGXL_ENABLE_EXAMPLES=OFF \
+      -DJPEGXL_ENABLE_FUZZERS=OFF \
+      -DJPEGXL_ENABLE_SJPEG=OFF \
+      -DJPEGXL_ENABLE_SKCMS=OFF \
+      -DJPEGXL_ENABLE_VIEWERS=OFF \
+      -DJPEGXL_FORCE_SYSTEM_GTEST=ON \
+      -DJPEGXL_FORCE_SYSTEM_BROTLI=ON \
+      -DJPEGXL_FORCE_SYSTEM_HWY=OFF && \
+    cmake --build build -j$(nproc) && \
+    cmake --install build; \
   fi
 
 # hardware acceleration for intel cpu
-RUN cd libvpl-* && \
+COPY [ "src/libvpl-*", "./libvpl" ]
+RUN cd libvpl && \
     cmake -B build \
       -G"Unix Makefiles" \
       -DCMAKE_BUILD_TYPE=Release \
@@ -549,30 +514,33 @@ RUN cd libvpl-* && \
     cmake --build build -j$(nproc) && \
     cmake --install build;
 
-# Remove vvenc (HEVC encoder)
+# vvenc (HEVC encoder)
+COPY [ "src/vvenc-*", "./vvenc" ]
 RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
-  echo "Skipping vvenc build"; \
-  else \
-  cd vvenc-* && \
-    sed -i 's/-Werror;//' source/Lib/vvenc/CMakeLists.txt && \
-    cmake \
-      -S . \
-      -B build/release-static \
-      -DVVENC_ENABLE_WERROR=OFF \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX=/usr/local && \
-    cmake --build build/release-static -j && \
-    cmake --build build/release-static --target install; \
-  fi
+    echo "Skipping vvenc build"; \
+    else \
+    cd vvenc && \
+      sed -i 's/-Werror;//' source/Lib/vvenc/CMakeLists.txt && \
+      cmake \
+        -S . \
+        -B build/release-static \
+        -DVVENC_ENABLE_WERROR=OFF \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr/local && \
+      cmake --build build/release-static -j && \
+      cmake --build build/release-static --target install; \
+    fi
 
-# Keep dav1d (AV1 decoder)
-RUN cd dav1d-* && \
+# dav1d (AV1 decoder)
+COPY [ "src/dav1d-*", "./dav1d" ]
+RUN cd dav1d && \
   meson setup build \
     -Dbuildtype=release \
     -Ddefault_library=static && \
   ninja -j$(nproc) -vC build install
 
 # Remove game-music-emu (niche audio)
+COPY [ "src/game-music-emu", "./game-music-emu" ]
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping game-music-emu build"; \
   else \
@@ -588,36 +556,38 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
     make -j$(nproc) install; \
   fi
 
-# Remove libmodplug (niche audio)
+# libmodplug (niche audio)
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping libmodplug build"; \
   else \
-    apk add libmodplug-dev libmodplug-static; \
+    apk add $APK_OPTS libmodplug-dev libmodplug-static; \
   fi
 
-# Remove rav1e (AV1 encoder)
-RUN apk add rav1e-static rav1e-dev
+# rav1e (AV1 encoder)
+RUN apk add $APK_OPTS rav1e-static rav1e-dev
 
-# Remove zeromq (networking)
+# zeromq (networking)
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping zeromq build"; \
   else \
-    apk add zeromq-dev zeromq-static; \
+    apk add zeromq-dev libzmq-static; \
   fi
 
 # Keep zimg (image processing for decode, scaling etc.)
-RUN cd zimg-* && \
+COPY [ "src/zimg-*", "./zimg" ]
+RUN cd zimg && \
   ./autogen.sh && \
   ./configure \
     --disable-shared \
     --enable-static && \
   make -j$(nproc) install
 
-# Remove srt (networking)
+# srt (networking)
+COPY [ "src/srt-*", "./srt" ]
 RUN if [ "$DECODE_ONLY" = "true" ]; then \
   echo "DECODE_ONLY is true, skipping srt build"; \
   else \
-    cd srt-* && \
+    cd srt && \
     mkdir build && cd build && \
     cmake \
       -G"Unix Makefiles" \
@@ -636,155 +606,112 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
     make -j$(nproc) && make install; \
   fi
 
-# Keep libwebp (decoder)
-RUN apk add libwebp-dev libwebp-static
+# libwebp (decoder)
+RUN apk add $APK_OPTS libwebp-dev libwebp-static
 
-
-# Keep libvpx (VP8/VP9 decoder)
-RUN cd libvpx-* && \
+# libvpx (VP8/VP9 decoder)
+COPY [ "src/libvpx-*", "./libvpx" ]
+RUN if [ "$(uname -m)" = "armv7l" ]; then \
+  echo "DECODE_ONLY is true, skipping libvpx build"; \
+  else \
+    cd libvpx && \
     ./configure \
       --enable-static \
       --enable-vp9-highbitdepth \
       --disable-shared \
       --disable-unit-tests \
       --disable-examples && \
-    make -j$(nproc) install;
-
-# Keep libvorbis (decoder)
-RUN apk add libvorbis-dev libvorbis-static
-
-# Remove libmysofa (niche audio)
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
-    echo "Skipping libmysofa build"; \
-  else \
-    cd libmysofa-*/build && \
-    cmake \
-      -G"Unix Makefiles" \
-      -DCMAKE_VERBOSE_MAKEFILE=ON \
-      -DCMAKE_INSTALL_LIBDIR=lib \
-      -DBUILD_SHARED_LIBS=OFF \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DBUILD_TESTS=OFF \
-      .. && \
     make -j$(nproc) install; \
   fi
 
-RUN cd ffmpeg* && \
+# libvorbis (decoder)
+RUN apk add $APK_OPTS libvorbis-dev libvorbis-static
+
+COPY [ "src/ffmpeg*", "./ffmpeg" ]
+RUN cd ffmpeg && \
   sed -i 's/svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc, &svt_enc->enc_params)/svt_av1_enc_init_handle(\&svt_enc->svt_handle, \&svt_enc->enc_params)/g' libavcodec/libsvtav1.c && \
+  if [ "$(uname -m)" != "armv7l" ]; then \
+    FEATURES="--enable-libvpx"; \
+  fi; \
   # Conditional flags based on DECODE_ONLY
   if [ "$DECODE_ONLY" != "true" ]; then \
-    FDKAAC_FLAGS="--enable-libfdk-aac --enable-nonfree"; \
-    LIBX264_FLAG="--enable-libx264"; \
-    RAV1E_FLAG="--enable-librav1e"; \
-    LIBSVT_FLAG="--enable-libsvtav1"; \
-    LIBX265_FLAG="--enable-libx265"; \
-    LIBEXEV_FLAG="--enable-libxeve"; \
-    LIBEXVD_FLAG="--enable-libxevd"; \
-    LIBVVENC_FLAG="--enable-libvvenc"; \
-    LIBBLURAY_FLAG="--enable-libbluray"; \
-    LIBDAVS2_FLAG="--enable-libdavs2"; \
-    LIBGME_FLAG="--enable-libgme"; \
-    LIBGSM_FLAGS="--enable-libgsm"; \
-    LIBMODPLUG_FLAG="--enable-libmodplug"; \
-    LIBMYSOFA_FLAG="--enable-libmysofa"; \
-    LIBOPENCOREAMR_FLAG="--enable-libopencore-amrnb --enable-libopencore-amrwb"; \
-    LIBRTMP_FLAG="--enable-librtmp"; \
-    LIBRUBBERBAND_FLAG="--enable-librubberband"; \
-    LIBSHINE_FLAG="--enable-libshine"; \
-    LIBSPEEX_FLAG="--enable-libspeex"; \
-    LIBTHEORA_FLAG="--enable-libtheora"; \
-    LIBTWOLAME_FLAG="--enable-libtwolame"; \
-    UAVS3D_FLAG="--enable-libuavs3d"; \
-    LIBVIDSTAB_FLAG="--enable-libvidstab"; \
-    LIBVMAF_FLAG="--enable-libvmaf"; \
-    LIBVOAMRWBENC_FLAG="--enable-libvo-amrwbenc"; \
-    LIBJXL_FLAG="--enable-libjxl"; \
-    LIBRSVG_FLAG="--enable-librsvg"; \
-    LIBRABBITMQ_FLAG="--enable-librabbitmq"; \
-    LIBSRT_FLAG="--enable-libsrt"; \
-    LIBSSH_FLAG="--enable-libssh"; \
-    LIBZM_FLAG="--enable-libzmq"; \
-    LIBKVZ_FLAG="--enable-libkvazaar"; \
-    LIBMP3LAME_FLAG="--enable-libmp3lame"; \
-    LIBSHINE_FLAG="--enable-libshine"; \
-    LIBXVID_FLAG="--enable-libxvid"; \
+    FEATURES="$FEATURES --enable-libfdk-aac --enable-nonfree"; \
+    FEATURES="$FEATURES --enable-libx264"; \
+    FEATURES="$FEATURES --enable-librav1e"; \
+    FEATURES="$FEATURES --enable-libsvtav1"; \
+    FEATURES="$FEATURES --enable-libx265"; \
+    FEATURES="$FEATURES --enable-libxeve"; \
+    FEATURES="$FEATURES --enable-libxevd"; \
+    FEATURES="$FEATURES --enable-libvvenc"; \
+    FEATURES="$FEATURES --enable-libbluray"; \
+    FEATURES="$FEATURES --enable-libdavs2"; \
+    FEATURES="$FEATURES --enable-libgme"; \
+    # For the GSM audio codec, used in telephony.
+    #FEATURES="$FEATURES --enable-libgsm"; \
+    FEATURES="$FEATURES --enable-libmodplug"; \
+    # 3d audio support.
+    #FEATURES="$FEATURES --enable-libmysofa"; \
+    # AMR audio codecs for mobile.
+    #FEATURES="$FEATURES --enable-libopencore-amrnb --enable-libopencore-amrwb"; \
+    #FEATURES="$FEATURES --enable-librtmp"; \
+    # High-quality audio pitch shifting.
+    #FEATURES="$FEATURES --enable-librubberband"; \
+    # libmp3lame is superior and already included.
+    #FEATURES="$FEATURES --enable-libshine"; \
+    # Voice audio codec, largely replaced by Opus.
+    #FEATURES="$FEATURES --enable-libspeex"; \
+    #FEATURES="$FEATURES --enable-libtheora"; \
+    #FEATURES="$FEATURES --enable-libtwolame"; \
+    FEATURES="$FEATURES --enable-libuavs3d"; \
+    # Video stabilization filter.
+    #FEATURES="$FEATURES --enable-libvidstab"; \
+    FEATURES="$FEATURES --enable-libvmaf"; \
+    FEATURES="$FEATURES --enable-libvo-amrwbenc"; \
+    #FEATURES="$FEATURES --enable-libjxl"; \
+    #FEATURES="$FEATURES --enable-librsvg"; \
+    FEATURES="$FEATURES --enable-librabbitmq"; \
+    FEATURES="$FEATURES --enable-libsrt"; \
+    FEATURES="$FEATURES --enable-libssh"; \
+    #FEATURES="$FEATURES --enable-libzmq"; \
+    FEATURES="$FEATURES --enable-libkvazaar"; \
+    FEATURES="$FEATURES --enable-libmp3lame"; \
+    #FEATURES="$FEATURES --enable-libshine"; \
+    # replaced by x264
+    #FEATURES="$FEATURES --enable-libxvid"; \
   fi && \
     PKG_CONFIG_PATH="/usr/lib/pkgconfig/:${PKG_CONFIG_PATH}" && \
-    # VPX is a critical decoder for web video, so keep it for DECODE_ONLY
-    VPX_FLAG="--enable-libvpx" && \
-    # SOXR is for high-quality resampling, might be good for decode even if not encoding
-    LIBSOXR_FLAG="--enable-libsoxr" && \
-    # Opus and Vorbis are good decoders to keep for common web formats
-    LIBOPUS_FLAG="--enable-libopus" && \
-    LIBVORBIS_FLAG="--enable-libvorbis" && \
     ./configure \
     --pkg-config-flags="--static" \
     --extra-cflags="$CFLAGS" \
     --extra-cxxflags="$CXXFLAGS" \
     --extra-ldexeflags="-fPIE -static-pie" \
-    --extra-ldflags="-fopenmp -Wl,--allow-multiple-definition -Wl,-z,stack-size=2097152" \
+    --enable-small \
+    --enable-openssl \
     --disable-shared \
     --disable-ffplay \
     --enable-static \
     --enable-gpl \
     --enable-libvpl \
+    --enable-libvorbis \
+    --enable-libopus \
     --enable-version3 \
-    $FDKAAC_FLAGS \
+    --enable-libzimg \
     --enable-fontconfig \
     --enable-gray \
     --enable-iconv \
     --enable-lcms2 \
     --enable-libaom \
-    $LIBKVZ_FLAG \
-    $LIBBLURAY_FLAG \
-    --enable-libdav1d \
-    $LIBDAVS2_FLAG \
-    --enable-libfreetype \
-    --enable-libfribidi \
-    $LIBMP3LAME_FLAG \
-    $LIBGME_FLAG \
-    $LIBX264_FLAG \
-    $LIBGSM_FLAGS \
-    --enable-libharfbuzz \
-    $LIBJXL_FLAG \
-    $LIBMODPLUG_FLAG \
-    $LIBMYSOFA_FLAG \
-    $LIBOPENCOREAMR_FLAG \
-    --enable-libopenjpeg \
-    $LIBOPUS_FLAG \
-    $LIBRABBITMQ_FLAG \
-    $RAV1E_FLAG \
-    $LIBRSVG_FLAG \
-    $LIBRTMP_FLAG \
-    $LIBRUBBERBAND_FLAG \
-    $LIBSHINE_FLAG \
-    --enable-libsnappy \
-    $LIBSOXR_FLAG \
-    $LIBSPEEX_FLAG \
-    $LIBSRT_FLAG \
-    $LIBSSH_FLAG \
-    $LIBSVT_FLAG \
-    $LIBTHEORA_FLAG \
-    $LIBTWOLAME_FLAG \
-    $UAVS3D_FLAG \
-    $LIBVIDSTAB_FLAG \
-    $LIBVMAF_FLAG \
-    $LIBVOAMRWBENC_FLAG \
-    $LIBVORBIS_FLAG \
-    $LIBVPL_FLAG \
-    $VPX_FLAG \
-    $LIBVVENC_FLAG \
     --enable-libwebp \
-    $LIBX264_FLAG \
-    $LIBX265_FLAG \
-    $LIBEXVD_FLAG \
-    $LIBEXEV_FLAG \
     --enable-libxml2 \
-    $LIBXVID_FLAG \
-    --enable-libzimg \
-    $LIBZM_FLAG \
-    --enable-small \
-    --enable-openssl \
+    --enable-libdav1d \
+    #--enable-libass \
+    #--enable-libfreetype \
+    #--enable-libfribidi \
+    #--enable-libharfbuzz \
+    #--enable-libsoxr \
+    --enable-libopenjpeg \
+    --enable-libsnappy \
+    $FEATURES \
   || (cat ffbuild/config.log ; false) && \
   make -j$(nproc) install
 
@@ -834,10 +761,10 @@ RUN \
   librtmp: env.LIBRTMP_COMMIT, \
   librubberband: env.RUBBERBAND_VERSION, \
   libsamplerate: env.LIBSAMPLERATE_VERSION, \
-  libshine: env.LIBSHINE_VERSION, \
+  #libshine: env.LIBSHINE_VERSION, \
   libsnappy: env.SNAPPY_VERSION, \
   libsoxr: env.SOXR_VERSION, \
-  libspeex: env.SPEEX_VERSION, \
+  #libspeex: env.SPEEX_VERSION, \
   libsrt: env.SRT_VERSION, \
   libssh: env.LIBSSH_VERSION, \
   libsvtav1: env.SVTAV1_VERSION, \
@@ -858,7 +785,7 @@ RUN \
   libxevd: env.XEVD_VERSION, \
   libxeve: env.XEVE_VERSION, \
   libxml2: env.LIBXML2_VERSION, \
-  libxvid: env.XVID_VERSION, \
+  #libxvid: env.XVID_VERSION, \
   libzimg: env.ZIMG_VERSION, \
   libzmq: env.LIBZMQ_VERSION, \
   openssl: env.OPENSSL_VERSION, \
