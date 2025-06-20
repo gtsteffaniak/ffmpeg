@@ -23,6 +23,8 @@ RUN apk add $APK_OPTS \
   jq \
   zlib-dev zlib-static \
   bzip2-dev bzip2-static \
+  util-linux-dev util-linux-static \
+  pixman-dev pixman-static \
   libxml2-dev libxml2-static \
   expat-dev expat-static \
   fontconfig-dev fontconfig-static \
@@ -60,7 +62,7 @@ ARG LDFLAGS="-Wl,-z,relro,-z,now"
 # Add a DECODE_ONLY argument
 ARG DECODE_ONLY="false" # Set "true" for decode-only, "false" for full build
 
-RUN apk add $APK_OPTS glib-dev glib-static
+RUN apk add $APK_OPTS glib-dev glib-static pcre2-dev pcre2-static
 
 # Skip cairo, librsvg, pango if DECODE_ONLY is true (for smaller text rendering footprint if desired)
 RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
@@ -71,28 +73,11 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
 
 RUN apk add $APK_OPTS harfbuzz-dev harfbuzz-static
 
-RUN if [ "$(uname -m)" = "armv7l" ]; then \
-    echo "Skipping Pango build"; \
-  else \
-    apk add $APK_OPTS pango-dev pango; \
-  fi
-
-COPY [ "src/librsvg-*", "./librsvg" ]
+COPY [ "src/pango-*", "./pango" ]
 RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
-  echo "Skipping librsvg build"; \
-  else \
-    cd librsvg && \
-    sed -i "/^if host_system in \['windows'/s/, 'linux'//" meson.build && \
-    meson setup build \
-      -Dbuildtype=release \
-      -Ddefault_library=static \
-      -Ddocs=disabled \
-      -Dintrospection=disabled \
-      -Dpixbuf=disabled \
-      -Dpixbuf-loader=disabled \
-      -Dvala=disabled \
-      -Dtests=false && \
-    ninja -j$(nproc) -vC build install; \
+  echo "Skipping pango build"; \
+else \
+    apk add $APK_OPTS pango-dev pango; \
   fi
 
 COPY [ "src/libva-*", "./libva" ]
@@ -341,7 +326,7 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
 
 # libjxl (image codec)
 COPY [ "src/libjxl-*", "./libjxl" ]
-RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+RUN if [ "$(uname -m)" = "armv7l" ]; then \
   echo "Skipping libjxl build"; \
   else \
     set -e && \
@@ -443,6 +428,25 @@ RUN if [ "$(uname -m)" = "armv7l" ]; then \
 # libvorbis (decoder)
 RUN apk add $APK_OPTS libvorbis-dev libvorbis-static
 
+COPY [ "src/libass-*", "./libass" ]
+RUN cd libass && \
+  ./configure \
+    --disable-shared \
+    --enable-static && \
+  make -j$(nproc) && make install
+
+COPY [ "src/libmysofa-*", "./libmysofa" ]
+RUN cd libmysofa/build && \
+  cmake \
+    -G"Unix Makefiles" \
+    -DCMAKE_VERBOSE_MAKEFILE=ON \
+    -DCMAKE_INSTALL_LIBDIR=lib \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTS=OFF \
+    .. && \
+  make -j$(nproc) install
+
 COPY [ "src/ffmpeg*", "./ffmpeg" ]
 RUN cd ffmpeg && \
   sed -i 's/svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc, &svt_enc->enc_params)/svt_av1_enc_init_handle(\&svt_enc->svt_handle, \&svt_enc->enc_params)/g' libavcodec/libsvtav1.c && \
@@ -451,7 +455,7 @@ RUN cd ffmpeg && \
   fi; \
   # Conditional flags based on DECODE_ONLY
   if [ "$DECODE_ONLY" != "true" ]; then \
-    FEATURES="$FEATURES --enable-libfdk-aac --enable-nonfree"; \
+    FEATURES="$FEATURES --enable-nonfree"; \
     FEATURES="$FEATURES --enable-libx264"; \
     FEATURES="$FEATURES --enable-librav1e"; \
     FEATURES="$FEATURES --enable-libsvtav1"; \
@@ -470,20 +474,17 @@ RUN cd ffmpeg && \
     #FEATURES="$FEATURES --enable-librubberband"; \
     # libmp3lame is superior and already included.
     #FEATURES="$FEATURES --enable-libshine"; \
-    # Voice audio codec, largely replaced by Opus.
     #FEATURES="$FEATURES --enable-libtheora"; \
-    FEATURES="$FEATURES --enable-libtwolame"; \
+    #FEATURES="$FEATURES --enable-libtwolame"; \
     FEATURES="$FEATURES --enable-libuavs3d"; \
     # Video stabilization filter.
     FEATURES="$FEATURES --enable-libvidstab"; \
     FEATURES="$FEATURES --enable-libvmaf"; \
     FEATURES="$FEATURES --enable-libvo-amrwbenc"; \
-    FEATURES="$FEATURES --enable-libjxl"; \
-    FEATURES="$FEATURES --enable-librsvg"; \
+    #FEATURES="$FEATURES --enable-libjxl"; \
+    #FEATURES="$FEATURES --enable-librsvg"; \
     FEATURES="$FEATURES --enable-libmp3lame"; \
     #FEATURES="$FEATURES --enable-libshine"; \
-    # replaced by x264
-    #FEATURES="$FEATURES --enable-libxvid"; \
   fi && \
     PKG_CONFIG_PATH="/usr/lib/pkgconfig/:${PKG_CONFIG_PATH}" && \
     ./configure \
@@ -491,9 +492,9 @@ RUN cd ffmpeg && \
     --extra-cflags="$CFLAGS" \
     --extra-cxxflags="$CXXFLAGS" \
     --extra-ldexeflags="-fPIE -static-pie" \
+    --extra-libs="-lm -fopenmp" \
     --enable-small \
-    --enable-vulkan \
-    --enable-libplacebo \
+    #--enable-vulkan \
     --enable-openssl \
     --disable-shared \
     --disable-ffplay \
@@ -501,7 +502,6 @@ RUN cd ffmpeg && \
     --enable-gpl \
     --enable-libvpl \
     --enable-libvorbis \
-    --enable-libopus \
     --enable-version3 \
     --enable-libzimg \
     --enable-fontconfig \
@@ -519,7 +519,7 @@ RUN cd ffmpeg && \
     --enable-libsoxr \
     --enable-libopenjpeg \
     --enable-libsnappy \
-  $FEATURES \
+    $FEATURES \
   || (cat ffbuild/config.log ; false) && \
   make -j$(nproc) install
 
@@ -540,7 +540,6 @@ RUN apk add $APK_OPTS font-terminus font-inconsolata font-dejavu font-awesome
 FROM scratch AS testing
 COPY --from=builder /usr/local/bin/ffmpeg /
 COPY --from=builder /usr/local/bin/ffprobe /
-COPY --from=builder /versions.json /
 COPY --from=builder /usr/local/share/doc/ffmpeg/* /doc/
 COPY --from=builder /etc/ssl/cert.pem /etc/ssl/cert.pem
 COPY --from=builder /etc/fonts/ /etc/fonts/
@@ -568,7 +567,6 @@ RUN ["/ffmpeg", "-f", "lavfi", "-i", "testsrc", "-c:v", "libx265", "-t", "100ms"
 FROM scratch
 COPY --from=builder /usr/local/bin/ffmpeg /
 COPY --from=builder /usr/local/bin/ffprobe /
-COPY --from=builder /versions.json /
 COPY --from=builder /usr/local/share/doc/ffmpeg/* /doc/
 COPY --from=builder /etc/ssl/cert.pem /etc/ssl/cert.pem
 COPY --from=builder /etc/fonts/ /etc/fonts/
