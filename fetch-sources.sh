@@ -178,30 +178,6 @@ fetch_and_unpack srt SRT_VERSION SRT_URL SRT_SHA256
 : "${ZIMG_SHA256:=a9a0226bf85e0d83c41a8ebe4e3e690e1348682f6a2a7838f1b8cbff1b799bcf}"
 fetch_and_unpack zimg ZIMG_VERSION ZIMG_URL ZIMG_SHA256
 
-# bump: libzmq /LIBZMQ_VERSION=([\d.]+)/ https://github.com/zeromq/libzmq.git|*
-# bump: libzmq after ./hashupdate Dockerfile LIBZMQ $LATEST
-# bump: libzmq link "NEWS" https://github.com/zeromq/libzmq/blob/master/NEWS
-#: "${LIBZMQ_VERSION:=4.3.5}"
-#: "${LIBZMQ_URL:=https://github.com/zeromq/libzmq/releases/download/v${LIBZMQ_VERSION}/zeromq-$#{LIBZMQ_VERSION}.tar.gz}"
-#: "${LIBZMQ_SHA256:=6653ef5910f17954861fe72332e68b03ca6e4d9c7160eb3a8de5a5a913bfab43}"
-#fetch_and_unpack zeromq LIBZMQ_VERSION LIBZMQ_URL LIBZMQ_SHA256
-
-# bump: libgme /LIBGME_COMMIT=([[:xdigit:]]+)/ gitrefs:https://github.com/libgme/game-music-emu.git|re:#^refs/heads/master$#|@commit
-# bump: libgme after ./hashupdate Dockerfile LIBGME $LATEST
-# bump: libgme link "Source diff $CURRENT..$LATEST" https://github.com/libgme/game-music-emu/compare/$CURRENT..v$LATEST
-: "${LIBGME_URL:=https://github.com/libgme/game-music-emu.git}"
-: "${LIBGME_COMMIT:=9762cbcff3d2224ee0f8b8c41ec143e956ebad56}"
-fetch_and_unpack_git game-music-emu "" LIBGME_URL "" LIBGME_COMMIT
-
-# bump: libmodplug /LIBMODPLUG_VERSION=([\d.]+)/ fetch:https://sourceforge.net/projects/modplug-xmms/files/|/libmodplug-([\d.]+).tar.gz/
-# bump: libmodplug after ./hashupdate Dockerfile LIBMODPLUG $LATEST
-# bump: libmodplug link "NEWS" https://sourceforge.net/p/modplug-xmms/git/ci/master/tree/libmodplug/NEWS
-#: "${LIBMODPLUG_VERSION:=0.8.9.0}"
-#: "${LIBMODPLUG_URL:=https://downloads.sourceforge.net/modplug-xmms/libmodplug-${LIBMODPLUG_VERSION}.tar.gz}"
-#: "${LIBMODPLUG_SHA256:=457ca5a6c179656d66c01505c0d95fafaead4329b9dbaa0f997d00a3508ad9de}"
-#fetch_and_unpack libmodplug LIBMODPLUG_VERSION LIBMODPLUG_URL LIBMODPLUG_SHA256
-
-
 # preferring rav1e-static rav1e-dev from apk (0.7.1)
 # bump: rav1e /RAV1E_VERSION=([\d.]+)/ https://github.com/xiph/rav1e.git|/\d+\./|*
 # bump: rav1e after ./hashupdate Dockerfile RAV1E $LATEST
@@ -280,14 +256,6 @@ fetch_and_unpack libbluray LIBBLURAY_VERSION LIBBLURAY_URL LIBBLURAY_SHA256
 : "${LIBASS_URL:=https://github.com/libass/libass/releases/download/$LIBASS_VERSION/libass-$LIBASS_VERSION.tar.gz}"
 : "${LIBASS_SHA256:=da7c348deb6fa6c24507afab2dee7545ba5dd5bbf90a137bfe9e738f7df68537}"
 fetch_and_unpack libass LIBASS_VERSION LIBASS_URL LIBASS_SHA256
-
-# bump: kvazaar /KVAZAAR_VERSION=([\d.]+)/ https://github.com/ultravideo/kvazaar.git|^2
-# bump: kvazaar after ./hashupdate Dockerfile KVAZAAR $LATEST
-# bump: kvazaar link "Release notes" https://github.com/ultravideo/kvazaar/releases/tag/v$LATEST
-: "${KVAZAAR_VERSION:=2.3.1}"
-: "${KVAZAAR_URL:=https://github.com/ultravideo/kvazaar/archive/v$KVAZAAR_VERSION.tar.gz}"
-: "${KVAZAAR_SHA256:=c5a1699d0bd50bc6bdba485b3438a5681a43d7b2c4fd6311a144740bfa59c9cc}"
-fetch_and_unpack kvazaar KVAZAAR_VERSION KVAZAAR_URL KVAZAAR_SHA256
 
 # bump: libvpl /LIBVPL_VERSION=([\d.]+)/ https://github.com/intel/libvpl.git|^2
 # bump: libvpl after ./hashupdate Dockerfile LIBVPL $LATEST
@@ -426,26 +394,6 @@ fetch_and_unpack twolame TWOLAME_VERSION TWOLAME_URL TWOLAME_SHA256
 ## Use 'libtheora' as name to match extracted directory
 #fetch_and_unpack libtheora THEORA_VERSION THEORA_URL THEORA_SHA256
 
-# bump: libssh /LIBSSH_VERSION=([\d.]+)/ https://gitlab.com/libssh/libssh-mirror.git|*
-# bump: libssh after ./hashupdate Dockerfile LIBSSH $LATEST
-# bump: libssh link "Source diff $CURRENT..$LATEST" https://gitlab.com/libssh/libssh-mirror/-/compare/libssh-$CURRENT...libssh-$LATEST
-# bump: libssh link "Release notes" https://gitlab.com/libssh/libssh-mirror/-/tags/libssh-$LATEST
-: "${LIBSSH_VERSION:=0.11.1}"
-: "${LIBSSH_URL:=https://gitlab.com/libssh/libssh-mirror/-/archive/libssh-$LIBSSH_VERSION/libssh-mirror-libssh-$LIBSSH_VERSION.tar.gz}"
-: "${LIBSSH_SHA256:=b43ef9c91b6c3db64e7ba3db101eb89dbe645db63489c19d4f88cf6f84911ec6}"
-# LIBSSH_STATIC=1 is REQUIRED to link statically against libssh.a so add to pkg-config file (Build step comment)
-# Use 'libssh' as name, function expects dir 'libssh-${LIBSSH_VERSION}'
-fetch_and_unpack libssh LIBSSH_VERSION LIBSSH_URL LIBSSH_SHA256
-
-# bump: speex /SPEEX_VERSION=([\d.]+)/ https://github.com/xiph/speex.git|*
-# bump: speex after ./hashupdate Dockerfile SPEEX $LATEST
-# bump: speex link "ChangeLog" https://github.com/xiph/speex//blob/master/ChangeLog
-# bump: speex link "Source diff $CURRENT..$LATEST" https://github.com/xiph/speex/compare/$CURRENT..$LATEST
-: "${SPEEX_VERSION:=1.2.1}"
-: "${SPEEX_URL:=https://github.com/xiph/speex/archive/Speex-$SPEEX_VERSION.tar.gz}"
-: "${SPEEX_SHA256:=beaf2642e81a822eaade4d9ebf92e1678f301abfc74a29159c4e721ee70fdce0}"
-fetch_and_unpack speex SPEEX_VERSION SPEEX_URL SPEEX_SHA256
-
 # bump: libshine /LIBSHINE_VERSION=([\d.]+)/ https://github.com/toots/shine.git|*
 # bump: libshine after ./hashupdate Dockerfile LIBSHINE $LATEST
 # bump: libshine link "CHANGELOG" https://github.com/toots/shine/blob/master/ChangeLog
@@ -465,33 +413,6 @@ fetch_and_unpack shine LIBSHINE_VERSION LIBSHINE_URL LIBSHINE_SHA256
 : "${RUBBERBAND_SHA256:=b9eac027e797789ae99611c9eaeaf1c3a44cc804f9c8a0441a0d1d26f3d6bdf9}"
 fetch_and_unpack rubberband RUBBERBAND_VERSION RUBBERBAND_URL RUBBERBAND_SHA256
 
-# bump: librtmp /LIBRTMP_COMMIT=([[:xdigit:]]+)/ gitrefs:https://git.ffmpeg.org/rtmpdump.git|re:#^refs/heads/master$#|@commit
-# bump: librtmp after ./hashupdate Dockerfile LIBRTMP $LATEST
-# bump: librtmp link "Commit diff $CURRENT..$LATEST" https://git.ffmpeg.org/gitweb/rtmpdump.git/commitdiff/$LATEST?ds=sidebyside
-#: "${LIBRTMP_URL:=https://git.ffmpeg.org/rtmpdump.git}"
-#: "${LIBRTMP_COMMIT:=6f6bb1353fc84f4cc37138baa99f586750028a01}"
-## Use 'rtmpdump' as name to match cloned directory
-#fetch_and_unpack_git rtmpdump "" LIBRTMP_URL "" LIBRTMP_COMMIT
-
-
-# bump: librabbitmq /LIBRABBITMQ_VERSION=([\d.]+)/ https://github.com/alanxz/rabbitmq-c.git|*
-# bump: librabbitmq after ./hashupdate Dockerfile LIBRABBITMQ $LATEST
-# bump: librabbitmq link "ChangeLog" https://github.com/alanxz/rabbitmq-c/blob/master/ChangeLog.md
-: "${LIBRABBITMQ_VERSION:=0.15.0}"
-: "${LIBRABBITMQ_URL:=https://github.com/alanxz/rabbitmq-c/archive/refs/tags/v$LIBRABBITMQ_VERSION.tar.gz}"
-: "${LIBRABBITMQ_SHA256:=7b652df52c0de4d19ca36c798ed81378cba7a03a0f0c5d498881ae2d79b241c2}"
-# Use 'rabbitmq-c' as name to match extracted directory
-fetch_and_unpack rabbitmq-c LIBRABBITMQ_VERSION LIBRABBITMQ_URL LIBRABBITMQ_SHA256
-
-# bump: opus /OPUS_VERSION=([\d.]+)/ https://github.com/xiph/opus.git|^1
-# bump: opus after ./hashupdate Dockerfile OPUS $LATEST
-# bump: opus link "Release notes" https://github.com/xiph/opus/releases/tag/v$LATEST
-# bump: opus link "Source diff $CURRENT..$LATEST" https://github.com/xiph/opus/compare/v$CURRENT..v$LATEST
-: "${OPUS_VERSION:=1.5.2}"
-: "${OPUS_URL:=https://downloads.xiph.org/releases/opus/opus-$OPUS_VERSION.tar.gz}"
-: "${OPUS_SHA256:=65c1d2f78b9f2fb20082c38cbe47c951ad5839345876e46941612ee87f9a7ce1}"
-fetch_and_unpack opus OPUS_VERSION OPUS_URL OPUS_SHA256
-
 # bump: openjpeg /OPENJPEG_VERSION=([\d.]+)/ https://github.com/uclouvain/openjpeg.git|*
 # bump: openjpeg after ./hashupdate Dockerfile OPENJPEG $LATEST
 # bump: openjpeg link "CHANGELOG" https://github.com/uclouvain/openjpeg/blob/master/CHANGELOG.md
@@ -499,15 +420,6 @@ fetch_and_unpack opus OPUS_VERSION OPUS_URL OPUS_SHA256
 : "${OPENJPEG_URL:=https://github.com/uclouvain/openjpeg/archive/v$OPENJPEG_VERSION.tar.gz}"
 : "${OPENJPEG_SHA256:=368fe0468228e767433c9ebdea82ad9d801a3ad1e4234421f352c8b06e7aa707}"
 fetch_and_unpack openjpeg OPENJPEG_VERSION OPENJPEG_URL OPENJPEG_SHA256
-
-# bump: opencoreamr /OPENCOREAMR_VERSION=([\d.]+)/ fetch:https://sourceforge.net/projects/opencore-amr/files/opencore-amr/|/opencore-amr-([\d.]+).tar.gz/
-# bump: opencoreamr after ./hashupdate Dockerfile OPENCOREAMR $LATEST
-# bump: opencoreamr link "ChangeLog" https://sourceforge.net/p/opencore-amr/code/ci/master/tree/ChangeLog
-: "${OPENCOREAMR_VERSION:=0.1.6}"
-: "${OPENCOREAMR_URL:=https://sourceforge.net/projects/opencore-amr/files/opencore-amr/opencore-amr-$OPENCOREAMR_VERSION.tar.gz}"
-: "${OPENCOREAMR_SHA256:=483eb4061088e2b34b358e47540b5d495a96cd468e361050fae615b1809dc4a1}"
-# Use 'opencore-amr' as name to match extracted directory
-fetch_and_unpack opencore-amr OPENCOREAMR_VERSION OPENCOREAMR_URL OPENCOREAMR_SHA256
 
 # bump: lcms2 /LCMS2_VERSION=([\d.]+)/ https://github.com/mm2/Little-CMS.git|^2
 # bump: lcms2 after ./hashupdate Dockerfile LCMS2 $LATEST
@@ -532,15 +444,6 @@ fetch_and_unpack lame MP3LAME_VERSION MP3LAME_URL MP3LAME_SHA256
 : "${LIBGSM_URL:=https://github.com/timothytylee/libgsm.git}"
 : "${LIBGSM_COMMIT:=98f1708fb5e06a0dfebd58a3b40d610823db9715}"
 fetch_and_unpack_git libgsm "" LIBGSM_URL "" LIBGSM_COMMIT
-
-# bump: fdk-aac /FDK_AAC_VERSION=([\d.]+)/ https://github.com/mstorsjo/fdk-aac.git|*
-# bump: fdk-aac after ./hashupdate Dockerfile FDK_AAC $LATEST
-# bump: fdk-aac link "ChangeLog" https://github.com/mstorsjo/fdk-aac/blob/master/ChangeLog
-# bump: fdk-aac link "Source diff $CURRENT..$LATEST" https://github.com/mstorsjo/fdk-aac/compare/v$CURRENT..v$LATEST
-: "${FDK_AAC_VERSION:=2.0.3}"
-: "${FDK_AAC_URL:=https://github.com/mstorsjo/fdk-aac/archive/v$FDK_AAC_VERSION.tar.gz}"
-: "${FDK_AAC_SHA256:=e25671cd96b10bad896aa42ab91a695a9e573395262baed4e4a2ff178d6a3a78}"
-fetch_and_unpack fdk-aac FDK_AAC_VERSION FDK_AAC_URL FDK_AAC_SHA256
 
 # bump: davs2 /DAVS2_VERSION=([\d.]+)/ https://github.com/pkuvcl/davs2.git|^1
 # bump: davs2 after ./hashupdate Dockerfile DAVS2 $LATEST
