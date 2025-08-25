@@ -98,7 +98,7 @@ fetch_and_unpack() {
   echo "--- Finished $dir ---"
 }
 
-: "${SVTAV1_VERSION:=3.0.2}"
+: "${SVTAV1_VERSION:=3.1.0}"
 : "${SVTAV1_URL:=https://gitlab.com/AOMediaCodec/SVT-AV1/-/archive/v$SVTAV1_VERSION/SVT-AV1-v$SVTAV1_VERSION.tar.bz2}"
 fetch_and_unpack SVT-AV1 SVTAV1_VERSION SVTAV1_URL
 
@@ -108,7 +108,7 @@ fetch_and_unpack SVT-AV1 SVTAV1_VERSION SVTAV1_URL
 # bump: ffmpeg after ./hashupdate Dockerfile FFMPEG $LATEST
 # bump: ffmpeg link "Changelog" https://github.com/FFmpeg/FFmpeg/blob/n$LATEST/Changelog
 # bump: ffmpeg link "Source diff $CURRENT..$LATEST" https://github.com/FFmpeg/FFmpeg/compare/n$CURRENT..n$LATEST
-: "${FFMPEG_VERSION:=7.1.1}"
+: "${FFMPEG_VERSION:=8.0}"
 : "${FFMPEG_URL:=https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.bz2}"
 fetch_and_unpack ffmpeg FFMPEG_VERSION FFMPEG_URL
 
@@ -132,7 +132,7 @@ fetch_and_unpack libvpx VPX_VERSION VPX_URL
 # bump: libwebp after ./hashupdate Dockerfile LIBWEBP $LATEST
 # bump: libwebp link "Release notes" https://github.com/webmproject/libwebp/releases/tag/v$LATEST
 # bump: libwebp link "Source diff $CURRENT..$LATEST" https://github.com/webmproject/libwebp/compare/v$CURRENT..v$LATEST
-: "${LIBWEBP_VERSION:=1.5.0}"
+: "${LIBWEBP_VERSION:=1.6.0}"
 : "${LIBWEBP_URL:=https://github.com/webmproject/libwebp/archive/v${LIBWEBP_VERSION}.tar.gz}"
 fetch_and_unpack libwebp LIBWEBP_VERSION LIBWEBP_URL
 
@@ -163,7 +163,7 @@ fetch_and_unpack srt SRT_VERSION SRT_URL
 # bump: zimg /ZIMG_VERSION=([\d.]+)/ https://github.com/sekrit-twc/zimg.git|*
 # bump: zimg after ./hashupdate Dockerfile ZIMG $LATEST
 # bump: zimg link "ChangeLog" https://github.com/sekrit-twc/zimg/blob/master/ChangeLog
-: "${ZIMG_VERSION:=3.0.5}"
+: "${ZIMG_VERSION:=3.0.6}"
 : "${ZIMG_URL:=https://github.com/sekrit-twc/zimg/archive/release-${ZIMG_VERSION}.tar.gz}"
 fetch_and_unpack zimg ZIMG_VERSION ZIMG_URL
 
@@ -227,7 +227,7 @@ fetch_and_unpack dav1d DAV1D_VERSION DAV1D_URL
 # bump: libbluray /LIBBLURAY_VERSION=([\d.]+)/ https://code.videolan.org/videolan/libbluray.git|*
 # bump: libbluray after ./hashupdate Dockerfile LIBBLURAY $LATEST
 # bump: libbluray link "ChangeLog" https://code.videolan.org/videolan/libbluray/-/blob/master/ChangeLog
-: "${LIBBLURAY_VERSION:=1.3.4}"
+: "${LIBBLURAY_VERSION:=1.4.0}"
 : "${LIBBLURAY_URL:=https://code.videolan.org/videolan/libbluray/-/archive/$LIBBLURAY_VERSION/libbluray-$LIBBLURAY_VERSION.tar.gz}"
 fetch_and_unpack libbluray LIBBLURAY_VERSION LIBBLURAY_URL
 
@@ -426,7 +426,7 @@ git clone --depth 1 --branch v$AOM_VERSION "$AOM_URL" && cd aom && test $(git re
 # bump: harfbuzz /LIBHARFBUZZ_VERSION=([\d.]+)/ https://github.com/harfbuzz/harfbuzz.git|*
 # bump: harfbuzz after ./hashupdate Dockerfile LIBHARFBUZZ $LATEST
 # bump: harfbuzz link "NEWS" https://github.com/harfbuzz/harfbuzz/blob/main/NEWS
-: "${LIBHARFBUZZ_VERSION:=11.2.0}"
+: "${LIBHARFBUZZ_VERSION:=11.4.1}"
 : "${LIBHARFBUZZ_URL:=https://github.com/harfbuzz/harfbuzz/releases/download/$LIBHARFBUZZ_VERSION/harfbuzz-$LIBHARFBUZZ_VERSION.tar.xz}"
 fetch_and_unpack harfbuzz LIBHARFBUZZ_VERSION LIBHARFBUZZ_URL
 

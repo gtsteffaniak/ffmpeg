@@ -117,17 +117,11 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
     cd libbluray && \
     sed -i 's/dec_init/libbluray_dec_init/' src/libbluray/disc/* && \
     git clone https://code.videolan.org/videolan/libudfread.git contrib/libudfread && \
-    (cd contrib/libudfread && git checkout --recurse-submodules $LIBUDFREAD_COMMIT) && \
-    autoreconf -fiv && \
-    ./configure \
-      --with-pic \
-      --disable-doxygen-doc \
-      --disable-doxygen-dot \
-      --enable-static \
-      --disable-shared \
-      --disable-examples \
-      --disable-bdjava-jar && \
-    make -j$(nproc) install; \
+  (cd contrib/libudfread && git checkout --recurse-submodules $LIBUDFREAD_COMMIT) && \
+  meson setup build \
+    -Dbuildtype=release \
+    -Ddefault_library=static && \
+  ninja -j$(nproc) -vC build install; \
   fi
 
 # aom (AV1 decoder)
