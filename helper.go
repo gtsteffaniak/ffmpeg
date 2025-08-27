@@ -13,23 +13,19 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/alecthomas/kong"
 )
 
-const fetchScriptPath = "fetch-sources.sh"
-
-type Library struct {
-	Name           string
-	VersionRegex   string
-	URL            string
-	Filter         string
-	VarNameBase    string
-	VarName        string
-	CurrentVersion string
-	LatestVersion  string
-	IsCommitBased  bool
+var cli struct {
+	Update UpdateCmd `cmd:"" help:"Check for new dependency versions and update fetch-sources.sh."`
 }
 
-func main() {
+type UpdateCmd struct {
+	DryRun bool `help:"Show what would be updated without applying any changes."`
+}
+
+func (u *UpdateCmd) Run() error {
 	log.Println("Starting version check for", fetchScriptPath)
 
 	fileContent, err := os.ReadFile(fetchScriptPath)
@@ -64,6 +60,10 @@ func main() {
 	}
 
 	if updatesFound {
+		if u.DryRun {
+			log.Println("Dry run enabled. No changes will be written.")
+			return nil
+		}
 		// Create a backup
 		if err := os.Rename(fetchScriptPath, fetchScriptPath+".bak"); err != nil {
 			log.Fatalf("Failed to create backup: %v", err)
@@ -78,6 +78,27 @@ func main() {
 	}
 
 	log.Println("Version check finished.")
+	return nil
+}
+
+const fetchScriptPath = "fetch-sources.sh"
+
+type Library struct {
+	Name           string
+	VersionRegex   string
+	URL            string
+	Filter         string
+	VarNameBase    string
+	VarName        string
+	CurrentVersion string
+	LatestVersion  string
+	IsCommitBased  bool
+}
+
+func main() {
+	ctx := kong.Parse(&cli)
+	err := ctx.Run()
+	ctx.FatalIfErrorf(err)
 }
 
 func getLatestVersion(lib *Library) {
@@ -107,7 +128,7 @@ func getLatestVersion(lib *Library) {
 
 func getLatestGitHubTag(repoURL string) (string, error) {
 	// ... implementation from shell script in Go ...
-	re := regexp.MustCompile(`github\.com/([^/]+)/([^/.]+)`)
+	re := regexp.MustCompile(`github\.com/([^/]+)/(.+)`)
 	matches := re.FindStringSubmatch(repoURL)
 	if len(matches) < 3 {
 		return "", fmt.Errorf("invalid github URL: %s", repoURL)
@@ -115,6 +136,9 @@ func getLatestGitHubTag(repoURL string) (string, error) {
 	owner, repo := matches[1], strings.TrimSuffix(matches[2], ".git")
 
 	token := os.Getenv("GITHUB_TOKEN")
+	if token == "" {
+		log.Println("Warning: GITHUB_TOKEN not set. You may hit rate limits.")
+	}
 	client := &http.Client{}
 
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", owner, repo)
