@@ -108,21 +108,6 @@ RUN cd vmaf/libvmaf && \
     ninja -j$(nproc) -vC build install; \
     sed -i 's/-lvmaf /-lvmaf -lstdc++ /' /usr/local/lib/pkgconfig/libvmaf.pc;
 
-# libbluray (niche)
-COPY [ "src/libbluray-*", "./libbluray" ]
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
-    echo "Skipping libbluray build"; \
-  else \
-    # dec_init rename is to workaround https://code.videolan.org/videolan/libbluray/-/issues/43
-    cd libbluray && \
-    sed -i 's/dec_init/libbluray_dec_init/' src/libbluray/disc/* && \
-    git clone https://code.videolan.org/videolan/libudfread.git contrib/libudfread && \
-  (cd contrib/libudfread && git checkout --recurse-submodules $LIBUDFREAD_COMMIT) && \
-  meson setup build \
-    -Dbuildtype=release \
-    -Ddefault_library=static && \
-  ninja -j$(nproc) -vC build install; \
-  fi
 
 # aom (AV1 decoder)
 RUN apk add $APK_OPTS aom-dev aom-static
@@ -457,7 +442,6 @@ RUN cd ffmpeg && \
     FEATURES="$FEATURES --enable-libxeve"; \
     FEATURES="$FEATURES --enable-libxevd"; \
     FEATURES="$FEATURES --enable-libvvenc"; \
-    FEATURES="$FEATURES --enable-libbluray"; \
     FEATURES="$FEATURES --enable-libdavs2"; \
     # For the GSM audio codec, used in telephony.
     #FEATURES="$FEATURES --enable-libgsm"; \

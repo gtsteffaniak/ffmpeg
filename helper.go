@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -50,12 +52,15 @@ func (u *UpdateCmd) Run() error {
 	newContent := string(fileContent)
 	for _, lib := range libraries {
 		if lib.LatestVersion != "" && lib.CurrentVersion != "" && lib.LatestVersion != lib.CurrentVersion {
-			updatesFound = true
-			log.Printf("New version for %s: %s -> %s", lib.Name, lib.CurrentVersion, lib.LatestVersion)
+			// Only update if it's actually a newer version
+			if isNewerVersion(lib.CurrentVersion, lib.LatestVersion) {
+				updatesFound = true
+				log.Printf("New version for %s: %s -> %s", lib.Name, lib.CurrentVersion, lib.LatestVersion)
 
-			oldLine := fmt.Sprintf(`: "${%s:=%s}"`, lib.VarName, lib.CurrentVersion)
-			newLine := fmt.Sprintf(`: "${%s:=%s}"`, lib.VarName, lib.LatestVersion)
-			newContent = strings.Replace(newContent, oldLine, newLine, 1)
+				oldLine := fmt.Sprintf(`: "${%s:=%s}"`, lib.VarName, lib.CurrentVersion)
+				newLine := fmt.Sprintf(`: "${%s:=%s}"`, lib.VarName, lib.LatestVersion)
+				newContent = strings.Replace(newContent, oldLine, newLine, 1)
+			}
 		}
 	}
 
@@ -95,6 +100,215 @@ type Library struct {
 	IsCommitBased  bool
 }
 
+type SemanticVersion struct {
+	Major int
+	Minor int
+	Patch int
+	Tag   string
+}
+
+// isNumericVersion checks if a tag represents a numeric version (x.y or x.y.z format)
+func isNumericVersion(tag string) bool {
+	// Remove common prefixes (v, n, release-, lcms)
+	cleanTag := strings.TrimPrefix(tag, "v")
+	cleanTag = strings.TrimPrefix(cleanTag, "n")
+	cleanTag = strings.TrimPrefix(cleanTag, "release-")
+	cleanTag = strings.TrimPrefix(cleanTag, "lcms")
+	cleanTag = strings.TrimPrefix(cleanTag, "lcms2.")
+
+	// Handle PANGO_X_Y_Z format
+	if strings.HasPrefix(tag, "PANGO_") {
+		// Convert PANGO_1_23_0 to 1.23.0
+		pangoRegex := regexp.MustCompile(`^PANGO_(\d+)_(\d+)_(\d+)$`)
+		if pangoRegex.MatchString(tag) {
+			return true
+		}
+		// Convert PANGO_1_23 to 1.23
+		pangoRegex2 := regexp.MustCompile(`^PANGO_(\d+)_(\d+)$`)
+		if pangoRegex2.MatchString(tag) {
+			return true
+		}
+		return false
+	}
+
+	// Skip development tags and rc versions
+	if strings.Contains(cleanTag, "dev") || strings.Contains(cleanTag, "rc") || strings.Contains(cleanTag, "alpha") || strings.Contains(cleanTag, "Alpha") {
+		return false
+	}
+
+	// Match numeric version pattern: x.y or x.y.z (no suffixes allowed)
+	numVerRegex := regexp.MustCompile(`^(\d+)\.(\d+)(\.(\d+))?$`)
+	return numVerRegex.MatchString(cleanTag)
+}
+
+// stripPrefixes removes common version prefixes and returns clean numeric version
+func stripPrefixes(tag string) string {
+	// Handle PANGO_X_Y_Z format
+	if strings.HasPrefix(tag, "PANGO_") {
+		// Convert PANGO_1_23_0 to 1.23.0
+		pangoRegex := regexp.MustCompile(`^PANGO_(\d+)_(\d+)_(\d+)$`)
+		matches := pangoRegex.FindStringSubmatch(tag)
+		if len(matches) == 4 {
+			return fmt.Sprintf("%s.%s.%s", matches[1], matches[2], matches[3])
+		}
+		// Convert PANGO_1_23 to 1.23
+		pangoRegex2 := regexp.MustCompile(`^PANGO_(\d+)_(\d+)$`)
+		matches2 := pangoRegex2.FindStringSubmatch(tag)
+		if len(matches2) == 3 {
+			return fmt.Sprintf("%s.%s", matches2[1], matches2[2])
+		}
+	}
+
+	cleanTag := strings.TrimPrefix(tag, "v")
+	cleanTag = strings.TrimPrefix(cleanTag, "n")
+	cleanTag = strings.TrimPrefix(cleanTag, "release-")
+	cleanTag = strings.TrimPrefix(cleanTag, "lcms")
+	cleanTag = strings.TrimPrefix(cleanTag, "lcms2.")
+	return cleanTag
+}
+
+// parseSemanticVersion parses a semantic version tag into components
+func parseSemanticVersion(tag string) (SemanticVersion, error) {
+	cleanTag := tag
+
+	// Handle PANGO_X_Y_Z format
+	if strings.HasPrefix(tag, "PANGO_") {
+		// Convert PANGO_1_23_0 to 1.23.0
+		pangoRegex := regexp.MustCompile(`^PANGO_(\d+)_(\d+)_(\d+)$`)
+		matches := pangoRegex.FindStringSubmatch(tag)
+		if len(matches) == 4 {
+			cleanTag = fmt.Sprintf("%s.%s.%s", matches[1], matches[2], matches[3])
+		} else {
+			// Convert PANGO_1_23 to 1.23
+			pangoRegex2 := regexp.MustCompile(`^PANGO_(\d+)_(\d+)$`)
+			matches2 := pangoRegex2.FindStringSubmatch(tag)
+			if len(matches2) == 3 {
+				cleanTag = fmt.Sprintf("%s.%s", matches2[1], matches2[2])
+			}
+		}
+	} else {
+		cleanTag = strings.TrimPrefix(cleanTag, "v")
+		cleanTag = strings.TrimPrefix(cleanTag, "n")
+		cleanTag = strings.TrimPrefix(cleanTag, "release-")
+		cleanTag = strings.TrimPrefix(cleanTag, "lcms")
+		cleanTag = strings.TrimPrefix(cleanTag, "lcms2.")
+	}
+
+	// Match semantic version pattern: x.y.z or x.y (optionally with suffixes like -beta, -rc1, etc)
+	semVerRegex := regexp.MustCompile(`^(\d+)\.(\d+)(\.(\d+))?(-.*)?$`)
+	matches := semVerRegex.FindStringSubmatch(cleanTag)
+	if len(matches) < 3 {
+		return SemanticVersion{}, fmt.Errorf("invalid semantic version: %s", tag)
+	}
+
+	major, _ := strconv.Atoi(matches[1])
+	minor, _ := strconv.Atoi(matches[2])
+	patch := 0
+	if matches[4] != "" {
+		patch, _ = strconv.Atoi(matches[4])
+	}
+
+	return SemanticVersion{
+		Major: major,
+		Minor: minor,
+		Patch: patch,
+		Tag:   tag,
+	}, nil
+}
+
+// compareSemanticVersions compares two semantic versions. Returns:
+// -1 if a < b, 0 if a == b, 1 if a > b
+func compareSemanticVersions(a, b SemanticVersion) int {
+	if a.Major != b.Major {
+		if a.Major > b.Major {
+			return 1
+		}
+		return -1
+	}
+	if a.Minor != b.Minor {
+		if a.Minor > b.Minor {
+			return 1
+		}
+		return -1
+	}
+	if a.Patch != b.Patch {
+		if a.Patch > b.Patch {
+			return 1
+		}
+		return -1
+	}
+	return 0
+}
+
+// getLatestNumericVersion filters and sorts tags to find the latest numeric version
+func getLatestNumericVersion(tags []string) (string, error) {
+	var numericVersions []SemanticVersion
+
+	for _, tag := range tags {
+		if isNumericVersion(tag) {
+			semVer, err := parseSemanticVersion(tag)
+			if err == nil {
+				numericVersions = append(numericVersions, semVer)
+			}
+		}
+	}
+
+	if len(numericVersions) == 0 {
+		return "", fmt.Errorf("no numeric version tags found")
+	}
+
+	// Sort by semantic version (latest first)
+	sort.Slice(numericVersions, func(i, j int) bool {
+		return compareSemanticVersions(numericVersions[i], numericVersions[j]) > 0
+	})
+
+	// Return the original tag without prefix modifications
+	return stripPrefixes(numericVersions[0].Tag), nil
+}
+
+// getLatestNumericVersionForLCMS2 handles lcms2's special tag format
+func getLatestNumericVersionForLCMS2(tags []string) (string, error) {
+	var numericVersions []SemanticVersion
+
+	for _, tag := range tags {
+		// Look for tags like "lcms2.17" or clean versions like "2.17"
+		if strings.HasPrefix(tag, "lcms2.") || isNumericVersion(tag) {
+			semVer, err := parseSemanticVersion(tag)
+			if err == nil {
+				numericVersions = append(numericVersions, semVer)
+			}
+		}
+	}
+
+	if len(numericVersions) == 0 {
+		return "", fmt.Errorf("no numeric version tags found")
+	}
+
+	// Sort by semantic version (latest first)
+	sort.Slice(numericVersions, func(i, j int) bool {
+		return compareSemanticVersions(numericVersions[i], numericVersions[j]) > 0
+	})
+
+	// Return in lcms2.X format (script expects this format)
+	latest := numericVersions[0]
+	cleanVersion := stripPrefixes(latest.Tag)
+	return "lcms2." + cleanVersion, nil
+}
+
+// isNewerVersion checks if newVersion is newer than currentVersion
+func isNewerVersion(currentVersion, newVersion string) bool {
+	// Handle original tag formats (with prefixes)
+	currentSemVer, err1 := parseSemanticVersion(currentVersion)
+	newSemVer, err2 := parseSemanticVersion(newVersion)
+
+	if err1 != nil || err2 != nil {
+		// If we can't parse as versions, do string comparison
+		return newVersion != currentVersion
+	}
+
+	return compareSemanticVersions(newSemVer, currentSemVer) > 0
+}
+
 func main() {
 	ctx := kong.Parse(&cli)
 	err := ctx.Run()
@@ -103,13 +317,11 @@ func main() {
 
 func getLatestVersion(lib *Library) {
 	var err error
+
 	if strings.Contains(lib.URL, "github.com") {
 		lib.LatestVersion, err = getLatestGitHubTag(lib.URL)
-		lib.LatestVersion = strings.TrimPrefix(lib.LatestVersion, "v")
-		lib.LatestVersion = strings.TrimPrefix(lib.LatestVersion, "release-")
 	} else if strings.Contains(lib.URL, "gitlab.com") || strings.Contains(lib.URL, "gitlab.gnome.org") {
 		lib.LatestVersion, err = getLatestGitLabTag(lib.URL)
-		lib.LatestVersion = strings.TrimPrefix(lib.LatestVersion, "v")
 	} else if strings.HasPrefix(lib.URL, "gitrefs:") {
 		branchRegex := regexp.MustCompile(`re:#^refs/heads/(.*)\$#`)
 		matches := branchRegex.FindStringSubmatch(lib.Filter)
@@ -127,7 +339,6 @@ func getLatestVersion(lib *Library) {
 }
 
 func getLatestGitHubTag(repoURL string) (string, error) {
-	// ... implementation from shell script in Go ...
 	re := regexp.MustCompile(`github\.com/([^/]+)/(.+)`)
 	matches := re.FindStringSubmatch(repoURL)
 	if len(matches) < 3 {
@@ -141,7 +352,8 @@ func getLatestGitHubTag(repoURL string) (string, error) {
 	}
 	client := &http.Client{}
 
-	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", owner, repo)
+	// Get all tags instead of just the latest release
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/tags?per_page=100", owner, repo)
 	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
 		return "", err
@@ -151,46 +363,34 @@ func getLatestGitHubTag(repoURL string) (string, error) {
 	}
 
 	resp, err := client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		apiURL = fmt.Sprintf("https://api.github.com/repos/%s/%s/tags", owner, repo)
-		req, err = http.NewRequest("GET", apiURL, nil)
-		if err != nil {
-			return "", err
-		}
-		if token != "" {
-			req.Header.Set("Authorization", "token "+token)
-		}
-		resp, err = client.Do(req)
-		if err != nil {
-			return "", err
-		}
-		defer resp.Body.Close()
-
-		var tags []struct {
-			Name string `json:"name"`
-		}
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return "", fmt.Errorf("failed to read tags response for %s: %v", repoURL, err)
-		}
-		if err := json.Unmarshal(body, &tags); err != nil || len(tags) == 0 {
-			return "", fmt.Errorf("failed to decode tags or no tags found for %s. Body: %s", repoURL, string(body))
-		}
-		return tags[0].Name, nil
+	if err != nil {
+		return "", err
 	}
 	defer resp.Body.Close()
 
-	var release struct {
-		TagName string `json:"tag_name"`
+	var tags []struct {
+		Name string `json:"name"`
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read release response for %s: %v", repoURL, err)
+		return "", fmt.Errorf("failed to read tags response for %s: %v", repoURL, err)
 	}
-	if err := json.Unmarshal(body, &release); err != nil {
-		return "", fmt.Errorf("failed to decode release for %s. Body: %s", repoURL, string(body))
+	if err := json.Unmarshal(body, &tags); err != nil || len(tags) == 0 {
+		return "", fmt.Errorf("failed to decode tags or no tags found for %s. Body: %s", repoURL, string(body))
 	}
-	return release.TagName, nil
+
+	// Extract tag names and filter for numeric versions
+	var tagNames []string
+	for _, tag := range tags {
+		tagNames = append(tagNames, tag.Name)
+	}
+
+	// Special handling for lcms2 which expects "lcms2.X" format
+	if repo == "Little-CMS" {
+		return getLatestNumericVersionForLCMS2(tagNames)
+	}
+
+	return getLatestNumericVersion(tagNames)
 }
 
 func getLatestGitLabTag(repoURL string) (string, error) {
@@ -224,7 +424,14 @@ func getLatestGitLabTag(repoURL string) (string, error) {
 	if err := json.Unmarshal(body, &tags); err != nil || len(tags) == 0 {
 		return "", fmt.Errorf("failed to decode tags or no tags found for %s. Body: %s", repoURL, string(body))
 	}
-	return tags[0].Name, nil
+
+	// Extract tag names and filter for numeric versions
+	var tagNames []string
+	for _, tag := range tags {
+		tagNames = append(tagNames, tag.Name)
+	}
+
+	return getLatestNumericVersion(tagNames)
 }
 
 func getLatestGitCommit(repoURL, branch string) (string, error) {
