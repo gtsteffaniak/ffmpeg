@@ -108,27 +108,6 @@ RUN cd vmaf/libvmaf && \
     ninja -j$(nproc) -vC build install; \
     sed -i 's/-lvmaf /-lvmaf -lstdc++ /' /usr/local/lib/pkgconfig/libvmaf.pc;
 
-# libbluray (niche)
-COPY [ "src/libbluray-*", "./libbluray" ]
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
-    echo "Skipping libbluray build"; \
-  else \
-    # dec_init rename is to workaround https://code.videolan.org/videolan/libbluray/-/issues/43
-    cd libbluray && \
-    sed -i 's/dec_init/libbluray_dec_init/' src/libbluray/disc/* && \
-    git clone https://code.videolan.org/videolan/libudfread.git contrib/libudfread && \
-    (cd contrib/libudfread && git checkout --recurse-submodules $LIBUDFREAD_COMMIT) && \
-    autoreconf -fiv && \
-    ./configure \
-      --with-pic \
-      --disable-doxygen-doc \
-      --disable-doxygen-dot \
-      --enable-static \
-      --disable-shared \
-      --disable-examples \
-      --disable-bdjava-jar && \
-    make -j$(nproc) install; \
-  fi
 
 # aom (AV1 decoder)
 RUN apk add $APK_OPTS aom-dev aom-static
@@ -463,7 +442,6 @@ RUN cd ffmpeg && \
     FEATURES="$FEATURES --enable-libxeve"; \
     FEATURES="$FEATURES --enable-libxevd"; \
     FEATURES="$FEATURES --enable-libvvenc"; \
-    FEATURES="$FEATURES --enable-libbluray"; \
     FEATURES="$FEATURES --enable-libdavs2"; \
     # For the GSM audio codec, used in telephony.
     #FEATURES="$FEATURES --enable-libgsm"; \
@@ -524,15 +502,10 @@ RUN cd ffmpeg && \
   make -j$(nproc) install
 
 # make sure binaries has no dependencies, is relro, pie and stack nx
-COPY checkelf /
+COPY checkelf.sh /
 RUN \
-  /checkelf /usr/local/bin/ffmpeg && \
-  /checkelf /usr/local/bin/ffprobe
-
-# workaround for using -Wl,--allow-multiple-definition
-# see comment in checkdupsym for details
-COPY checkdupsym /
-RUN /checkdupsym /ffmpeg-*
+  /checkelf.sh /usr/local/bin/ffmpeg && \
+  /checkelf.sh /usr/local/bin/ffprobe
 
 # some basic fonts that don't take up much space
 RUN apk add $APK_OPTS font-terminus font-inconsolata font-dejavu font-awesome

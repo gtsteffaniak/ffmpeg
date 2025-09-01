@@ -108,7 +108,7 @@ fetch_and_unpack SVT-AV1 SVTAV1_VERSION SVTAV1_URL
 # bump: ffmpeg after ./hashupdate Dockerfile FFMPEG $LATEST
 # bump: ffmpeg link "Changelog" https://github.com/FFmpeg/FFmpeg/blob/n$LATEST/Changelog
 # bump: ffmpeg link "Source diff $CURRENT..$LATEST" https://github.com/FFmpeg/FFmpeg/compare/n$CURRENT..n$LATEST
-: "${FFMPEG_VERSION:=7.1.1}"
+: "${FFMPEG_VERSION:=8.0}"
 : "${FFMPEG_URL:=https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.bz2}"
 fetch_and_unpack ffmpeg FFMPEG_VERSION FFMPEG_URL
 
@@ -124,7 +124,7 @@ fetch_and_unpack libvorbis VORBIS_VERSION VORBIS_URL
 # bump: libvpx after ./hashupdate Dockerfile VPX $LATEST
 # bump: libvpx link "CHANGELOG" https://github.com/webmproject/libvpx/blob/master/CHANGELOG
 # bump: libvpx link "Source diff $CURRENT..$LATEST" https://github.com/webmproject/libvpx/compare/v$CURRENT..v$LATEST
-: "${VPX_VERSION:=1.15.1}"
+: "${VPX_VERSION:=1.15.2}"
 : "${VPX_URL:=https://github.com/webmproject/libvpx/archive/v${VPX_VERSION}.tar.gz}"
 fetch_and_unpack libvpx VPX_VERSION VPX_URL
 
@@ -132,7 +132,7 @@ fetch_and_unpack libvpx VPX_VERSION VPX_URL
 # bump: libwebp after ./hashupdate Dockerfile LIBWEBP $LATEST
 # bump: libwebp link "Release notes" https://github.com/webmproject/libwebp/releases/tag/v$LATEST
 # bump: libwebp link "Source diff $CURRENT..$LATEST" https://github.com/webmproject/libwebp/compare/v$CURRENT..v$LATEST
-: "${LIBWEBP_VERSION:=1.5.0}"
+: "${LIBWEBP_VERSION:=1.6.0}"
 : "${LIBWEBP_URL:=https://github.com/webmproject/libwebp/archive/v${LIBWEBP_VERSION}.tar.gz}"
 fetch_and_unpack libwebp LIBWEBP_VERSION LIBWEBP_URL
 
@@ -154,7 +154,7 @@ fetch_and_unpack srt SRT_VERSION SRT_URL
 # bump: ogg after ./hashupdate Dockerfile OGG $LATEST
 # bump: ogg link "CHANGES" https://github.com/xiph/ogg/blob/master/CHANGES
 # bump: ogg link "Source diff $CURRENT..$LATEST" https://github.com/xiph/ogg/compare/v$CURRENT..v$LATEST
-#: "${OGG_VERSION:=1.3.5}"
+#: "${OGG_VERSION:=1.3.6}"
 #: "${OGG_URL:=https://downloads.xiph.org/releases/ogg/libogg-${OGG_VERSION}.tar.gz}"
 #: "${OGG_SHA256:=0eb4b4b9420a0f51db142ba3f9c64b333f826532dc0f48c6410ae51f4799b664}"
 #fetch_and_unpack libogg OGG_VERSION OGG_URL OGG_SHA256
@@ -163,7 +163,7 @@ fetch_and_unpack srt SRT_VERSION SRT_URL
 # bump: zimg /ZIMG_VERSION=([\d.]+)/ https://github.com/sekrit-twc/zimg.git|*
 # bump: zimg after ./hashupdate Dockerfile ZIMG $LATEST
 # bump: zimg link "ChangeLog" https://github.com/sekrit-twc/zimg/blob/master/ChangeLog
-: "${ZIMG_VERSION:=3.0.5}"
+: "${ZIMG_VERSION:=3.0.6}"
 : "${ZIMG_URL:=https://github.com/sekrit-twc/zimg/archive/release-${ZIMG_VERSION}.tar.gz}"
 fetch_and_unpack zimg ZIMG_VERSION ZIMG_URL
 
@@ -171,7 +171,7 @@ fetch_and_unpack zimg ZIMG_VERSION ZIMG_URL
 # bump: rav1e /RAV1E_VERSION=([\d.]+)/ https://github.com/xiph/rav1e.git|/\d+\./|*
 # bump: rav1e after ./hashupdate Dockerfile RAV1E $LATEST
 # bump: rav1e link "Release notes" https://github.com/xiph/rav1e/releases/tag/v$LATEST
-#: "${RAV1E_VERSION:=0.7.1}"
+#: "${RAV1E_VERSION:=0.8.1}"
 #: "${RAV1E_URL:=https://github.com/xiph/rav1e/archive/v${RAV1E_VERSION}.tar.gz}"
 #: "${RAV1E_SHA256:=da7ae0df2b608e539de5d443c096e109442cdfa6c5e9b4014361211cf61d030c}"
 #fetch_and_unpack rav1e RAV1E_VERSION RAV1E_URL RAV1E_SHA256
@@ -188,7 +188,7 @@ fetch_and_unpack libvorbis VORBIS_VERSION VORBIS_URL
 # bump: libvpx after ./hashupdate Dockerfile VPX $LATEST
 # bump: libvpx link "CHANGELOG" https://github.com/webmproject/libvpx/blob/master/CHANGELOG
 # bump: libvpx link "Source diff $CURRENT..$LATEST" https://github.com/webmproject/libvpx/compare/v$CURRENT..v$LATEST
-: "${VPX_VERSION:=1.15.1}"
+: "${VPX_VERSION:=1.15.2}"
 : "${VPX_URL:=https://github.com/webmproject/libvpx/archive/v${VPX_VERSION}.tar.gz}"
 fetch_and_unpack libvpx VPX_VERSION VPX_URL
 
@@ -196,15 +196,15 @@ fetch_and_unpack libvpx VPX_VERSION VPX_URL
 # bump: libwebp after ./hashupdate Dockerfile LIBWEBP $LATEST
 # bump: libwebp link "Release notes" https://github.com/webmproject/libwebp/releases/tag/v$LATEST
 # bump: libwebp link "Source diff $CURRENT..$LATEST" https://github.com/webmproject/libwebp/compare/v$CURRENT..v$LATEST
-: "${LIBWEBP_VERSION:=1.5.0}"
+: "${LIBWEBP_VERSION:=1.6.0}"
 : "${LIBWEBP_URL:=https://github.com/webmproject/libwebp/archive/v${LIBWEBP_VERSION}.tar.gz}"
 fetch_and_unpack libwebp LIBWEBP_VERSION LIBWEBP_URL
 
 # bump: librsvg /LIBRSVG_VERSION=([\d.]+)/ https://gitlab.gnome.org/GNOME/librsvg.git|^2
 # bump: librsvg after ./hashupdate Dockerfile LIBRSVG $LATEST
 # bump: librsvg link "NEWS" https://gitlab.gnome.org/GNOME/librsvg/-/blob/master/NEWS
-: "${LIBRSVG_VERSION:=2.60.0}"
-: "${LIBRSVG_URL:=https://download.gnome.org/sources/librsvg/2.60/librsvg-$LIBRSVG_VERSION.tar.xz}"
+: "${LIBRSVG_VERSION:=2.61.0}"
+: "${LIBRSVG_URL:=https://download.gnome.org/sources/librsvg/2.61/librsvg-$LIBRSVG_VERSION.tar.xz}"
 fetch_and_unpack librsvg LIBRSVG_VERSION LIBRSVG_URL
 
 # bump: dav1d /DAV1D_VERSION=([\d.]+)/ https://code.videolan.org/videolan/dav1d.git|*
@@ -219,7 +219,7 @@ fetch_and_unpack dav1d DAV1D_VERSION DAV1D_URL
 # bump: glib /GLIB_VERSION=([\d.]+)/ https://gitlab.gnome.org/GNOME/glib.git|^2
 # bump: glib after ./hashupdate Dockerfile GLIB $LATEST
 # bump: glib link "NEWS" https://gitlab.gnome.org/GNOME/glib/-/blob/main/NEWS?ref_type=heads
-#: "${GLIB_VERSION:=2.84.1}"
+#: "${GLIB_VERSION:=2.85.4}"
 #: "${GLIB_URL:=https://download.gnome.org/sources/glib/2.84/glib-$GLIB_VERSION.tar.xz}"
 #: "${GLIB_SHA256:=2b4bc2ec49611a5fc35f86aca855f2ed0196e69e53092bab6bb73396bf30789a}"
 #fetch_and_unpack glib GLIB_VERSION GLIB_URL GLIB_SHA256
@@ -336,7 +336,7 @@ fetch_and_unpack vid.stab VIDSTAB_VERSION VIDSTAB_URL
 # bump: uavs3d after ./hashupdate Dockerfile UAVS3D $LATEST
 # bump: uavs3d link "Source diff $CURRENT..$LATEST" https://github.com/uavs3/uavs3d/compare/$CURRENT..$LATEST
 : "${UAVS3D_URL:=https://github.com/uavs3/uavs3d.git}"
-: "${UAVS3D_COMMIT:=1fd04917cff50fac72ae23e45f82ca6fd9130bd8}"
+: "${UAVS3D_COMMIT:=1.1}"
 # Removes BIT_DEPTH 10 to be able to build on other platforms. 10 was overkill anyways. (This comment refers to build steps, not fetch)
 fetch_and_unpack_git uavs3d "" UAVS3D_URL "" UAVS3D_COMMIT
 
@@ -371,7 +371,7 @@ fetch_and_unpack shine LIBSHINE_VERSION LIBSHINE_URL
 # bump: rubberband after ./hashupdate Dockerfile RUBBERBAND $LATEST
 # bump: rubberband link "CHANGELOG" https://github.com/breakfastquay/rubberband/blob/default/CHANGELOG
 # bump: rubberband link "Source diff $CURRENT..$LATEST" https://github.com/breakfastquay/rubberband/compare/$CURRENT..$LATEST
-: "${RUBBERBAND_VERSION:=2.0.2}"
+: "${RUBBERBAND_VERSION:=4.0.0}"
 : "${RUBBERBAND_URL:=https://breakfastquay.com/files/releases/rubberband-$RUBBERBAND_VERSION.tar.bz2}"
 fetch_and_unpack rubberband RUBBERBAND_VERSION RUBBERBAND_URL
 
@@ -426,7 +426,7 @@ git clone --depth 1 --branch v$AOM_VERSION "$AOM_URL" && cd aom && test $(git re
 # bump: harfbuzz /LIBHARFBUZZ_VERSION=([\d.]+)/ https://github.com/harfbuzz/harfbuzz.git|*
 # bump: harfbuzz after ./hashupdate Dockerfile LIBHARFBUZZ $LATEST
 # bump: harfbuzz link "NEWS" https://github.com/harfbuzz/harfbuzz/blob/main/NEWS
-: "${LIBHARFBUZZ_VERSION:=11.2.0}"
+: "${LIBHARFBUZZ_VERSION:=11.4.5}"
 : "${LIBHARFBUZZ_URL:=https://github.com/harfbuzz/harfbuzz/releases/download/$LIBHARFBUZZ_VERSION/harfbuzz-$LIBHARFBUZZ_VERSION.tar.xz}"
 fetch_and_unpack harfbuzz LIBHARFBUZZ_VERSION LIBHARFBUZZ_URL
 
