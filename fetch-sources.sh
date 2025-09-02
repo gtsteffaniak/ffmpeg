@@ -336,7 +336,7 @@ fetch_and_unpack vid.stab VIDSTAB_VERSION VIDSTAB_URL
 # bump: uavs3d after ./hashupdate Dockerfile UAVS3D $LATEST
 # bump: uavs3d link "Source diff $CURRENT..$LATEST" https://github.com/uavs3/uavs3d/compare/$CURRENT..$LATEST
 : "${UAVS3D_URL:=https://github.com/uavs3/uavs3d.git}"
-: "${UAVS3D_COMMIT:=1.1}"
+: "${UAVS3D_COMMIT:=v1.1}"
 # Removes BIT_DEPTH 10 to be able to build on other platforms. 10 was overkill anyways. (This comment refers to build steps, not fetch)
 fetch_and_unpack_git uavs3d "" UAVS3D_URL "" UAVS3D_COMMIT
 
