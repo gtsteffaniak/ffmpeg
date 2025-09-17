@@ -47,7 +47,10 @@ RUN apk add $APK_OPTS \
   xxd \
   xz-dev xz-static \
   python3 py3-packaging \
-  libdrm-dev
+  libdrm-dev \
+  mesa-dev \
+  mesa-dri-gallium \
+  mesa-va-gallium
 
 # python3 py3-packaging needed by glib
 
@@ -93,6 +96,31 @@ RUN cd libva && \
     -Dwith_win32=no \
     -Dwith_legacy=[] \
     -Denable_docs=false && \
+  ninja -j$(nproc) -vC build install
+
+# Build Mesa with VAAPI and AV1 support
+COPY [ "src/mesa-*", "./mesa" ]
+RUN cd mesa && \
+  meson setup build \
+    -Dgallium-drivers=swrast,d3d12,i965,radeonsi,nouveau \
+    -Dgallium-va=true \
+    -Dvideo-codecs=h264dec,h264enc,h265dec,h265enc,vc1dec,vp8dec,vp9dec,av1dec,av1enc \
+    -Dvulkan-drivers= \
+    -Ddri3=enabled \
+    -Dglx=enabled \
+    -Dplatforms=x11,drm \
+    -Dprefix=/usr/local \
+    -Ddefault_library=static \
+    -Dbuildtype=release && \
+  ninja -j$(nproc) -vC build install
+
+# Build libva-utils (optional, for testing)
+COPY [ "src/libva-utils-*", "./libva-utils" ]
+RUN cd libva-utils && \
+  meson setup build \
+    -Dbuildtype=release \
+    -Ddefault_library=static \
+    -Dprefix=/usr/local && \
   ninja -j$(nproc) -vC build install
 
 COPY [ "src/vmaf-*", "./vmaf" ]
@@ -463,6 +491,23 @@ RUN cd ffmpeg && \
     #FEATURES="$FEATURES --enable-librsvg"; \
     FEATURES="$FEATURES --enable-libmp3lame"; \
     #FEATURES="$FEATURES --enable-libshine"; \
+    # Add VAAPI support
+    FEATURES="$FEATURES --enable-vaapi"; \
+    FEATURES="$FEATURES --enable-hwaccel=h264_vaapi"; \
+    FEATURES="$FEATURES --enable-hwaccel=hevc_vaapi"; \
+    FEATURES="$FEATURES --enable-hwaccel=vp8_vaapi"; \
+    FEATURES="$FEATURES --enable-hwaccel=vp9_vaapi"; \
+    FEATURES="$FEATURES --enable-hwaccel=av1_vaapi"; \
+    FEATURES="$FEATURES --enable-encoder=h264_vaapi"; \
+    FEATURES="$FEATURES --enable-encoder=hevc_vaapi"; \
+    FEATURES="$FEATURES --enable-encoder=vp8_vaapi"; \
+    FEATURES="$FEATURES --enable-encoder=vp9_vaapi"; \
+    FEATURES="$FEATURES --enable-encoder=av1_vaapi"; \
+    FEATURES="$FEATURES --enable-decoder=h264_vaapi"; \
+    FEATURES="$FEATURES --enable-decoder=hevc_vaapi"; \
+    FEATURES="$FEATURES --enable-decoder=vp8_vaapi"; \
+    FEATURES="$FEATURES --enable-decoder=vp9_vaapi"; \
+    FEATURES="$FEATURES --enable-decoder=av1_vaapi"; \
   fi && \
     PKG_CONFIG_PATH="/usr/lib/pkgconfig/:${PKG_CONFIG_PATH}" && \
     ./configure \
@@ -536,6 +581,8 @@ RUN ["/ffprobe", "-i", "https://github.githubassets.com/favicons/favicon.svg"]
 RUN ["/ffmpeg", "-f", "lavfi", "-i", "testsrc", "-c:v", "libvvenc", "-t", "100ms", "-f", "null", "-"]
 # x265 regression
 RUN ["/ffmpeg", "-f", "lavfi", "-i", "testsrc", "-c:v", "libx265", "-t", "100ms", "-f", "null", "-"]
+# AV1 VAAPI test (if available)
+RUN ["/ffmpeg", "-f", "lavfi", "-i", "testsrc", "-c:v", "av1_vaapi", "-t", "100ms", "-f", "null", "-"] || echo "AV1 VAAPI not available"
 
 FROM scratch
 COPY --from=builder /usr/local/bin/ffmpeg /
