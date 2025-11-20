@@ -1,0 +1,45 @@
+FROM ffmpeg-base:latest AS audio
+
+ARG DECODE_ONLY="false"
+
+# libogg (container format for vorbis)
+RUN apk add $APK_OPTS libogg-dev libogg-static
+
+# libvorbis (Vorbis audio codec)
+RUN apk add $APK_OPTS libvorbis-dev libvorbis-static
+
+# opus (Modern high-quality audio codec)
+RUN apk add $APK_OPTS opus-dev
+
+# lame (MP3 encoder)
+COPY [ "src/lame-*", "./lame" ]
+RUN if [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping lame build"; \
+  else \
+    cd lame && \
+    ./configure \
+      --disable-shared \
+      --enable-static \
+      --enable-nasm \
+      --disable-gtktest \
+      --disable-cpml \
+      --disable-frontend && \
+    make -j$(nproc) install; \
+  fi
+
+# rubberband (audio pitch shifting and time stretching)
+COPY [ "src/rubberband-*", "./rubberband" ]
+RUN if [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping rubberband build"; \
+  else \
+    cd rubberband && \
+    meson setup build \
+      -Ddefault_library=static \
+      -Dfft=fftw \
+      -Dresampler=libsamplerate && \
+    ninja -j$(nproc) -vC build install && \
+    echo "Requires.private: fftw3 samplerate" >> /usr/local/lib/pkgconfig/rubberband.pc; \
+  fi
+
+# vo-amrwbenc (AMR-WB encoder for mobile audio)
+RUN apk add $APK_OPTS vo-amrwbenc-dev vo-amrwbenc-static

@@ -1,0 +1,62 @@
+FROM ffmpeg-base:latest AS processing
+
+ARG DECODE_ONLY="false"
+
+# Install harfbuzz (libass dependency)
+RUN apk add $APK_OPTS harfbuzz-dev harfbuzz-static
+
+# libass (subtitle rendering)
+COPY [ "src/libass-*", "./libass" ]
+RUN cd libass && \
+  ./configure \
+    --disable-shared \
+    --enable-static && \
+  make -j$(nproc) && make install
+
+# libmysofa (3D audio support - SOFA file format)
+COPY [ "src/libmysofa-*", "./libmysofa" ]
+RUN cd libmysofa/build && \
+  cmake \
+    -G"Unix Makefiles" \
+    -DCMAKE_VERBOSE_MAKEFILE=ON \
+    -DCMAKE_INSTALL_LIBDIR=lib \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTS=OFF \
+    .. && \
+  make -j$(nproc) install
+
+# vmaf (video quality assessment)
+COPY [ "src/vmaf-*", "./vmaf" ]
+RUN cd vmaf/libvmaf && \
+    meson setup build \
+      -Dbuildtype=release \
+      -Ddefault_library=static \
+      -Dbuilt_in_models=true \
+      -Denable_tests=false \
+      -Denable_docs=false \
+      -Denable_avx512=true \
+      -Denable_float=true && \
+    ninja -j$(nproc) -vC build install; \
+    sed -i 's/-lvmaf /-lvmaf -lstdc++ /' /usr/local/lib/pkgconfig/libvmaf.pc
+
+# vid.stab (video stabilization)
+COPY [ "src/vid.stab-*", "./vid.stab" ]
+RUN if [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping vid.stab build"; \
+  else \
+    cd vid.stab && \
+    mkdir build && cd build && \
+    sed -i 's/include (FindSSE)/if(CMAKE_SYSTEM_ARCH MATCHES "amd64")\ninclude (FindSSE)\nendif()/' ../CMakeLists.txt && \
+    cmake \
+      -G"Unix Makefiles" \
+      -DCMAKE_VERBOSE_MAKEFILE=ON \
+      -DCMAKE_SYSTEM_ARCH=$(arch) \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DUSE_OMP=ON \
+      .. && \
+    make -j$(nproc) install; \
+    echo "Libs.private: -ldl" >> /usr/local/lib/pkgconfig/vidstab.pc; \
+  fi
+

@@ -1,0 +1,127 @@
+ARG ALPINE_VERSION=alpine:3.22
+FROM ffmpeg-base:latest AS builder
+
+ARG DECODE_ONLY="false"
+
+# Copy built libraries from all component stages
+# Copy both /usr and /usr/local since some deps are from apk (in /usr) and others are built (in /usr/local)
+COPY --from=ffmpeg-graphics:latest /usr/ /usr/
+COPY --from=ffmpeg-av1:latest /usr/ /usr/
+COPY --from=ffmpeg-x264-x265:latest /usr/ /usr/
+COPY --from=ffmpeg-modern-codecs:latest /usr/ /usr/
+COPY --from=ffmpeg-vpx-avs:latest /usr/ /usr/
+COPY --from=ffmpeg-image-formats:latest /usr/ /usr/
+COPY --from=ffmpeg-audio:latest /usr/ /usr/
+COPY --from=ffmpeg-vaapi:latest /usr/ /usr/
+COPY --from=ffmpeg-processing:latest /usr/ /usr/
+
+# Build FFmpeg
+COPY [ "src/ffmpeg*", "./ffmpeg" ]
+RUN cd ffmpeg && \
+  sed -i 's/svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc, &svt_enc->enc_params)/svt_av1_enc_init_handle(\&svt_enc->svt_handle, \&svt_enc->enc_params)/g' libavcodec/libsvtav1.c && \
+  if [ "$(uname -m)" != "armv7l" ]; then \
+    FEATURES="--enable-libvpx"; \
+  fi; \
+  # Conditional flags based on DECODE_ONLY
+  if [ "$DECODE_ONLY" != "true" ]; then \
+    FEATURES="$FEATURES --enable-nonfree"; \
+    FEATURES="$FEATURES --enable-libx264"; \
+    FEATURES="$FEATURES --enable-librav1e"; \
+    FEATURES="$FEATURES --enable-libsvtav1"; \
+    FEATURES="$FEATURES --enable-libx265"; \
+    FEATURES="$FEATURES --enable-libxeve"; \
+    FEATURES="$FEATURES --enable-libxevd"; \
+    FEATURES="$FEATURES --enable-libvvenc"; \
+    FEATURES="$FEATURES --enable-libdavs2"; \
+    FEATURES="$FEATURES --enable-libmysofa"; \
+    FEATURES="$FEATURES --enable-libuavs3d"; \
+    FEATURES="$FEATURES --enable-libvidstab"; \
+    FEATURES="$FEATURES --enable-libvmaf"; \
+    FEATURES="$FEATURES --enable-libvo-amrwbenc"; \
+    FEATURES="$FEATURES --enable-libmp3lame"; \
+  fi && \
+    PKG_CONFIG_PATH="/usr/lib/pkgconfig/:${PKG_CONFIG_PATH}" && \
+    ./configure \
+    --pkg-config-flags="--static" \
+    --extra-cflags="$CFLAGS" \
+    --extra-cxxflags="$CXXFLAGS" \
+    --extra-ldexeflags="-fPIE -static-pie" \
+    --extra-libs="-lm -fopenmp" \
+    --enable-small \
+    --enable-openssl \
+    --disable-shared \
+    --disable-ffplay \
+    --enable-static \
+    --enable-gpl \
+    --enable-libvpl \
+    --enable-libvorbis \
+    --enable-version3 \
+    --enable-libzimg \
+    --enable-fontconfig \
+    --enable-gray \
+    --enable-iconv \
+    --enable-lcms2 \
+    --enable-libaom \
+    --enable-libwebp \
+    --enable-libxml2 \
+    --enable-libdav1d \
+    --enable-libass \
+    --enable-libfreetype \
+    --enable-libfribidi \
+    --enable-libharfbuzz \
+    --enable-libsoxr \
+    --enable-libopenjpeg \
+    --enable-libsnappy \
+    $FEATURES \
+  || (cat ffbuild/config.log ; false) && \
+  make -j$(nproc) install
+
+# Validate binaries (security checks: no dependencies, relro, pie, stack nx)
+COPY checkelf.sh /
+RUN \
+  /checkelf.sh /usr/local/bin/ffmpeg && \
+  /checkelf.sh /usr/local/bin/ffprobe
+
+# Install fonts for subtitle rendering
+RUN apk add $APK_OPTS font-terminus font-inconsolata font-dejavu font-awesome
+
+# Testing stage - run sanity tests before creating final image
+FROM scratch AS testing
+COPY --from=builder /usr/local/bin/ffmpeg /
+COPY --from=builder /usr/local/bin/ffprobe /
+COPY --from=builder /usr/local/share/doc/ffmpeg/* /doc/
+COPY --from=builder /etc/ssl/cert.pem /etc/ssl/cert.pem
+COPY --from=builder /etc/fonts/ /etc/fonts/
+COPY --from=builder /usr/share/fonts/ /usr/share/fonts/
+COPY --from=builder /usr/share/consolefonts/ /usr/share/consolefonts/
+COPY --from=builder /var/cache/fontconfig/ /var/cache/fontconfig/
+
+# Sanity tests
+RUN ["/ffmpeg", "-version"]
+RUN ["/ffprobe", "-version"]
+RUN ["/ffmpeg", "-hide_banner", "-buildconf"]
+# Test encoding with SVT-AV1
+RUN ["/ffmpeg", "-f", "lavfi", "-i", "testsrc", "-c:v", "libsvtav1", "-t", "100ms", "-f", "null", "-"]
+# Test DNS resolution
+RUN ["/ffprobe", "-i", "https://github.com/favicon.ico"]
+# Test TLS/HTTPS with certificate validation
+RUN ["/ffprobe", "-tls_verify", "1", "-ca_file", "/etc/ssl/cert.pem", "-i", "https://github.com/favicon.ico"]
+# Test SVG support
+RUN ["/ffprobe", "-i", "https://github.githubassets.com/favicons/favicon.svg"]
+# Test vvenc
+RUN ["/ffmpeg", "-f", "lavfi", "-i", "testsrc", "-c:v", "libvvenc", "-t", "100ms", "-f", "null", "-"]
+# Test x265 (regression test)
+RUN ["/ffmpeg", "-f", "lavfi", "-i", "testsrc", "-c:v", "libx265", "-t", "100ms", "-f", "null", "-"]
+
+# Final minimal image
+FROM scratch
+COPY --from=builder /usr/local/bin/ffmpeg /
+COPY --from=builder /usr/local/bin/ffprobe /
+COPY --from=builder /usr/local/share/doc/ffmpeg/* /doc/
+COPY --from=builder /etc/ssl/cert.pem /etc/ssl/cert.pem
+COPY --from=builder /etc/fonts/ /etc/fonts/
+COPY --from=builder /usr/share/fonts/ /usr/share/fonts/
+COPY --from=builder /usr/share/consolefonts/ /usr/share/consolefonts/
+COPY --from=builder /var/cache/fontconfig/ /var/cache/fontconfig/
+
+ENTRYPOINT ["/ffmpeg"]

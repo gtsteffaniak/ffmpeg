@@ -1,0 +1,51 @@
+FROM ffmpeg-base:latest AS vpx-avs
+
+ARG DECODE_ONLY="false"
+
+# libvpx (VP8/VP9 codec)
+COPY [ "src/libvpx-*", "./libvpx" ]
+RUN if [ "$(uname -m)" = "armv7l" ]; then \
+    echo "Skipping libvpx build on armv7l"; \
+  else \
+    cd libvpx && \
+    ./configure \
+      --enable-static \
+      --enable-vp9-highbitdepth \
+      --disable-shared \
+      --disable-unit-tests \
+      --disable-examples && \
+    make -j$(nproc) install; \
+  fi
+
+# davs2 (AVS2 encoder - very niche Chinese codec)
+COPY [ "src/davs2-*", "./davs2" ]
+RUN if [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping davs2 build"; \
+  else \
+    # TODO: seems to be issues with asm on musl
+    cd davs2/build/linux && \
+    ./configure \
+      --disable-asm \
+      --enable-pic \
+      --enable-strip \
+      --disable-cli && \
+    make -j$(nproc) install; \
+  fi
+
+# uavs3d (AVS3 decoder - niche Chinese codec)
+COPY [ "src/uavs3d*", "./uavs3d" ]
+RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping uavs3d build"; \
+  else \
+    cd uavs3d && \
+      sed -i '/armv7\.c/d' source/CMakeLists.txt && \
+      mkdir -p build/linux && cd build/linux && \
+      cmake \
+        -G"Unix Makefiles" \
+        -DCMAKE_VERBOSE_MAKEFILE=ON \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=OFF \
+        ../.. && \
+      make -j$(nproc) install; \
+  fi
+

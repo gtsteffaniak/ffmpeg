@@ -1,0 +1,33 @@
+FROM ffmpeg-base:latest AS x264-x265
+
+ARG DECODE_ONLY="false"
+
+# x264 (H.264 encoder)
+COPY [ "src/x264*", "./x264" ]
+RUN if [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping x264 build"; \
+  else \
+    cd x264 && \
+    ./configure \
+      --enable-pic \
+      --enable-static \
+      --disable-cli \
+      --disable-lavf \
+      --disable-swscale && \
+    make -j$(nproc) install; \
+  fi
+
+# x265 (HEVC encoder with multilib support)
+COPY [ "src/x265*", "./x265" ]
+RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping x265 build"; \
+  else \
+    cd x265/build/linux && \
+      sed -i '/^cmake / s/$/ -G "Unix Makefiles" ${CMAKEFLAGS}/' ./multilib.sh && \
+      sed -i 's/ -DENABLE_SHARED=OFF//g' ./multilib.sh && \
+      MAKEFLAGS="-j$(nproc)" \
+      CMAKEFLAGS="-DENABLE_SHARED=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_AGGRESSIVE_CHECKS=ON -DENABLE_NASM=ON -DCMAKE_BUILD_TYPE=Release" \
+      ./multilib.sh && \
+      make -C 8bit -j$(nproc) install; \
+  fi
+

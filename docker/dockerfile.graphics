@@ -1,0 +1,21 @@
+FROM ffmpeg-base:latest AS graphics
+
+ARG DECODE_ONLY="false"
+
+# Skip cairo, librsvg, pango if DECODE_ONLY is true (for smaller text rendering footprint)
+RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping cairo build"; \
+  else \
+    apk add $APK_OPTS cairo-dev cairo-static; \
+  fi
+
+# Install harfbuzz (text shaping)
+RUN apk add $APK_OPTS harfbuzz-dev harfbuzz-static
+
+# Build pango (text layout engine)
+COPY [ "src/pango-*", "./pango" ]
+RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping pango build"; \
+  else \
+    apk add $APK_OPTS pango-dev pango; \
+  fi
