@@ -136,6 +136,12 @@ func isNumericVersion(tag string) bool {
 		return false
 	}
 
+	// Skip year-based versions (2022.x, 2023.x, 2024.x, etc.) for libraries that switched versioning schemes
+	yearBasedRegex := regexp.MustCompile(`^20\d{2}\.`)
+	if yearBasedRegex.MatchString(cleanTag) {
+		return false
+	}
+
 	// Match numeric version pattern: x.y or x.y.z (no suffixes allowed)
 	numVerRegex := regexp.MustCompile(`^(\d+)\.(\d+)(\.(\d+))?$`)
 	return numVerRegex.MatchString(cleanTag)
@@ -348,7 +354,7 @@ func getLatestGitHubTag(repoURL string) (string, error) {
 
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
-		log.Println("Warning: GITHUB_TOKEN not set. You may hit rate limits.")
+		log.Fatalf("GITHUB_TOKEN not set")
 	}
 	client := &http.Client{}
 

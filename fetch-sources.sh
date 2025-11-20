@@ -234,7 +234,7 @@ fetch_and_unpack libbluray LIBBLURAY_VERSION LIBBLURAY_URL
 # bump: libvpl /LIBVPL_VERSION=([\d.]+)/ https://github.com/intel/libvpl.git|^2
 # bump: libvpl after ./hashupdate Dockerfile LIBVPL $LATEST
 # bump: libvpl link "Changelog" https://github.com/intel/libvpl/blob/main/CHANGELOG.md
-: "${LIBVPL_VERSION:=2023.4.0}"
+: "${LIBVPL_VERSION:=2.15.0}"
 : "${LIBVPL_URL:=https://github.com/intel/libvpl/archive/refs/tags/v${LIBVPL_VERSION}.tar.gz}"
 fetch_and_unpack libvpl LIBVPL_VERSION LIBVPL_URL
 

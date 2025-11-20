@@ -84,8 +84,8 @@ Note: build times are just approximations. Actual build times vary widely based 
   └───────────┘       └───────────┘      └─────────────┘
         │                    │                    │
         │             ┌──────▼──────┐             │
-        │             │  vaapi      │             │
-        │             │   5 min     │             │
+        │             │    vaapi    │             │
+        │             │    5 min    │             │
         │             └─────────────┘             │
         │                    │                    │
         │             ┌──────▼──────┐             │
@@ -98,7 +98,7 @@ Note: build times are just approximations. Actual build times vary widely based 
                     ┌────────▼────────┐
                     │ dockerfile.final│
                     │ FFmpeg + package│
-                    |      10 min     |
+                    |      5 min      |
                     └─────────────────┘
 ```
 ## Components

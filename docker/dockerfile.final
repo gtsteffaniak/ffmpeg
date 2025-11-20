@@ -46,7 +46,7 @@ RUN cd ffmpeg && \
     --extra-cflags="$CFLAGS" \
     --extra-cxxflags="$CXXFLAGS" \
     --extra-ldexeflags="-fPIE -static-pie" \
-    --extra-libs="-lm -fopenmp" \
+    --extra-libs="-lm -fopenmp -lstdc++" \
     --enable-small \
     --enable-openssl \
     --disable-shared \
