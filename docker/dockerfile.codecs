@@ -1,0 +1,265 @@
+FROM ffmpeg-base:latest AS codecs
+
+# aom (AV1 decoder)
+RUN apk add $APK_OPTS aom-dev aom-static
+
+# libogg (niche audio codec)
+RUN apk add $APK_OPTS libogg-dev libogg-static
+
+# davs2 (very niche)
+COPY [ "src/davs2-*", "./davs2" ]
+ARG DECODE_ONLY="false"
+RUN if [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping davs2 build"; \
+  else \
+    cd davs2/build/linux && \
+    ./configure \
+      --disable-asm \
+      --enable-pic \
+      --enable-strip \
+      --disable-cli && \
+    make -j$(nproc) install; \
+  fi
+
+# SVT-AV1 (AV1 encoder)
+COPY [ "src/SVT-AV1-*", "./SVT-AV1" ]
+RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping SVT-AV1 build"; \
+  else \
+    cd SVT-AV1 && \
+    cd Build && \
+    cmake \
+      -G"Unix Makefiles" \
+      -DCMAKE_VERBOSE_MAKEFILE=ON \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DENABLE_AVX512=ON \
+      -DCMAKE_BUILD_TYPE=Release \
+      .. && \
+    make -j$(nproc) install; \
+  fi
+
+# uavs3d (AVS3 decoder - niche)
+COPY [ "src/uavs3d*", "./uavs3d" ]
+RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+  echo "Skipping uavs3d build"; \
+  else \
+    cd uavs3d && \
+      sed -i '/armv7\.c/d' source/CMakeLists.txt && \
+      mkdir -p build/linux && cd build/linux && \
+      cmake \
+        -G"Unix Makefiles" \
+        -DCMAKE_VERBOSE_MAKEFILE=ON \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=OFF \
+        ../.. && \
+      make -j$(nproc) install; \
+  fi
+
+# vid.stab (video processing)
+COPY [ "src/vid.stab-*", "./vid.stab" ]
+RUN if [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping vid.stab build"; \
+  else \
+    cd vid.stab && \
+    mkdir build && cd build && \
+    sed -i 's/include (FindSSE)/if(CMAKE_SYSTEM_ARCH MATCHES "amd64")\ninclude (FindSSE)\nendif()/' ../CMakeLists.txt && \
+    cmake \
+      -G"Unix Makefiles" \
+      -DCMAKE_VERBOSE_MAKEFILE=ON \
+      -DCMAKE_SYSTEM_ARCH=$(arch) \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DUSE_OMP=ON \
+      .. && \
+    make -j$(nproc) install; \
+    echo "Libs.private: -ldl" >> /usr/local/lib/pkgconfig/vidstab.pc; \
+  fi
+
+# x264 (encoder)
+COPY [ "src/x264*", "./x264" ]
+RUN if [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping x264 build"; \
+  else \
+    cd x264 && \
+    ./configure \
+      --enable-pic \
+      --enable-static \
+      --disable-cli \
+      --disable-lavf \
+      --disable-swscale && \
+    make -j$(nproc) install; \
+  fi
+
+# x265 (HEVC encoder)
+COPY [ "src/x265*", "./x265" ]
+RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping x265 build"; \
+  else \
+    cd x265/build/linux && \
+      sed -i '/^cmake / s/$/ -G "Unix Makefiles" ${CMAKEFLAGS}/' ./multilib.sh && \
+      sed -i 's/ -DENABLE_SHARED=OFF//g' ./multilib.sh && \
+      MAKEFLAGS="-j$(nproc)" \
+      CMAKEFLAGS="-DENABLE_SHARED=OFF -DCMAKE_VERBOSE_MAKEFILE=ON -DENABLE_AGGRESSIVE_CHECKS=ON -DENABLE_NASM=ON -DCMAKE_BUILD_TYPE=Release" \
+      ./multilib.sh && \
+      make -C 8bit -j$(nproc) install; \
+  fi
+
+# xeve (HEVC encoder)
+COPY [ "src/xeve-*", "./xeve" ]
+RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+  echo "Skipping xeve build"; \
+  else \
+    cd xeve && \
+    sed -i 's/mc_filter_bilin/xevem_mc_filter_bilin/' src_main/sse/xevem_mc_sse.c && \
+    mkdir build && cd build && \
+    cmake \
+      -G"Unix Makefiles" \
+      -DARM="$(if [ $(uname -m) == aarch64 ]; then echo TRUE; else echo FALSE; fi)" \
+      -DCMAKE_BUILD_TYPE=Release \
+      .. && \
+    make -j$(nproc) install && \
+    ln -s /usr/local/lib/xeve/libxeve.a /usr/local/lib/libxeve.a; \
+  fi
+
+# xevd (VVC/H.266 encoder)
+COPY [ "src/xevd-*", "./xevd" ]
+RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+  echo "Skipping xevd build"; \
+  else \
+    cd xevd && \
+    sed -i 's/mc_filter_bilin/xevdm_mc_filter_bilin/' src_main/sse/xevdm_mc_sse.c && \
+    mkdir build && cd build && \
+    cmake \
+      -G"Unix Makefiles" \
+      -DARM="$(if [ $(uname -m) == aarch64 ]; then echo TRUE; else echo FALSE; fi)" \
+      -DCMAKE_BUILD_TYPE=Release \
+      .. && \
+    make -j$(nproc) install && \
+    ln -s /usr/local/lib/xevd/libxevd.a /usr/local/lib/libxevd.a; \
+  fi
+
+# libjxl (image codec)
+COPY [ "src/libjxl-*", "./libjxl" ]
+RUN if [ "$(uname -m)" = "armv7l" ]; then \
+  echo "Skipping libjxl build"; \
+  else \
+    set -e && \
+    cd libjxl && \
+    ./deps.sh && \
+    cmake -B build \
+      -G"Unix Makefiles" \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_VERBOSE_MAKEFILE=ON \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DBUILD_TESTING=OFF \
+      -DJPEGXL_ENABLE_PLUGINS=OFF \
+      -DJPEGXL_ENABLE_BENCHMARK=OFF \
+      -DJPEGXL_ENABLE_COVERAGE=OFF \
+      -DJPEGXL_ENABLE_EXAMPLES=OFF \
+      -DJPEGXL_ENABLE_FUZZERS=OFF \
+      -DJPEGXL_ENABLE_SJPEG=OFF \
+      -DJPEGXL_ENABLE_SKCMS=OFF \
+      -DJPEGXL_ENABLE_VIEWERS=OFF \
+      -DJPEGXL_FORCE_SYSTEM_GTEST=ON \
+      -DJPEGXL_FORCE_SYSTEM_BROTLI=ON \
+      -DJPEGXL_FORCE_SYSTEM_HWY=OFF && \
+    cmake --build build -j$(nproc) && \
+    cmake --install build; \
+  fi
+
+# hardware acceleration for intel cpu
+COPY [ "src/libvpl-*", "./libvpl" ]
+RUN cd libvpl && \
+    cmake -B build \
+      -G"Unix Makefiles" \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_VERBOSE_MAKEFILE=ON \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DBUILD_TESTS=OFF \
+      -DENABLE_WARNING_AS_ERROR=ON && \
+    cmake --build build -j$(nproc) && \
+    cmake --install build;
+
+# vvenc (HEVC encoder)
+COPY [ "src/vvenc-*", "./vvenc" ]
+RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping vvenc build"; \
+    else \
+    cd vvenc && \
+      sed -i 's/-Werror;//' source/Lib/vvenc/CMakeLists.txt && \
+      cmake \
+        -S . \
+        -B build/release-static \
+        -DVVENC_ENABLE_WERROR=OFF \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr/local && \
+      cmake --build build/release-static -j && \
+      cmake --build build/release-static --target install; \
+    fi
+
+# dav1d (AV1 decoder)
+COPY [ "src/dav1d-*", "./dav1d" ]
+RUN cd dav1d && \
+  meson setup build \
+    -Dbuildtype=release \
+    -Ddefault_library=static && \
+  ninja -j$(nproc) -vC build install
+
+# rav1e (AV1 encoder)
+RUN apk add $APK_OPTS rav1e-static rav1e-dev
+
+# zimg (image processing)
+COPY [ "src/zimg-*", "./zimg" ]
+RUN cd zimg && \
+  ./autogen.sh && \
+  ./configure \
+    --disable-shared \
+    --enable-static && \
+  make -j$(nproc) install
+
+# libwebp (decoder)
+RUN apk add $APK_OPTS libwebp-dev libwebp-static
+
+# libvpx (VP8/VP9 decoder)
+COPY [ "src/libvpx-*", "./libvpx" ]
+RUN if [ "$(uname -m)" = "armv7l" ]; then \
+  echo "DECODE_ONLY is true, skipping libvpx build"; \
+  else \
+    cd libvpx && \
+    ./configure \
+      --enable-static \
+      --enable-vp9-highbitdepth \
+      --disable-shared \
+      --disable-unit-tests \
+      --disable-examples && \
+    make -j$(nproc) install; \
+  fi
+
+# libvorbis (decoder)
+RUN apk add $APK_OPTS libvorbis-dev libvorbis-static
+
+# libass
+COPY [ "src/libass-*", "./libass" ]
+RUN cd libass && \
+  ./configure \
+    --disable-shared \
+    --enable-static && \
+  make -j$(nproc) && make install
+
+# libmysofa
+COPY [ "src/libmysofa-*", "./libmysofa" ]
+RUN cd libmysofa/build && \
+  cmake \
+    -G"Unix Makefiles" \
+    -DCMAKE_VERBOSE_MAKEFILE=ON \
+    -DCMAKE_INSTALL_LIBDIR=lib \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTS=OFF \
+    .. && \
+  make -j$(nproc) install

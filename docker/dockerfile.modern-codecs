@@ -1,0 +1,55 @@
+FROM ffmpeg-base:latest AS modern-codecs
+
+ARG DECODE_ONLY="false"
+
+# xeve (MPEG-5 EVC encoder)
+COPY [ "src/xeve-*", "./xeve" ]
+RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping xeve build"; \
+  else \
+    cd xeve && \
+    sed -i 's/mc_filter_bilin/xevem_mc_filter_bilin/' src_main/sse/xevem_mc_sse.c && \
+    mkdir build && cd build && \
+    cmake \
+      -G"Unix Makefiles" \
+      -DARM="$(if [ $(uname -m) == aarch64 ]; then echo TRUE; else echo FALSE; fi)" \
+      -DCMAKE_BUILD_TYPE=Release \
+      .. && \
+    make -j$(nproc) install && \
+    ln -s /usr/local/lib/xeve/libxeve.a /usr/local/lib/libxeve.a; \
+  fi
+
+# xevd (MPEG-5 EVC decoder)
+COPY [ "src/xevd-*", "./xevd" ]
+RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping xevd build"; \
+  else \
+    cd xevd && \
+    sed -i 's/mc_filter_bilin/xevdm_mc_filter_bilin/' src_main/sse/xevdm_mc_sse.c && \
+    mkdir build && cd build && \
+    cmake \
+      -G"Unix Makefiles" \
+      -DARM="$(if [ $(uname -m) == aarch64 ]; then echo TRUE; else echo FALSE; fi)" \
+      -DCMAKE_BUILD_TYPE=Release \
+      .. && \
+    make -j$(nproc) install && \
+    ln -s /usr/local/lib/xevd/libxevd.a /usr/local/lib/libxevd.a; \
+  fi
+
+# vvenc (VVC/H.266 encoder)
+COPY [ "src/vvenc-*", "./vvenc" ]
+RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping vvenc build"; \
+  else \
+    cd vvenc && \
+      sed -i 's/-Werror;//' source/Lib/vvenc/CMakeLists.txt && \
+      cmake \
+        -S . \
+        -B build/release-static \
+        -DVVENC_ENABLE_WERROR=OFF \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr/local && \
+      cmake --build build/release-static -j && \
+      cmake --build build/release-static --target install; \
+  fi
+

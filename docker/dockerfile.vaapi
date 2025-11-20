@@ -1,0 +1,19 @@
+FROM ffmpeg-base:latest AS vaapi
+
+# libva (Video Acceleration API - use Alpine package for simplicity)
+RUN apk add $APK_OPTS libva-dev
+
+# libvpl (Intel Video Processing Library - oneAPI Video Processing Library)
+COPY [ "src/libvpl-*", "./libvpl" ]
+RUN cd libvpl && \
+    cmake -B build \
+      -G"Unix Makefiles" \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_VERBOSE_MAKEFILE=ON \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DCMAKE_INSTALL_PREFIX=/usr/local \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DBUILD_TESTS=OFF \
+      -DENABLE_WARNING_AS_ERROR=OFF && \
+    cmake --build build -j$(nproc) && \
+    cmake --install build

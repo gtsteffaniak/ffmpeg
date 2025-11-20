@@ -1,0 +1,40 @@
+FROM ffmpeg-base:latest AS av1
+
+ARG DECODE_ONLY="false"
+
+# aom (AV1 reference encoder/decoder)
+RUN apk add $APK_OPTS aom-dev aom-static
+
+# dav1d (fast AV1 decoder)
+COPY [ "src/dav1d-*", "./dav1d" ]
+RUN cd dav1d && \
+  meson setup build \
+    -Dbuildtype=release \
+    -Ddefault_library=static && \
+  ninja -j$(nproc) -vC build install
+
+# rav1e (Rust AV1 encoder)
+RUN if [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping rav1e build"; \
+  else \
+    apk add $APK_OPTS rav1e-static rav1e-dev; \
+  fi
+
+# SVT-AV1 (production AV1 encoder)
+COPY [ "src/SVT-AV1-*", "./SVT-AV1" ]
+RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping SVT-AV1 build"; \
+  else \
+    cd SVT-AV1 && \
+    cd Build && \
+    cmake \
+      -G"Unix Makefiles" \
+      -DCMAKE_VERBOSE_MAKEFILE=ON \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DENABLE_AVX512=ON \
+      -DCMAKE_BUILD_TYPE=Release \
+      .. && \
+    make -j$(nproc) install; \
+  fi
+

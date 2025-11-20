@@ -1,0 +1,72 @@
+ARG ALPINE_VERSION=alpine:3.22
+FROM $ALPINE_VERSION AS base
+
+# Alpine Package Keeper options
+ARG APK_OPTS="--no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing/"
+
+# Install base build tools and common dependencies
+RUN apk add $APK_OPTS \
+  coreutils \
+  pkgconfig \
+  rust cargo cargo-c \
+  openssl-dev openssl-libs-static \
+  ca-certificates \
+  bash \
+  git \
+  curl \
+  build-base \
+  autoconf automake \
+  libtool \
+  diffutils \
+  cmake meson ninja \
+  yasm nasm \
+  texinfo \
+  jq \
+  zlib-dev zlib-static \
+  bzip2-dev bzip2-static \
+  util-linux-dev util-linux-static \
+  pixman-dev pixman-static \
+  libxml2-dev libxml2-static \
+  expat-dev expat-static \
+  fontconfig-dev fontconfig-static \
+  freetype freetype-dev freetype-static \
+  graphite2-static \
+  tiff tiff-dev \
+  libjpeg-turbo libjpeg-turbo-dev \
+  libpng-dev libpng-static \
+  giflib giflib-dev \
+  fribidi-dev fribidi-static \
+  brotli-dev brotli-static \
+  soxr-dev soxr-static \
+  tcl \
+  numactl-dev \
+  cunit cunit-dev \
+  fftw-dev \
+  libsamplerate-dev libsamplerate-static \
+  vo-amrwbenc-dev vo-amrwbenc-static \
+  snappy snappy-dev snappy-static \
+  xxd \
+  xz-dev xz-static \
+  python3 py3-packaging \
+  libdrm-dev \
+  mesa-dev \
+  mesa-dri-gallium \
+  mesa-va-gallium
+
+# Build flags for static compilation
+ARG CFLAGS="-static-libgcc -fno-strict-overflow -fPIC"
+ARG CXXFLAGS="-static-libgcc -fno-strict-overflow -fPIC"
+ARG LDFLAGS="-Wl,-z,relro,-z,now"
+
+# Set environment variables
+ENV CFLAGS=$CFLAGS
+ENV CXXFLAGS=$CXXFLAGS
+ENV LDFLAGS=$LDFLAGS
+ENV PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/local/lib/pkgconfig"
+ENV APK_OPTS="--no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing/"
+
+# Create working directory
+WORKDIR /build
+
+# Build glib + pcre2 (foundational dependency for graphics stack)
+RUN apk add $APK_OPTS glib-dev glib-static pcre2-dev pcre2-static
