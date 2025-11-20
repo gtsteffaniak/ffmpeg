@@ -119,7 +119,7 @@ build-final: ## Build only final FFmpeg component (requires components built)
 update: ## Update source versions using helper program
 	@echo "$(CYAN)Updating source versions...$(NC)"
 	@if [ -f helper.go ]; then \
-		go run helper.go; \
+		go run helper.go update; \
 	else \
 		echo "$(YELLOW)helper.go not found - skipping update$(NC)"; \
 	fi

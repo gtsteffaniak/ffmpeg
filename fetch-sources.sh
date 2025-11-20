@@ -108,7 +108,7 @@ fetch_and_unpack SVT-AV1 SVTAV1_VERSION SVTAV1_URL
 # bump: ffmpeg after ./hashupdate Dockerfile FFMPEG $LATEST
 # bump: ffmpeg link "Changelog" https://github.com/FFmpeg/FFmpeg/blob/n$LATEST/Changelog
 # bump: ffmpeg link "Source diff $CURRENT..$LATEST" https://github.com/FFmpeg/FFmpeg/compare/n$CURRENT..n$LATEST
-: "${FFMPEG_VERSION:=8.0}"
+: "${FFMPEG_VERSION:=8.0.1}"
 : "${FFMPEG_URL:=https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.bz2}"
 fetch_and_unpack ffmpeg FFMPEG_VERSION FFMPEG_URL
 
@@ -203,7 +203,7 @@ fetch_and_unpack libwebp LIBWEBP_VERSION LIBWEBP_URL
 # bump: librsvg /LIBRSVG_VERSION=([\d.]+)/ https://gitlab.gnome.org/GNOME/librsvg.git|^2
 # bump: librsvg after ./hashupdate Dockerfile LIBRSVG $LATEST
 # bump: librsvg link "NEWS" https://gitlab.gnome.org/GNOME/librsvg/-/blob/master/NEWS
-: "${LIBRSVG_VERSION:=2.61.0}"
+: "${LIBRSVG_VERSION:=2.61.3}"
 : "${LIBRSVG_URL:=https://download.gnome.org/sources/librsvg/2.61/librsvg-$LIBRSVG_VERSION.tar.xz}"
 fetch_and_unpack librsvg LIBRSVG_VERSION LIBRSVG_URL
 
@@ -219,7 +219,7 @@ fetch_and_unpack dav1d DAV1D_VERSION DAV1D_URL
 # bump: glib /GLIB_VERSION=([\d.]+)/ https://gitlab.gnome.org/GNOME/glib.git|^2
 # bump: glib after ./hashupdate Dockerfile GLIB $LATEST
 # bump: glib link "NEWS" https://gitlab.gnome.org/GNOME/glib/-/blob/main/NEWS?ref_type=heads
-#: "${GLIB_VERSION:=2.85.4}"
+#: "${GLIB_VERSION:=2.87.0}"
 #: "${GLIB_URL:=https://download.gnome.org/sources/glib/2.84/glib-$GLIB_VERSION.tar.xz}"
 #: "${GLIB_SHA256:=2b4bc2ec49611a5fc35f86aca855f2ed0196e69e53092bab6bb73396bf30789a}"
 #fetch_and_unpack glib GLIB_VERSION GLIB_URL GLIB_SHA256
@@ -234,7 +234,7 @@ fetch_and_unpack libbluray LIBBLURAY_VERSION LIBBLURAY_URL
 # bump: libvpl /LIBVPL_VERSION=([\d.]+)/ https://github.com/intel/libvpl.git|^2
 # bump: libvpl after ./hashupdate Dockerfile LIBVPL $LATEST
 # bump: libvpl link "Changelog" https://github.com/intel/libvpl/blob/main/CHANGELOG.md
-: "${LIBVPL_VERSION:=2.14.0}"
+: "${LIBVPL_VERSION:=2.15.0}"
 : "${LIBVPL_URL:=https://github.com/intel/libvpl/archive/refs/tags/v${LIBVPL_VERSION}.tar.gz}"
 fetch_and_unpack libvpl LIBVPL_VERSION LIBVPL_URL
 
@@ -378,7 +378,7 @@ fetch_and_unpack rubberband RUBBERBAND_VERSION RUBBERBAND_URL
 # bump: openjpeg /OPENJPEG_VERSION=([\d.]+)/ https://github.com/uclouvain/openjpeg.git|*
 # bump: openjpeg after ./hashupdate Dockerfile OPENJPEG $LATEST
 # bump: openjpeg link "CHANGELOG" https://github.com/uclouvain/openjpeg/blob/master/CHANGELOG.md
-: "${OPENJPEG_VERSION:=2.5.3}"
+: "${OPENJPEG_VERSION:=2.5.4}"
 : "${OPENJPEG_URL:=https://github.com/uclouvain/openjpeg/archive/v$OPENJPEG_VERSION.tar.gz}"
 fetch_and_unpack openjpeg OPENJPEG_VERSION OPENJPEG_URL
 
@@ -426,7 +426,7 @@ git clone --depth 1 --branch v$AOM_VERSION "$AOM_URL" && cd aom && test $(git re
 # bump: harfbuzz /LIBHARFBUZZ_VERSION=([\d.]+)/ https://github.com/harfbuzz/harfbuzz.git|*
 # bump: harfbuzz after ./hashupdate Dockerfile LIBHARFBUZZ $LATEST
 # bump: harfbuzz link "NEWS" https://github.com/harfbuzz/harfbuzz/blob/main/NEWS
-: "${LIBHARFBUZZ_VERSION:=11.4.5}"
+: "${LIBHARFBUZZ_VERSION:=12.2.0}"
 : "${LIBHARFBUZZ_URL:=https://github.com/harfbuzz/harfbuzz/releases/download/$LIBHARFBUZZ_VERSION/harfbuzz-$LIBHARFBUZZ_VERSION.tar.xz}"
 fetch_and_unpack harfbuzz LIBHARFBUZZ_VERSION LIBHARFBUZZ_URL
 
