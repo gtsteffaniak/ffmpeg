@@ -9,6 +9,7 @@ TAG ?= latest
 DECODE_TAG ?= decode
 ALPINE_VERSION ?= alpine:3.22
 PLATFORMS ?= linux/amd64,linux/arm64
+GITHUB_TOKEN ?= $(shell cat .github-token 2>/dev/null || echo "")
 
 # Construct full image names
 DEFAULT_IMAGE := $(REGISTRY)/$(IMAGE_NAME):$(TAG)
@@ -119,7 +120,7 @@ build-final: ## Build only final FFmpeg component (requires components built)
 update: ## Update source versions using helper program
 	@echo "$(CYAN)Updating source versions...$(NC)"
 	@if [ -f helper.go ]; then \
-		go run helper.go; \
+		GITHUB_TOKEN=$$(cat .github-token 2>/dev/null || echo "") go run helper.go update; \
 	else \
 		echo "$(YELLOW)helper.go not found - skipping update$(NC)"; \
 	fi
