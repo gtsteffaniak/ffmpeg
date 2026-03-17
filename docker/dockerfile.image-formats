@@ -1,14 +1,5 @@
 FROM ffmpeg-base:latest AS image-formats
 
-# lcms2 (color management - required by libjxl)
-COPY [ "src/lcms2-*", "./lcms2" ]
-RUN cd lcms2 && \
-  ./autogen.sh && \
-  ./configure \
-    --enable-static \
-    --disable-shared && \
-  make -j$(nproc) install
-
 # libwebp (WebP image format)
 RUN apk add $APK_OPTS libwebp-dev libwebp-static
 
