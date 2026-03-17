@@ -239,15 +239,6 @@ fetch_and_unpack libbluray LIBBLURAY_VERSION LIBBLURAY_URL
 : "${LIBVPL_URL:=https://github.com/intel/libvpl/archive/refs/tags/v${LIBVPL_VERSION}.tar.gz}"
 fetch_and_unpack libvpl LIBVPL_VERSION LIBVPL_URL
 
-# bump: libjxl /LIBJXL_VERSION=([\d.]+)/ https://github.com/libjxl/libjxl.git|^0
-# bump: libjxl after ./hashupdate Dockerfile LIBJXL $LATEST
-# bump: libjxl link "Changelog" https://github.com/libjxl/libjxl/blob/main/CHANGELOG.md
-# use bundled highway library as its static build is not available in alpine
-: "${LIBJXL_VERSION:=0.11.2}"
-: "${LIBJXL_URL:=https://github.com/libjxl/libjxl/archive/refs/tags/v${LIBJXL_VERSION}.tar.gz}"
-fetch_and_unpack libjxl LIBJXL_VERSION LIBJXL_URL
-
-
 # bump: xevd /XEVD_VERSION=([\d.]+)/ https://github.com/mpeg5/xevd.git|*
 # bump: xevd after ./hashupdate Dockerfile XEVD $LATEST
 # bump: xevd link "CHANGELOG" https://github.com/mpeg5/xevd/releases/tag/v$LATEST
