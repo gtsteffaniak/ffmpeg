@@ -108,7 +108,7 @@ fetch_and_unpack SVT-AV1 SVTAV1_VERSION SVTAV1_URL
 # bump: ffmpeg after ./hashupdate Dockerfile FFMPEG $LATEST
 # bump: ffmpeg link "Changelog" https://github.com/FFmpeg/FFmpeg/blob/n$LATEST/Changelog
 # bump: ffmpeg link "Source diff $CURRENT..$LATEST" https://github.com/FFmpeg/FFmpeg/compare/n$CURRENT..n$LATEST
-: "${FFMPEG_VERSION:=8.0.1}"
+: "${FFMPEG_VERSION:=8.1}"
 : "${FFMPEG_URL:=https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.bz2}"
 fetch_and_unpack ffmpeg FFMPEG_VERSION FFMPEG_URL
 
@@ -124,7 +124,7 @@ fetch_and_unpack libvorbis VORBIS_VERSION VORBIS_URL
 # bump: libvpx after ./hashupdate Dockerfile VPX $LATEST
 # bump: libvpx link "CHANGELOG" https://github.com/webmproject/libvpx/blob/master/CHANGELOG
 # bump: libvpx link "Source diff $CURRENT..$LATEST" https://github.com/webmproject/libvpx/compare/v$CURRENT..v$LATEST
-: "${VPX_VERSION:=1.15.2}"
+: "${VPX_VERSION:=1.16.0}"
 : "${VPX_URL:=https://github.com/webmproject/libvpx/archive/v${VPX_VERSION}.tar.gz}"
 fetch_and_unpack libvpx VPX_VERSION VPX_URL
 
@@ -188,7 +188,7 @@ fetch_and_unpack libvorbis VORBIS_VERSION VORBIS_URL
 # bump: libvpx after ./hashupdate Dockerfile VPX $LATEST
 # bump: libvpx link "CHANGELOG" https://github.com/webmproject/libvpx/blob/master/CHANGELOG
 # bump: libvpx link "Source diff $CURRENT..$LATEST" https://github.com/webmproject/libvpx/compare/v$CURRENT..v$LATEST
-: "${VPX_VERSION:=1.15.2}"
+: "${VPX_VERSION:=1.16.0}"
 : "${VPX_URL:=https://github.com/webmproject/libvpx/archive/v${VPX_VERSION}.tar.gz}"
 fetch_and_unpack libvpx VPX_VERSION VPX_URL
 
@@ -203,8 +203,9 @@ fetch_and_unpack libwebp LIBWEBP_VERSION LIBWEBP_URL
 # bump: librsvg /LIBRSVG_VERSION=([\d.]+)/ https://gitlab.gnome.org/GNOME/librsvg.git|^2
 # bump: librsvg after ./hashupdate Dockerfile LIBRSVG $LATEST
 # bump: librsvg link "NEWS" https://gitlab.gnome.org/GNOME/librsvg/-/blob/master/NEWS
-: "${LIBRSVG_VERSION:=2.61.3}"
-: "${LIBRSVG_URL:=https://download.gnome.org/sources/librsvg/2.61/librsvg-$LIBRSVG_VERSION.tar.xz}"
+: "${LIBRSVG_VERSION:=2.62.0}"
+short_version=$(echo $LIBRSVG_VERSION | cut -d'.' -f1-2)
+: "${LIBRSVG_URL:=https://download.gnome.org/sources/librsvg/$short_version/librsvg-$LIBRSVG_VERSION.tar.xz}"
 fetch_and_unpack librsvg LIBRSVG_VERSION LIBRSVG_URL
 
 # bump: dav1d /DAV1D_VERSION=([\d.]+)/ https://code.videolan.org/videolan/dav1d.git|*
@@ -219,7 +220,7 @@ fetch_and_unpack dav1d DAV1D_VERSION DAV1D_URL
 # bump: glib /GLIB_VERSION=([\d.]+)/ https://gitlab.gnome.org/GNOME/glib.git|^2
 # bump: glib after ./hashupdate Dockerfile GLIB $LATEST
 # bump: glib link "NEWS" https://gitlab.gnome.org/GNOME/glib/-/blob/main/NEWS?ref_type=heads
-#: "${GLIB_VERSION:=2.87.0}"
+#: "${GLIB_VERSION:=2.88.0}"
 #: "${GLIB_URL:=https://download.gnome.org/sources/glib/2.84/glib-$GLIB_VERSION.tar.xz}"
 #: "${GLIB_SHA256:=2b4bc2ec49611a5fc35f86aca855f2ed0196e69e53092bab6bb73396bf30789a}"
 #fetch_and_unpack glib GLIB_VERSION GLIB_URL GLIB_SHA256
@@ -234,18 +235,9 @@ fetch_and_unpack libbluray LIBBLURAY_VERSION LIBBLURAY_URL
 # bump: libvpl /LIBVPL_VERSION=([\d.]+)/ https://github.com/intel/libvpl.git|^2
 # bump: libvpl after ./hashupdate Dockerfile LIBVPL $LATEST
 # bump: libvpl link "Changelog" https://github.com/intel/libvpl/blob/main/CHANGELOG.md
-: "${LIBVPL_VERSION:=2.15.0}"
+: "${LIBVPL_VERSION:=2.16.0}"
 : "${LIBVPL_URL:=https://github.com/intel/libvpl/archive/refs/tags/v${LIBVPL_VERSION}.tar.gz}"
 fetch_and_unpack libvpl LIBVPL_VERSION LIBVPL_URL
-
-# bump: libjxl /LIBJXL_VERSION=([\d.]+)/ https://github.com/libjxl/libjxl.git|^0
-# bump: libjxl after ./hashupdate Dockerfile LIBJXL $LATEST
-# bump: libjxl link "Changelog" https://github.com/libjxl/libjxl/blob/main/CHANGELOG.md
-# use bundled highway library as its static build is not available in alpine
-: "${LIBJXL_VERSION:=0.11.1}"
-: "${LIBJXL_URL:=https://github.com/libjxl/libjxl/archive/refs/tags/v${LIBJXL_VERSION}.tar.gz}"
-fetch_and_unpack libjxl LIBJXL_VERSION LIBJXL_URL
-
 
 # bump: xevd /XEVD_VERSION=([\d.]+)/ https://github.com/mpeg5/xevd.git|*
 # bump: xevd after ./hashupdate Dockerfile XEVD $LATEST
@@ -426,7 +418,7 @@ git clone --depth 1 --branch v$AOM_VERSION "$AOM_URL" && cd aom && test $(git re
 # bump: harfbuzz /LIBHARFBUZZ_VERSION=([\d.]+)/ https://github.com/harfbuzz/harfbuzz.git|*
 # bump: harfbuzz after ./hashupdate Dockerfile LIBHARFBUZZ $LATEST
 # bump: harfbuzz link "NEWS" https://github.com/harfbuzz/harfbuzz/blob/main/NEWS
-: "${LIBHARFBUZZ_VERSION:=12.2.0}"
+: "${LIBHARFBUZZ_VERSION:=13.1.1}"
 : "${LIBHARFBUZZ_URL:=https://github.com/harfbuzz/harfbuzz/releases/download/$LIBHARFBUZZ_VERSION/harfbuzz-$LIBHARFBUZZ_VERSION.tar.xz}"
 fetch_and_unpack harfbuzz LIBHARFBUZZ_VERSION LIBHARFBUZZ_URL
 
@@ -442,7 +434,7 @@ fetch_and_unpack vmaf VMAF_VERSION VMAF_URL
 # bump: vvenc /VVENC_VERSION=([\d.]+)/ https://github.com/fraunhoferhhi/vvenc.git|*
 # bump: vvenc after ./hashupdate Dockerfile VVENC $LATEST
 # bump: vvenc link "CHANGELOG" https://github.com/fraunhoferhhi/vvenc/releases/tag/v$LATEST
-: "${VVENC_VERSION:=1.13.1}"
+: "${VVENC_VERSION:=1.14.0}"
 : "${VVENC_URL:=https://github.com/fraunhoferhhi/vvenc/archive/refs/tags/v$VVENC_VERSION.tar.gz}"
 fetch_and_unpack vvenc VVENC_VERSION VVENC_URL
 
@@ -467,7 +459,7 @@ fetch_and_unpack pango PANGO_VERSION PANGO_URL
 # bump: libmysofa after ./hashupdate Dockerfile LIBMYSOFA $LATEST
 # bump: libmysofa link "Release" https://github.com/hoene/libmysofa/releases/tag/v$LATEST
 # bump: libmysofa link "Source diff $CURRENT..$LATEST" https://github.com/hoene/libmysofa/compare/v$CURRENT..v$LATEST
-: "${LIBMYSOFA_VERSION:=1.3.3}"
+: "${LIBMYSOFA_VERSION:=1.3.4}"
 : "${LIBMYSOFA_URL:=https://github.com/hoene/libmysofa/archive/refs/tags/v$LIBMYSOFA_VERSION.tar.gz}"
 fetch_and_unpack libmysofa LIBMYSOFA_VERSION LIBMYSOFA_URL
 

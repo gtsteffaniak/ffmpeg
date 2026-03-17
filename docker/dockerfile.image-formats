@@ -1,14 +1,5 @@
 FROM ffmpeg-base:latest AS image-formats
 
-# lcms2 (color management - required by libjxl)
-COPY [ "src/lcms2-*", "./lcms2" ]
-RUN cd lcms2 && \
-  ./autogen.sh && \
-  ./configure \
-    --enable-static \
-    --disable-shared && \
-  make -j$(nproc) install
-
 # libwebp (WebP image format)
 RUN apk add $APK_OPTS libwebp-dev libwebp-static
 
@@ -36,35 +27,3 @@ RUN cd zimg && \
     --disable-shared \
     --enable-static && \
   make -j$(nproc) install
-
-# libjxl (JPEG XL - next generation image format)
-COPY [ "src/libjxl-*", "./libjxl" ]
-RUN if [ "$(uname -m)" = "armv7l" ]; then \
-    echo "Skipping libjxl build"; \
-  else \
-    set -e && \
-    cd libjxl && \
-    ./deps.sh && \
-    cmake -B build \
-      -G"Unix Makefiles" \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_VERBOSE_MAKEFILE=ON \
-      -DCMAKE_INSTALL_LIBDIR=lib \
-      -DCMAKE_INSTALL_PREFIX=/usr/local \
-      -DBUILD_SHARED_LIBS=OFF \
-      -DBUILD_TESTING=OFF \
-      -DJPEGXL_ENABLE_PLUGINS=OFF \
-      -DJPEGXL_ENABLE_BENCHMARK=OFF \
-      -DJPEGXL_ENABLE_COVERAGE=OFF \
-      -DJPEGXL_ENABLE_EXAMPLES=OFF \
-      -DJPEGXL_ENABLE_FUZZERS=OFF \
-      -DJPEGXL_ENABLE_SJPEG=OFF \
-      -DJPEGXL_ENABLE_SKCMS=OFF \
-      -DJPEGXL_ENABLE_VIEWERS=OFF \
-      -DJPEGXL_FORCE_SYSTEM_GTEST=ON \
-      -DJPEGXL_FORCE_SYSTEM_BROTLI=ON \
-      -DJPEGXL_FORCE_SYSTEM_HWY=OFF && \
-    cmake --build build -j$(nproc) && \
-    cmake --install build; \
-  fi
-
