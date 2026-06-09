@@ -108,7 +108,7 @@ fetch_and_unpack SVT-AV1 SVTAV1_VERSION SVTAV1_URL
 # bump: ffmpeg after ./hashupdate Dockerfile FFMPEG $LATEST
 # bump: ffmpeg link "Changelog" https://github.com/FFmpeg/FFmpeg/blob/n$LATEST/Changelog
 # bump: ffmpeg link "Source diff $CURRENT..$LATEST" https://github.com/FFmpeg/FFmpeg/compare/n$CURRENT..n$LATEST
-: "${FFMPEG_VERSION:=8.1}"
+: "${FFMPEG_VERSION:=8.1.1}"
 : "${FFMPEG_URL:=https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.bz2}"
 fetch_and_unpack ffmpeg FFMPEG_VERSION FFMPEG_URL
 
@@ -146,7 +146,7 @@ fetch_and_unpack libva LIBVA_VERSION LIBVA_URL
 # bump: srt /SRT_VERSION=([\d.]+)/ https://github.com/Haivision/srt.git|^1
 # bump: srt after ./hashupdate Dockerfile SRT $LATEST
 # bump: srt link "Release notes" https://github.com/Haivision/srt/releases/tag/v$LATEST
-: "${SRT_VERSION:=1.5.4}"
+: "${SRT_VERSION:=1.5.5}"
 : "${SRT_URL:=https://github.com/Haivision/srt/archive/v${SRT_VERSION}.tar.gz}"
 fetch_and_unpack srt SRT_VERSION SRT_URL
 
@@ -203,7 +203,7 @@ fetch_and_unpack libwebp LIBWEBP_VERSION LIBWEBP_URL
 # bump: librsvg /LIBRSVG_VERSION=([\d.]+)/ https://gitlab.gnome.org/GNOME/librsvg.git|^2
 # bump: librsvg after ./hashupdate Dockerfile LIBRSVG $LATEST
 # bump: librsvg link "NEWS" https://gitlab.gnome.org/GNOME/librsvg/-/blob/master/NEWS
-: "${LIBRSVG_VERSION:=2.62.0}"
+: "${LIBRSVG_VERSION:=2.62.3}"
 short_version=$(echo $LIBRSVG_VERSION | cut -d'.' -f1-2)
 : "${LIBRSVG_URL:=https://download.gnome.org/sources/librsvg/$short_version/librsvg-$LIBRSVG_VERSION.tar.xz}"
 fetch_and_unpack librsvg LIBRSVG_VERSION LIBRSVG_URL
@@ -220,7 +220,7 @@ fetch_and_unpack dav1d DAV1D_VERSION DAV1D_URL
 # bump: glib /GLIB_VERSION=([\d.]+)/ https://gitlab.gnome.org/GNOME/glib.git|^2
 # bump: glib after ./hashupdate Dockerfile GLIB $LATEST
 # bump: glib link "NEWS" https://gitlab.gnome.org/GNOME/glib/-/blob/main/NEWS?ref_type=heads
-#: "${GLIB_VERSION:=2.88.0}"
+#: "${GLIB_VERSION:=2.89.0}"
 #: "${GLIB_URL:=https://download.gnome.org/sources/glib/2.84/glib-$GLIB_VERSION.tar.xz}"
 #: "${GLIB_SHA256:=2b4bc2ec49611a5fc35f86aca855f2ed0196e69e53092bab6bb73396bf30789a}"
 #fetch_and_unpack glib GLIB_VERSION GLIB_URL GLIB_SHA256
@@ -328,7 +328,7 @@ fetch_and_unpack vid.stab VIDSTAB_VERSION VIDSTAB_URL
 # bump: uavs3d after ./hashupdate Dockerfile UAVS3D $LATEST
 # bump: uavs3d link "Source diff $CURRENT..$LATEST" https://github.com/uavs3/uavs3d/compare/$CURRENT..$LATEST
 : "${UAVS3D_URL:=https://github.com/uavs3/uavs3d.git}"
-: "${UAVS3D_COMMIT:=v1.1}"
+: "${UAVS3D_COMMIT:=0e20d2c}"
 # Removes BIT_DEPTH 10 to be able to build on other platforms. 10 was overkill anyways. (This comment refers to build steps, not fetch)
 fetch_and_unpack_git uavs3d "" UAVS3D_URL "" UAVS3D_COMMIT
 
@@ -377,7 +377,7 @@ fetch_and_unpack openjpeg OPENJPEG_VERSION OPENJPEG_URL
 # bump: lcms2 /LCMS2_VERSION=([\d.]+)/ https://github.com/mm2/Little-CMS.git|^2
 # bump: lcms2 after ./hashupdate Dockerfile LCMS2 $LATEST
 # bump: lcms2 link "Release" https://github.com/mm2/Little-CMS/releases/tag/lcms$LATEST
-: "${LCMS2_VERSION:=2.17}"
+: "${LCMS2_VERSION:=2.19.1}"
 : "${LCMS2_URL:=https://github.com/mm2/Little-CMS/releases/download/lcms$LCMS2_VERSION/lcms2-$LCMS2_VERSION.tar.gz}"
 fetch_and_unpack lcms2 LCMS2_VERSION LCMS2_URL
 
@@ -418,7 +418,7 @@ git clone --depth 1 --branch v$AOM_VERSION "$AOM_URL" && cd aom && test $(git re
 # bump: harfbuzz /LIBHARFBUZZ_VERSION=([\d.]+)/ https://github.com/harfbuzz/harfbuzz.git|*
 # bump: harfbuzz after ./hashupdate Dockerfile LIBHARFBUZZ $LATEST
 # bump: harfbuzz link "NEWS" https://github.com/harfbuzz/harfbuzz/blob/main/NEWS
-: "${LIBHARFBUZZ_VERSION:=13.1.1}"
+: "${LIBHARFBUZZ_VERSION:=14.2.1}"
 : "${LIBHARFBUZZ_URL:=https://github.com/harfbuzz/harfbuzz/releases/download/$LIBHARFBUZZ_VERSION/harfbuzz-$LIBHARFBUZZ_VERSION.tar.xz}"
 fetch_and_unpack harfbuzz LIBHARFBUZZ_VERSION LIBHARFBUZZ_URL
 
@@ -427,7 +427,7 @@ fetch_and_unpack harfbuzz LIBHARFBUZZ_VERSION LIBHARFBUZZ_URL
 # bump: vmaf after ./hashupdate Dockerfile VMAF $LATEST
 # bump: vmaf link "Release" https://github.com/Netflix/vmaf/releases/tag/v$LATEST
 # bump: vmaf link "Source diff $CURRENT..$LATEST" https://github.com/Netflix/vmaf/compare/v$CURRENT..v$LATEST
-: "${VMAF_VERSION:=3.0.0}"
+: "${VMAF_VERSION:=3.1.0}"
 : "${VMAF_URL:=https://github.com/Netflix/vmaf/archive/refs/tags/v$VMAF_VERSION.tar.gz}"
 fetch_and_unpack vmaf VMAF_VERSION VMAF_URL
 
