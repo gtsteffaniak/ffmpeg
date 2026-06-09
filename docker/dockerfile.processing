@@ -13,6 +13,15 @@ RUN cd libass && \
     --enable-static && \
   make -j$(nproc) && make install
 
+# lcms2 (color management)
+COPY [ "src/lcms2-*", "./lcms2" ]
+RUN cd lcms2 && \
+  ./autogen.sh && \
+  ./configure \
+    --enable-static \
+    --disable-shared && \
+  make -j$(nproc) install
+
 # libmysofa (3D audio support - SOFA file format)
 COPY [ "src/libmysofa-*", "./libmysofa" ]
 RUN cd libmysofa/build && \
