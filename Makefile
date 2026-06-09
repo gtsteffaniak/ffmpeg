@@ -1,6 +1,8 @@
 .PHONY: help build build-local build-push-all build-decode build-decode-push \
         build-multiplatform build-multiplatform-decode update fetch-sources \
-        clean test test-encoders test-version
+        clean test test-encoders test-version \
+        ci-push-platform ci-push-platform-decode ci-merge-manifest ci-merge-manifest-decode \
+        ci-package-release ci-package-release-decode
 
 # Configuration
 REGISTRY ?= docker.io/gtstef
@@ -211,7 +213,49 @@ buildx-remove: ## Remove buildx builder
 
 # ==================== CI/CD Helpers ====================
 
-ci-build-and-push: ## CI: Build and push both full and decode versions
+# Per-platform native CI builds (one arch per runner, merged in a follow-up job)
+ARCH_SUFFIX ?= amd64
+PLATFORM ?= linux/amd64
+LOAD_IMAGE ?= false
+CI_BUILD_MODE ?= parallel
+
+ci-push-platform: ## CI: Build and push full image for a single platform (set ARCH_SUFFIX, PLATFORM)
+	@echo "$(CYAN)CI: Building full image for $(PLATFORM) -> $(REGISTRY)/$(IMAGE_NAME):$(TAG)-$(ARCH_SUFFIX)$(NC)"
+	BUILD_MODE=$(CI_BUILD_MODE) LOAD_IMAGE=$(LOAD_IMAGE) \
+		IMAGE=$(REGISTRY)/$(IMAGE_NAME):$(TAG)-$(ARCH_SUFFIX) \
+		PLATFORMS=$(PLATFORM) PUSH=true ./build.sh
+
+ci-push-platform-decode: ## CI: Build and push decode image for a single platform
+	@echo "$(CYAN)CI: Building decode image for $(PLATFORM) -> $(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode-$(ARCH_SUFFIX)$(NC)"
+	BUILD_MODE=$(CI_BUILD_MODE) LOAD_IMAGE=$(LOAD_IMAGE) DECODE_ONLY=true \
+		IMAGE=$(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode-$(ARCH_SUFFIX) \
+		PLATFORMS=$(PLATFORM) PUSH=true ./build.sh
+
+ci-merge-manifest: ## CI: Merge per-arch full images into multi-arch manifest
+	@echo "$(CYAN)CI: Merging manifest for $(REGISTRY)/$(IMAGE_NAME):$(TAG)$(NC)"
+	./scripts/merge-manifest.sh \
+		$(REGISTRY)/$(IMAGE_NAME):$(TAG) \
+		$(REGISTRY)/$(IMAGE_NAME):$(TAG)-amd64 \
+		$(REGISTRY)/$(IMAGE_NAME):$(TAG)-arm64
+
+ci-merge-manifest-decode: ## CI: Merge per-arch decode images into multi-arch manifest
+	@echo "$(CYAN)CI: Merging decode manifest for $(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode$(NC)"
+	./scripts/merge-manifest.sh \
+		$(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode \
+		$(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode-amd64 \
+		$(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode-arm64
+
+ci-package-release: ## CI: Package full ffmpeg/ffprobe binaries for both architectures
+	@echo "$(CYAN)CI: Packaging full release binaries for $(TAG)$(NC)"
+	./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-amd64 $(TAG) amd64
+	./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-arm64 $(TAG) arm64
+
+ci-package-release-decode: ## CI: Package decode ffmpeg/ffprobe binaries for both architectures
+	@echo "$(CYAN)CI: Packaging decode release binaries for $(TAG)$(NC)"
+	./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode-amd64 $(TAG) amd64 decode
+	./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode-arm64 $(TAG) arm64 decode
+
+ci-build-and-push: ## CI: Build and push both full and decode versions (local buildx multi-arch)
 	@echo "$(CYAN)CI: Building and pushing both versions...$(NC)"
 	@$(MAKE) build-push IMAGE=$(IMAGE) PLATFORMS=$(PLATFORMS)
 	@$(MAKE) build-decode-push IMAGE=$(IMAGE_DECODE) PLATFORMS=$(PLATFORMS)
