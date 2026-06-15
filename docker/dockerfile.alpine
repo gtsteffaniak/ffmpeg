@@ -1,0 +1,22 @@
+# Wrap a scratch-based ffmpeg image in Alpine for release packaging.
+# The published image stays scratch; this is only used to extract binaries in CI.
+#
+#   docker build -f docker/dockerfile.alpine \
+#     --build-arg SOURCE_IMAGE=docker.io/gtstef/ffmpeg:8.1.1-amd64 \
+#     -t ffmpeg-package:tmp .
+
+ARG SOURCE_IMAGE
+FROM ${SOURCE_IMAGE} AS src
+
+ARG ALPINE_VERSION=alpine:3.22
+FROM ${ALPINE_VERSION}
+
+RUN apk add --no-cache ca-certificates
+
+COPY --from=src /ffmpeg /usr/local/bin/ffmpeg
+COPY --from=src /ffprobe /usr/local/bin/ffprobe
+COPY --from=src /etc/ssl/cert.pem /etc/ssl/cert.pem
+COPY --from=src /etc/fonts/ /etc/fonts/
+COPY --from=src /usr/share/fonts/ /usr/share/fonts/
+COPY --from=src /usr/share/consolefonts/ /usr/share/consolefonts/
+COPY --from=src /var/cache/fontconfig/ /var/cache/fontconfig/

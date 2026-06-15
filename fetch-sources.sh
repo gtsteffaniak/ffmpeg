@@ -9,8 +9,13 @@ mkdir -p src && cd src
 ROOT_DIR=$(pwd)
 
 # Options for wget: retry on specific errors; user-agent avoids bot blocks on some hosts
-WGET_OPTS="--retry-on-host-error --retry-on-http-error=429,500,502,503 --timeout=60 --tries=3"
-WGET_OPTS="${WGET_OPTS} --user-agent=ffmpeg-build/1.0 (+https://github.com/gtsteffaniak/ffmpeg)"
+WGET_OPTS=(
+  --retry-on-host-error
+  --retry-on-http-error=429,500,502,503
+  --timeout=60
+  --tries=3
+)
+WGET_USER_AGENT="ffmpeg-build/1.0 (+https://github.com/gtsteffaniak/ffmpeg)"
 # Options for tar: extract, specify file, don't preserve owner
 TAR_OPTS="--no-same-owner --extract --file"
 
@@ -111,7 +116,7 @@ fetch_and_unpack() {
 
   echo "--- Downloading $name ---"
   local file="${name}.tar"
-  wget ${WGET_OPTS} -O "$file" "$url"
+  wget "${WGET_OPTS[@]}" --user-agent="$WGET_USER_AGENT" -O "$file" "$url"
 
   if [[ -n "$sha256" ]]; then
     echo "$sha256  $file" | sha256sum -c -

@@ -6,21 +6,17 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      branch:
-        description: Branch to build from
-        required: false
-        default: main
       version:
         description: Release version (default from FFMPEG_VERSION in fetch-sources.sh)
         required: false
       update_latest:
-        description: Mark this release as latest on GitHub (also auto-enabled when building from main)
+        description: Mark this release as latest on GitHub (also auto-enabled when run from main)
         required: false
         type: boolean
         default: false
 
 concurrency:
-  group: release-${{ github.workflow }}-${{ github.event.inputs.branch || github.ref }}
+  group: release-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -33,22 +29,14 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
-      branch: ${{ steps.version.outputs.branch }}
       make_latest: ${{ steps.version.outputs.make_latest }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.branch || github.ref }}
 
-      - name: Determine version and branch
+      - name: Determine version
         id: version
         run: |
-          BRANCH="${{ github.event.inputs.branch }}"
-          if [ -z "$BRANCH" ]; then
-            BRANCH="${GITHUB_REF#refs/heads/}"
-          fi
-
           if [ -n "${{ github.event.inputs.version }}" ]; then
             VERSION="${{ github.event.inputs.version }}"
           else
@@ -61,7 +49,7 @@ jobs:
           fi
 
           MAKE_LATEST=false
-          if [ "$BRANCH" = "main" ]; then
+          if [ "${{ github.ref_name }}" = "main" ]; then
             MAKE_LATEST=true
           fi
           if [ "${{ github.event.inputs.update_latest }}" = "true" ]; then
@@ -69,9 +57,8 @@ jobs:
           fi
 
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
           echo "make_latest=${MAKE_LATEST}" >> "$GITHUB_OUTPUT"
-          echo "Building version ${VERSION} from branch ${BRANCH} (make_latest=${MAKE_LATEST})"
+          echo "Building version ${VERSION} from ${{ github.ref_name }} (make_latest=${MAKE_LATEST})"
 
   build:
     name: Build (${{ matrix.arch_suffix }})
@@ -97,14 +84,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.resolve-version.outputs.branch }}
 
       - name: Fetch sources
         run: ./fetch-sources.sh
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -191,8 +173,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.resolve-version.outputs.branch }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
