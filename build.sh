@@ -47,6 +47,9 @@ if docker buildx version &> /dev/null; then
 fi
 
 # Determine build method
+# Single-platform builds use classic `docker build` so locally tagged component
+# images (ffmpeg-base:latest, etc.) remain visible to later stages. The buildx
+# container driver runs in an isolated builder and tries to pull those from a registry.
 USE_BUILDX=false
 if [ -n "$PLATFORMS" ]; then
     if [ "$BUILDX_AVAILABLE" = false ]; then
@@ -54,7 +57,9 @@ if [ -n "$PLATFORMS" ]; then
         echo -e "${YELLOW}Install buildx or remove PLATFORMS variable${NC}"
         exit 1
     fi
-    USE_BUILDX=true
+    if [[ "$PLATFORMS" == *","* ]]; then
+        USE_BUILDX=true
+    fi
 fi
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
@@ -73,7 +78,11 @@ echo -e "  ${YELLOW}Build Mode:${NC}    ${BUILD_MODE}"
 echo -e "  ${YELLOW}No Cache:${NC}      ${NO_CACHE}"
 echo -e "  ${YELLOW}Component:${NC}     ${COMPONENT}"
 if [ -n "$PLATFORMS" ]; then
-    echo -e "  ${YELLOW}Platforms:${NC}     ${PLATFORMS} (buildx)"
+    if [ "$USE_BUILDX" = true ]; then
+        echo -e "  ${YELLOW}Platforms:${NC}     ${PLATFORMS} (buildx)"
+    else
+        echo -e "  ${YELLOW}Platforms:${NC}     ${PLATFORMS} (docker build)"
+    fi
 fi
 echo ""
 
@@ -159,8 +168,11 @@ build_image() {
         fi
 
     else
-        # Using standard docker build
+        # Using standard docker build (shares local image store with prior stages)
         BUILD_CMD="docker build -f docker/${dockerfile} $CACHE_FLAG $TAGS"
+        if [ -n "$PLATFORMS" ]; then
+            BUILD_CMD="$BUILD_CMD --platform ${PLATFORMS}"
+        fi
     fi
 
     # Add build args if provided
@@ -173,6 +185,9 @@ build_image() {
 
     # Execute build
     if eval $BUILD_CMD; then
+        if [ "$should_push" = "true" ] && [ "$USE_BUILDX" = false ]; then
+            docker push "${IMAGE}"
+        fi
         echo -e "${GREEN}✅ ${image_name} built successfully${NC}"
     else
         echo -e "${RED}❌ ${image_name} build failed${NC}"
