@@ -20,6 +20,7 @@ NO_CACHE=${NO_CACHE:-"false"}
 COMPONENT=${COMPONENT:-"all"}
 PLATFORMS=${PLATFORMS:-""}  # e.g., "linux/amd64,linux/arm64"
 PUSH=${PUSH:-"false"}  # Push final image only (components are never pushed)
+LOAD_IMAGE=${LOAD_IMAGE:-"true"}  # Load image locally after single-platform push (set false in CI)
 
 # Parse IMAGE into components if provided
 if [ -n "$IMAGE" ]; then
@@ -142,8 +143,12 @@ build_image() {
                 echo -e "${CYAN}📦 Multi-platform image will be pushed to registry${NC}"
                 echo -e "${CYAN}   Pull locally with: docker pull ${IMAGE}${NC}"
             else
-                # Single platform: can push and load
-                BUILD_CMD="$BUILD_CMD --push --load"
+                # Single platform: push and optionally load (CI sets LOAD_IMAGE=false)
+                if [ "$LOAD_IMAGE" = "true" ]; then
+                    BUILD_CMD="$BUILD_CMD --push --load"
+                else
+                    BUILD_CMD="$BUILD_CMD --push"
+                fi
             fi
         else
             # Building locally without push (components or final)

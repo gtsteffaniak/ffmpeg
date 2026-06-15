@@ -1,0 +1,178 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to build from
+        required: false
+        default: main
+      version:
+        description: Release version (default from FFMPEG_VERSION in fetch-sources.sh)
+        required: false
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.event.inputs.branch || github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: docker.io/gtstef
+  IMAGE_NAME: ffmpeg
+
+jobs:
+  resolve-version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      branch: ${{ steps.version.outputs.branch }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref }}
+
+      - name: Determine version and branch
+        id: version
+        run: |
+          BRANCH="${{ github.event.inputs.branch }}"
+          if [ -z "$BRANCH" ]; then
+            BRANCH="${GITHUB_REF#refs/heads/}"
+          fi
+
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=$(grep 'FFMPEG_VERSION:=' fetch-sources.sh | head -1 | sed -E 's/.*FFMPEG_VERSION:=([0-9.]+).*/\1/')
+          fi
+
+          if [ -z "$VERSION" ]; then
+            echo "Could not determine FFMPEG_VERSION" >&2
+            exit 1
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "Building version ${VERSION} from branch ${BRANCH}"
+
+  build-amd64:
+    name: Build amd64
+    needs: resolve-version
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-version.outputs.branch }}
+
+      - name: Fetch sources
+        run: ./fetch-sources.sh
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push full (amd64)
+        run: |
+          make ci-push-platform \
+            TAG=${{ needs.resolve-version.outputs.version }} \
+            ARCH_SUFFIX=amd64 \
+            PLATFORM=linux/amd64
+
+      - name: Build and push decode (amd64)
+        run: |
+          make ci-push-platform-decode \
+            TAG=${{ needs.resolve-version.outputs.version }} \
+            ARCH_SUFFIX=amd64 \
+            PLATFORM=linux/amd64
+
+  build-arm64:
+    name: Build arm64
+    needs: resolve-version
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-version.outputs.branch }}
+
+      - name: Fetch sources
+        run: ./fetch-sources.sh
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push full (arm64)
+        run: |
+          make ci-push-platform \
+            TAG=${{ needs.resolve-version.outputs.version }} \
+            ARCH_SUFFIX=arm64 \
+            PLATFORM=linux/arm64
+
+      - name: Build and push decode (arm64)
+        run: |
+          make ci-push-platform-decode \
+            TAG=${{ needs.resolve-version.outputs.version }} \
+            ARCH_SUFFIX=arm64 \
+            PLATFORM=linux/arm64
+
+  release:
+    name: Merge manifests and publish release
+    needs: [resolve-version, build-amd64, build-arm64]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-version.outputs.branch }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Merge multi-arch manifests
+        run: |
+          make ci-merge-manifest TAG=${{ needs.resolve-version.outputs.version }}
+          make ci-merge-manifest-decode TAG=${{ needs.resolve-version.outputs.version }}
+
+      - name: Package release binaries
+        run: |
+          make ci-package-release TAG=${{ needs.resolve-version.outputs.version }}
+          make ci-package-release-decode TAG=${{ needs.resolve-version.outputs.version }}
+
+      - name: Create or update GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.resolve-version.outputs.version }}
+          name: FFmpeg ${{ needs.resolve-version.outputs.version }}
+          generate_release_notes: true
+          make_latest: true
+          files: |
+            release-artifacts/*.tar.gz
+            release-artifacts/*.zip
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
