@@ -13,6 +13,11 @@ on:
       version:
         description: Release version (default from FFMPEG_VERSION in fetch-sources.sh)
         required: false
+      update_latest:
+        description: Mark this release as latest on GitHub (also auto-enabled when building from main)
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: release-${{ github.workflow }}-${{ github.event.inputs.branch || github.ref }}
@@ -29,6 +34,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       branch: ${{ steps.version.outputs.branch }}
+      make_latest: ${{ steps.version.outputs.make_latest }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,15 +60,40 @@ jobs:
             exit 1
           fi
 
+          MAKE_LATEST=false
+          if [ "$BRANCH" = "main" ]; then
+            MAKE_LATEST=true
+          fi
+          if [ "${{ github.event.inputs.update_latest }}" = "true" ]; then
+            MAKE_LATEST=true
+          fi
+
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
-          echo "Building version ${VERSION} from branch ${BRANCH}"
+          echo "make_latest=${MAKE_LATEST}" >> "$GITHUB_OUTPUT"
+          echo "Building version ${VERSION} from branch ${BRANCH} (make_latest=${MAKE_LATEST})"
 
-  build-amd64:
-    name: Build amd64
+  build:
+    name: Build (${{ matrix.arch_suffix }})
     needs: resolve-version
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            arch_suffix: amd64
+            runs_on: ubuntu-latest
+          - platform: linux/arm64
+            arch_suffix: arm64
+            runs_on: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runs_on }}
     timeout-minutes: 360
+    env:
+      TAG: ${{ needs.resolve-version.outputs.version }}
+      PLATFORM: ${{ matrix.platform }}
+      ARCH_SUFFIX: ${{ matrix.arch_suffix }}
+      FULL_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve-version.outputs.version }}-${{ matrix.arch_suffix }}
+      DECODE_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve-version.outputs.version }}-decode-${{ matrix.arch_suffix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -81,60 +112,79 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push full (amd64)
-        run: |
-          make ci-push-platform \
-            TAG=${{ needs.resolve-version.outputs.version }} \
-            ARCH_SUFFIX=amd64 \
-            PLATFORM=linux/amd64
+      # --- Full build (all encoders) ---
 
-      - name: Build and push decode (amd64)
-        run: |
-          make ci-push-platform-decode \
-            TAG=${{ needs.resolve-version.outputs.version }} \
-            ARCH_SUFFIX=amd64 \
-            PLATFORM=linux/amd64
+      - name: Build base
+        run: make ci-build-component COMPONENT=base DECODE_ONLY=false
 
-  build-arm64:
-    name: Build arm64
-    needs: resolve-version
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 360
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.resolve-version.outputs.branch }}
+      - name: Build graphics
+        run: make ci-build-component COMPONENT=graphics DECODE_ONLY=false
 
-      - name: Fetch sources
-        run: ./fetch-sources.sh
+      - name: Build av1
+        run: make ci-build-component COMPONENT=av1 DECODE_ONLY=false
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Build x264-x265
+        run: make ci-build-component COMPONENT=x264-x265 DECODE_ONLY=false
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build modern-codecs
+        run: make ci-build-component COMPONENT=modern-codecs DECODE_ONLY=false
 
-      - name: Build and push full (arm64)
-        run: |
-          make ci-push-platform \
-            TAG=${{ needs.resolve-version.outputs.version }} \
-            ARCH_SUFFIX=arm64 \
-            PLATFORM=linux/arm64
+      - name: Build vpx-avs
+        run: make ci-build-component COMPONENT=vpx-avs DECODE_ONLY=false
 
-      - name: Build and push decode (arm64)
-        run: |
-          make ci-push-platform-decode \
-            TAG=${{ needs.resolve-version.outputs.version }} \
-            ARCH_SUFFIX=arm64 \
-            PLATFORM=linux/arm64
+      - name: Build image-formats
+        run: make ci-build-component COMPONENT=image-formats DECODE_ONLY=false
+
+      - name: Build audio
+        run: make ci-build-component COMPONENT=audio DECODE_ONLY=false
+
+      - name: Build vaapi
+        run: make ci-build-component COMPONENT=vaapi DECODE_ONLY=false
+
+      - name: Build processing
+        run: make ci-build-component COMPONENT=processing DECODE_ONLY=false
+
+      - name: Build final (full)
+        run: make ci-build-component COMPONENT=final DECODE_ONLY=false CI_FINAL_IMAGE=${{ env.FULL_IMAGE }}
+
+      # --- Decode-only build ---
+
+      - name: Build base (decode)
+        run: make ci-build-component COMPONENT=base DECODE_ONLY=true
+
+      - name: Build graphics (decode)
+        run: make ci-build-component COMPONENT=graphics DECODE_ONLY=true
+
+      - name: Build av1 (decode)
+        run: make ci-build-component COMPONENT=av1 DECODE_ONLY=true
+
+      - name: Build x264-x265 (decode)
+        run: make ci-build-component COMPONENT=x264-x265 DECODE_ONLY=true
+
+      - name: Build modern-codecs (decode)
+        run: make ci-build-component COMPONENT=modern-codecs DECODE_ONLY=true
+
+      - name: Build vpx-avs (decode)
+        run: make ci-build-component COMPONENT=vpx-avs DECODE_ONLY=true
+
+      - name: Build image-formats (decode)
+        run: make ci-build-component COMPONENT=image-formats DECODE_ONLY=true
+
+      - name: Build audio (decode)
+        run: make ci-build-component COMPONENT=audio DECODE_ONLY=true
+
+      - name: Build vaapi (decode)
+        run: make ci-build-component COMPONENT=vaapi DECODE_ONLY=true
+
+      - name: Build processing (decode)
+        run: make ci-build-component COMPONENT=processing DECODE_ONLY=true
+
+      - name: Build final (decode)
+        run: make ci-build-component COMPONENT=final DECODE_ONLY=true CI_FINAL_IMAGE=${{ env.DECODE_IMAGE }}
 
   release:
     name: Merge manifests and publish release
-    needs: [resolve-version, build-amd64, build-arm64]
+    needs: [resolve-version, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -169,7 +219,7 @@ jobs:
           tag_name: v${{ needs.resolve-version.outputs.version }}
           name: FFmpeg ${{ needs.resolve-version.outputs.version }}
           generate_release_notes: true
-          make_latest: true
+          make_latest: ${{ needs.resolve-version.outputs.make_latest == 'true' }}
           files: |
             release-artifacts/*.tar.gz
             release-artifacts/*.zip

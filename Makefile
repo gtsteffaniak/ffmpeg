@@ -2,7 +2,7 @@
         build-multiplatform build-multiplatform-decode update fetch-sources \
         clean test test-encoders test-version \
         ci-push-platform ci-push-platform-decode ci-merge-manifest ci-merge-manifest-decode \
-        ci-package-release ci-package-release-decode
+        ci-package-release ci-package-release-decode ci-build-component
 
 # Configuration
 REGISTRY ?= docker.io/gtstef
@@ -217,7 +217,23 @@ buildx-remove: ## Remove buildx builder
 ARCH_SUFFIX ?= amd64
 PLATFORM ?= linux/amd64
 LOAD_IMAGE ?= false
-CI_BUILD_MODE ?= parallel
+CI_BUILD_MODE ?= sequential
+DECODE_ONLY ?= false
+CI_FINAL_IMAGE ?=
+
+ci-build-component: ## CI: Build one component (COMPONENT=base|graphics|...|final)
+	@if [ -z "$(COMPONENT)" ]; then echo "COMPONENT is required"; exit 1; fi
+	@if [ "$(COMPONENT)" = "final" ] && [ -z "$(CI_FINAL_IMAGE)" ]; then \
+		echo "CI_FINAL_IMAGE is required when COMPONENT=final"; exit 1; \
+	fi
+	@if [ "$(COMPONENT)" = "final" ]; then \
+		BUILD_MODE=$(CI_BUILD_MODE) LOAD_IMAGE=$(LOAD_IMAGE) DECODE_ONLY=$(DECODE_ONLY) \
+			PLATFORMS=$(PLATFORM) PUSH=true IMAGE=$(CI_FINAL_IMAGE) \
+			COMPONENT=final ./build.sh; \
+	else \
+		BUILD_MODE=$(CI_BUILD_MODE) LOAD_IMAGE=$(LOAD_IMAGE) DECODE_ONLY=$(DECODE_ONLY) \
+			PLATFORMS=$(PLATFORM) PUSH=false COMPONENT=$(COMPONENT) ./build.sh; \
+	fi
 
 ci-push-platform: ## CI: Build and push full image for a single platform (set ARCH_SUFFIX, PLATFORM)
 	@echo "$(CYAN)CI: Building full image for $(PLATFORM) -> $(REGISTRY)/$(IMAGE_NAME):$(TAG)-$(ARCH_SUFFIX)$(NC)"

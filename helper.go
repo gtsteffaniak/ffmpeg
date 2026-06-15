@@ -354,7 +354,10 @@ func getLatestGitHubTag(repoURL string) (string, error) {
 
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
-		log.Fatalf("GITHUB_TOKEN not set")
+		token = os.Getenv("PAT")
+	}
+	if token == "" {
+		return "", fmt.Errorf("GITHUB_TOKEN not set")
 	}
 	client := &http.Client{}
 

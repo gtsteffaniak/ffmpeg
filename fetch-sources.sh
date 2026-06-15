@@ -8,8 +8,9 @@ mkdir -p src && cd src
 # Store the absolute path to the source directory
 ROOT_DIR=$(pwd)
 
-# Options for wget: retry on specific errors
+# Options for wget: retry on specific errors; user-agent avoids bot blocks on some hosts
 WGET_OPTS="--retry-on-host-error --retry-on-http-error=429,500,502,503 --timeout=60 --tries=3"
+WGET_OPTS="${WGET_OPTS} --user-agent=ffmpeg-build/1.0 (+https://github.com/gtsteffaniak/ffmpeg)"
 # Options for tar: extract, specify file, don't preserve owner
 TAR_OPTS="--no-same-owner --extract --file"
 
@@ -49,6 +50,39 @@ fetch_and_unpack_git() {
 
   echo "--- Cloned $name ---"
 }
+
+fetch_and_unpack_git_tag() {
+  local name=$1
+  local version_var=$2
+  local url_var=$3
+
+  local version=""
+  local url=""
+
+  [[ -n "$version_var" && ${!version_var+x} ]] && version="${!version_var}"
+  [[ -n "$url_var" && ${!url_var+x} ]] && url="${!url_var}"
+
+  if [[ -z "$url" ]]; then
+    echo "Error: URL not set for $name"
+    return 1
+  fi
+
+  local dir="${name}-${version}"
+
+  if [[ -d "$dir" ]]; then
+    echo "Skipping $name, directory exists: $dir"
+    return
+  fi
+
+  echo "--- Cloning $name tag ${version} ---"
+  if ! git clone --depth 1 --branch "${version}" "$url" "$dir"; then
+    echo "Git clone failed for $name tag ${version}"
+    return 1
+  fi
+
+  echo "--- Finished ${dir} ---"
+}
+
 fetch_and_unpack() {
   local name=$1
   local version_var=$2
@@ -77,7 +111,7 @@ fetch_and_unpack() {
 
   echo "--- Downloading $name ---"
   local file="${name}.tar"
-  wget -O "$file" "$url"
+  wget ${WGET_OPTS} -O "$file" "$url"
 
   if [[ -n "$sha256" ]]; then
     echo "$sha256  $file" | sha256sum -c -
@@ -298,14 +332,9 @@ fi
 # bump: x265 after ./hashupdate Dockerfile X265 $LATEST
 # bump: x265 link "Source diff $CURRENT..$LATEST" https://bitbucket.org/multicoreware/x265_git/branches/compare/$LATEST..$CURRENT#diff
 : "${X265_VERSION:=4.0}"
-: "${X265_URL:=https://bitbucket.org/multicoreware/x265_git/downloads/x265_$X265_VERSION.tar.gz}"
-# NOTE: Original script saved this as .tar.bz2 and checked SHA against that name.
-# The URL points to a .tar.gz file. Using the .tar.gz URL.
-# The SHA provided might be for the .tar.bz2 and could fail verification against the .tar.gz.
-# CMAKEFLAGS issue
-# https://bitbucket.org/multicoreware/x265_git/issues/620/support-passing-cmake-flags-to-multilibsh
-# Use 'x265' as name, function expects dir 'x265-${X265_VERSION}'
-fetch_and_unpack x265 X265_VERSION X265_URL
+: "${X265_URL:=https://bitbucket.org/multicoreware/x265_git.git}"
+# Bitbucket download URLs often return 404 from CI datacenter IPs; clone by tag instead.
+fetch_and_unpack_git_tag x265 X265_VERSION X265_URL
 
 # x264 only have a stable branch no tags and we checkout commit so no hash is needed
 # bump: x264 /X264_VERSION=([[:xdigit:]]+)/ gitrefs:https://code.videolan.org/videolan/x264.git|re:#^refs/heads/stable$#|@commit
