@@ -92,8 +92,8 @@ jobs:
       TAG: ${{ needs.resolve-version.outputs.version }}
       PLATFORM: ${{ matrix.platform }}
       ARCH_SUFFIX: ${{ matrix.arch_suffix }}
-      FULL_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve-version.outputs.version }}-${{ matrix.arch_suffix }}
-      DECODE_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.resolve-version.outputs.version }}-decode-${{ matrix.arch_suffix }}
+      FULL_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-${{ matrix.arch_suffix }}
+      DECODE_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-decode-${{ matrix.arch_suffix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
