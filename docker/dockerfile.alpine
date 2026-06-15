@@ -6,9 +6,9 @@
 #     -t ffmpeg-package:tmp .
 
 ARG SOURCE_IMAGE
-FROM ${SOURCE_IMAGE} AS src
-
 ARG ALPINE_VERSION=alpine:3.22
+
+FROM ${SOURCE_IMAGE} AS src
 FROM ${ALPINE_VERSION}
 
 RUN apk add --no-cache ca-certificates
