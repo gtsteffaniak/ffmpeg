@@ -265,7 +265,7 @@ if [ "$COMPONENT" != "all" ]; then
             build_image "$dockerfile" "$name" "$args" "$desc"
             ;;
         windows-components)
-            local components_tag="ffmpeg-windows-components:latest"
+            components_tag="ffmpeg-windows-components:latest"
             if [ "$DECODE_ONLY" = "true" ]; then
                 components_tag="ffmpeg-windows-components-decode:latest"
             fi
@@ -277,8 +277,8 @@ if [ "$COMPONENT" != "all" ]; then
             echo ""
             ;;
         windows)
-            local components_tag="ffmpeg-windows-components:latest"
-            local windows_tag="ffmpeg-windows:latest"
+            components_tag="ffmpeg-windows-components:latest"
+            windows_tag="ffmpeg-windows:latest"
             if [ "$DECODE_ONLY" = "true" ]; then
                 components_tag="ffmpeg-windows-components-decode:latest"
                 windows_tag="ffmpeg-windows-decode:latest"
