@@ -37,7 +37,7 @@ RUN apk add $APK_OPTS \
 WORKDIR /build
 COPY docker/cross-mingw.ini /cross.mingw.ini
 
-RUN curl -fsSL "https://zlib.net/zlib-${ZLIB_VERSION}.tar.gz" | tar xz && \
+RUN curl -fsSL "https://github.com/madler/zlib/releases/download/v${ZLIB_VERSION}/zlib-${ZLIB_VERSION}.tar.gz" | tar xz && \
     cd "zlib-${ZLIB_VERSION}" && \
     CC=${CROSS}gcc AR=${CROSS}ar RANLIB=${CROSS}ranlib \
     ./configure --prefix=${MINGW} --static && \
