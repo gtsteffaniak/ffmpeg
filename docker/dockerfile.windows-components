@@ -51,6 +51,43 @@ RUN curl -fsSL "https://github.com/openssl/openssl/releases/download/openssl-${O
       --cross-compile-prefix=${CROSS} \
       -static && \
     make -j"$(nproc)" && make install_sw install_ssldirs && \
+    mkdir -p "${MINGW}/lib/pkgconfig" && \
+    printf '%s\n' \
+      "prefix=${MINGW}" \
+      'exec_prefix=${prefix}' \
+      'libdir=${prefix}/lib' \
+      'includedir=${prefix}/include' \
+      '' \
+      'Name: OpenSSL-libcrypto' \
+      'Description: OpenSSL cryptography library' \
+      "Version: ${OPENSSL_VERSION}" \
+      'Libs: -L${libdir} -lcrypto' \
+      'Cflags: -I${includedir}' \
+      > "${MINGW}/lib/pkgconfig/libcrypto.pc" && \
+    printf '%s\n' \
+      "prefix=${MINGW}" \
+      'exec_prefix=${prefix}' \
+      'libdir=${prefix}/lib' \
+      'includedir=${prefix}/include' \
+      '' \
+      'Name: OpenSSL-libssl' \
+      'Description: OpenSSL SSL/TLS library' \
+      "Version: ${OPENSSL_VERSION}" \
+      'Requires: libcrypto' \
+      'Libs: -L${libdir} -lssl' \
+      'Cflags: -I${includedir}' \
+      > "${MINGW}/lib/pkgconfig/libssl.pc" && \
+    printf '%s\n' \
+      "prefix=${MINGW}" \
+      'exec_prefix=${prefix}' \
+      'libdir=${prefix}/lib' \
+      'includedir=${prefix}/include' \
+      '' \
+      'Name: OpenSSL' \
+      'Description: Secure Sockets Layer and cryptography libraries' \
+      "Version: ${OPENSSL_VERSION}" \
+      'Requires: libssl libcrypto' \
+      > "${MINGW}/lib/pkgconfig/openssl.pc" && \
     cd .. && rm -rf "openssl-${OPENSSL_VERSION}"
 
 COPY [ "src/dav1d-*", "./dav1d" ]
