@@ -48,8 +48,8 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.PAT }}
-          commit-message: chore(deps): update library versions
-          title: chore(deps): update library versions
+          commit-message: 'chore(deps): update library versions'
+          title: 'chore(deps): update library versions'
           body: |
             Automated dependency version updates from `helper.go`.
 
