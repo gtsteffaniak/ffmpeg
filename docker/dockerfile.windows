@@ -1,0 +1,70 @@
+# Final Windows ffmpeg/ffprobe link step (mirrors dockerfile.final).
+# Requires ffmpeg-windows-components:latest built for the same DECODE_ONLY mode.
+#
+#   docker build -f docker/dockerfile.windows -t ffmpeg-windows:latest .
+
+ARG COMPONENTS_IMAGE=ffmpeg-windows-components:latest
+ARG ALPINE_VERSION=alpine:3.22
+FROM ${COMPONENTS_IMAGE} AS deps
+
+FROM ${ALPINE_VERSION} AS builder
+
+ARG APK_OPTS="--no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing/"
+ARG DECODE_ONLY="false"
+ARG MINGW=/usr/x86_64-w64-mingw32
+ARG CROSS=x86_64-w64-mingw32-
+
+ENV MINGW=${MINGW} \
+    CROSS=${CROSS} \
+    PKG_CONFIG_PATH=${MINGW}/lib/pkgconfig \
+    PKG_CONFIG_LIBDIR=${MINGW}/lib/pkgconfig \
+    PKG_CONFIG_SYSROOT_DIR=${MINGW} \
+    PATH="${MINGW}/bin:/usr/bin:${PATH}"
+
+RUN apk add $APK_OPTS \
+    build-base \
+    mingw-w64-gcc \
+    mingw-w64-crt \
+    mingw-w64-winpthreads \
+    nasm yasm \
+    pkgconfig \
+    diffutils \
+    texinfo
+
+COPY --from=deps ${MINGW}/ /usr/x86_64-w64-mingw32/
+
+COPY [ "src/ffmpeg*", "./ffmpeg" ]
+RUN cd ffmpeg && \
+    sed -i 's/svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc, &svt_enc->enc_params)/svt_av1_enc_init_handle(\&svt_enc->svt_handle, \&svt_enc->enc_params)/g' libavcodec/libsvtav1.c && \
+    FEATURES="" && \
+    if [ "$DECODE_ONLY" != "true" ]; then \
+      FEATURES="$FEATURES --enable-libx264 --enable-libx265 --enable-libmp3lame"; \
+    fi && \
+    ./configure \
+      --prefix=${MINGW} \
+      --pkg-config=pkg-config \
+      --pkg-config-flags="--static" \
+      --cross-prefix=${CROSS} \
+      --arch=x86_64 \
+      --target-os=mingw32 \
+      --enable-static \
+      --disable-shared \
+      --disable-ffplay \
+      --enable-gpl \
+      --enable-version3 \
+      --enable-openssl \
+      --enable-libdav1d \
+      --enable-libaom \
+      --enable-libvpx \
+      --extra-cflags="-static -static-libgcc -O3 -I${MINGW}/include" \
+      --extra-cxxflags="-static -static-libgcc -O3 -I${MINGW}/include" \
+      --extra-ldflags="-static -static-libgcc -L${MINGW}/lib" \
+      $FEATURES \
+    || (cat ffbuild/config.log; false) && \
+    make -j"$(nproc)" install
+
+RUN ${CROSS}strip ${MINGW}/bin/ffmpeg.exe ${MINGW}/bin/ffprobe.exe
+
+FROM scratch
+COPY --from=builder /usr/x86_64-w64-mingw32/bin/ffmpeg.exe /ffmpeg.exe
+COPY --from=builder /usr/x86_64-w64-mingw32/bin/ffprobe.exe /ffprobe.exe

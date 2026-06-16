@@ -1,5 +1,5 @@
 #!/bin/bash
-# Extract ffmpeg/ffprobe from a Docker image and package as tar.gz and zip.
+# Extract ffmpeg/ffprobe from a Linux Docker image and package as tar.gz.
 set -euo pipefail
 
 IMAGE="${1:?Docker image reference required}"
@@ -50,7 +50,5 @@ CONTAINER=""
 chmod +x "${WORKDIR}/ffmpeg" "${WORKDIR}/ffprobe"
 
 tar -czf "${OUTPUT_DIR}/${BASENAME}.tar.gz" -C "${WORKDIR}" ffmpeg ffprobe
-zip -j "${OUTPUT_DIR}/${BASENAME}.zip" "${WORKDIR}/ffmpeg" "${WORKDIR}/ffprobe"
 
 echo "Created ${OUTPUT_DIR}/${BASENAME}.tar.gz"
-echo "Created ${OUTPUT_DIR}/${BASENAME}.zip"

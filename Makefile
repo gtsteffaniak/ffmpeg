@@ -2,7 +2,8 @@
         build-multiplatform build-multiplatform-decode update fetch-sources \
         clean test test-encoders test-version \
         ci-push-platform ci-push-platform-decode ci-merge-manifest ci-merge-manifest-decode \
-        ci-package-release ci-package-release-decode ci-build-component
+        ci-package-release ci-package-release-decode ci-build-component \
+        ci-build-windows ci-package-windows-release ci-package-windows-release-decode
 
 # Configuration
 REGISTRY ?= docker.io/gtstef
@@ -221,7 +222,7 @@ CI_BUILD_MODE ?= sequential
 DECODE_ONLY ?= false
 CI_FINAL_IMAGE ?=
 
-ci-build-component: ## CI: Build one component (COMPONENT=base|graphics|...|final)
+ci-build-component: ## CI: Build one component (COMPONENT=base|graphics|...|final|windows-components|windows)
 	@if [ -z "$(COMPONENT)" ]; then echo "COMPONENT is required"; exit 1; fi
 	@if [ "$(COMPONENT)" = "final" ] && [ -z "$(CI_FINAL_IMAGE)" ]; then \
 		echo "CI_FINAL_IMAGE is required when COMPONENT=final"; exit 1; \
@@ -230,6 +231,8 @@ ci-build-component: ## CI: Build one component (COMPONENT=base|graphics|...|fina
 		BUILD_MODE=$(CI_BUILD_MODE) LOAD_IMAGE=$(LOAD_IMAGE) DECODE_ONLY=$(DECODE_ONLY) \
 			PLATFORMS=$(PLATFORM) PUSH=true IMAGE=$(CI_FINAL_IMAGE) \
 			COMPONENT=final ./build.sh; \
+	elif [ "$(COMPONENT)" = "windows-components" ] || [ "$(COMPONENT)" = "windows" ]; then \
+		BUILD_MODE=$(CI_BUILD_MODE) DECODE_ONLY=$(DECODE_ONLY) COMPONENT=$(COMPONENT) ./build.sh; \
 	else \
 		BUILD_MODE=$(CI_BUILD_MODE) LOAD_IMAGE=$(LOAD_IMAGE) DECODE_ONLY=$(DECODE_ONLY) \
 			PLATFORMS=$(PLATFORM) PUSH=false COMPONENT=$(COMPONENT) ./build.sh; \
@@ -270,6 +273,18 @@ ci-package-release-decode: ## CI: Package decode ffmpeg/ffprobe binaries for bot
 	@echo "$(CYAN)CI: Packaging decode release binaries for $(TAG)$(NC)"
 	./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode-amd64 $(TAG) amd64 decode
 	./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode-arm64 $(TAG) arm64 decode
+
+ci-build-windows: ## CI: Build Windows components + final (set DECODE_ONLY=true for decode)
+	@echo "$(CYAN)CI: Building Windows release (DECODE_ONLY=$(DECODE_ONLY))$(NC)"
+	DECODE_ONLY=$(DECODE_ONLY) ./scripts/build-windows.sh
+
+ci-package-windows-release: ## CI: Package full Windows release zip
+	@echo "$(CYAN)CI: Packaging Windows full release for $(TAG)$(NC)"
+	./scripts/package-windows-release.sh $(TAG)
+
+ci-package-windows-release-decode: ## CI: Package decode Windows release zip
+	@echo "$(CYAN)CI: Packaging Windows decode release for $(TAG)$(NC)"
+	./scripts/package-windows-release.sh $(TAG) decode
 
 ci-build-and-push: ## CI: Build and push both full and decode versions (local buildx multi-arch)
 	@echo "$(CYAN)CI: Building and pushing both versions...$(NC)"

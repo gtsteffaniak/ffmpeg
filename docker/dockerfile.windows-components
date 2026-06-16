@@ -1,0 +1,150 @@
+# Mingw-w64 codec/library deps for the Windows ffmpeg link step.
+# Built once per DECODE_ONLY mode, then consumed by dockerfile.windows.
+#
+#   docker build -f docker/dockerfile.windows-components -t ffmpeg-windows-components:latest .
+
+ARG ALPINE_VERSION=alpine:3.22
+FROM ${ALPINE_VERSION} AS builder
+
+ARG APK_OPTS="--no-cache --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing/"
+ARG DECODE_ONLY="false"
+ARG MINGW=/usr/x86_64-w64-mingw32
+ARG CROSS=x86_64-w64-mingw32-
+ARG ZLIB_VERSION=1.3.1
+ARG OPENSSL_VERSION=3.4.1
+
+ENV MINGW=${MINGW} \
+    CROSS=${CROSS} \
+    PKG_CONFIG_PATH=${MINGW}/lib/pkgconfig \
+    PKG_CONFIG_LIBDIR=${MINGW}/lib/pkgconfig \
+    PKG_CONFIG_SYSROOT_DIR=${MINGW} \
+    PATH="${MINGW}/bin:/usr/bin:${PATH}"
+
+RUN apk add $APK_OPTS \
+    build-base \
+    mingw-w64-gcc \
+    mingw-w64-crt \
+    mingw-w64-winpthreads \
+    nasm yasm \
+    cmake meson ninja \
+    pkgconfig \
+    perl \
+    curl \
+    ca-certificates \
+    diffutils \
+    texinfo
+
+WORKDIR /build
+COPY docker/cross-mingw.ini /cross.mingw.ini
+
+RUN curl -fsSL "https://zlib.net/zlib-${ZLIB_VERSION}.tar.gz" | tar xz && \
+    cd "zlib-${ZLIB_VERSION}" && \
+    CC=${CROSS}gcc AR=${CROSS}ar RANLIB=${CROSS}ranlib \
+    ./configure --prefix=${MINGW} --static && \
+    make -j"$(nproc)" install && \
+    cd .. && rm -rf "zlib-${ZLIB_VERSION}"
+
+RUN curl -fsSL "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" | tar xz && \
+    cd "openssl-${OPENSSL_VERSION}" && \
+    ./Configure mingw64 no-shared no-tests no-ui-console \
+      --prefix=${MINGW} \
+      --cross-compile-prefix=${CROSS} \
+      -static && \
+    make -j"$(nproc)" && make install_sw install_ssldirs && \
+    cd .. && rm -rf "openssl-${OPENSSL_VERSION}"
+
+COPY [ "src/dav1d-*", "./dav1d" ]
+RUN cd dav1d && \
+    meson setup build --cross-file=/cross.mingw.ini \
+      -Dbuildtype=release \
+      -Ddefault_library=static \
+      --prefix=${MINGW} && \
+    ninja -C build install
+
+COPY [ "src/aom", "./aom" ]
+RUN mkdir -p aom/build && cd aom/build && \
+    cmake .. \
+      -G "Unix Makefiles" \
+      -DCMAKE_SYSTEM_NAME=Windows \
+      -DCMAKE_C_COMPILER=${CROSS}gcc \
+      -DCMAKE_CXX_COMPILER=${CROSS}g++ \
+      -DCMAKE_FIND_ROOT_PATH=${MINGW} \
+      -DCMAKE_INSTALL_PREFIX=${MINGW} \
+      -DENABLE_SHARED=0 \
+      -DENABLE_TESTS=0 \
+      -DENABLE_DOCS=0 \
+      -DCMAKE_BUILD_TYPE=Release && \
+    make -j"$(nproc)" install
+
+COPY [ "src/libvpx-*", "./libvpx" ]
+RUN cd libvpx && \
+    ./configure \
+      --target=x86_64-win64-gcc \
+      --prefix=${MINGW} \
+      --enable-static \
+      --disable-shared \
+      --disable-unit-tests \
+      --disable-examples \
+      --extra-cflags="-static -I${MINGW}/include" \
+      --extra-cxxflags="-static -I${MINGW}/include" \
+      --extra-ldflags="-static -L${MINGW}/lib" && \
+    make -j"$(nproc)" install
+
+COPY [ "src/x264*", "./x264" ]
+RUN if [ "$DECODE_ONLY" = "true" ]; then \
+      echo "Skipping x264 (decode-only)"; \
+    else \
+      cd x264 && \
+      CC=${CROSS}gcc AR=${CROSS}ar RANLIB=${CROSS}ranlib \
+      ./configure \
+        --host=x86_64-w64-mingw32 \
+        --prefix=${MINGW} \
+        --enable-static \
+        --disable-cli \
+        --disable-lavf \
+        --disable-swscale \
+        --cross-prefix=${CROSS} \
+        --extra-cflags="-static -I${MINGW}/include" \
+        --extra-ldflags="-static -L${MINGW}/lib" && \
+      make -j"$(nproc)" install; \
+    fi
+
+COPY [ "src/x265-*", "./x265" ]
+RUN if [ "$DECODE_ONLY" = "true" ]; then \
+      echo "Skipping x265 (decode-only)"; \
+    else \
+      mkdir -p x265/build && cd x265/build && \
+      cmake ../source \
+        -G "Unix Makefiles" \
+        -DCMAKE_SYSTEM_NAME=Windows \
+        -DCMAKE_C_COMPILER=${CROSS}gcc \
+        -DCMAKE_CXX_COMPILER=${CROSS}g++ \
+        -DCMAKE_FIND_ROOT_PATH=${MINGW} \
+        -DCMAKE_INSTALL_PREFIX=${MINGW} \
+        -DENABLE_SHARED=OFF \
+        -DSTATIC_LINK_CRT=ON \
+        -DCMAKE_BUILD_TYPE=Release && \
+      make -j"$(nproc)" install; \
+    fi
+
+COPY [ "src/lame-*", "./lame" ]
+RUN if [ "$DECODE_ONLY" = "true" ]; then \
+      echo "Skipping lame (decode-only)"; \
+    else \
+      cd lame && \
+      CC=${CROSS}gcc AR=${CROSS}ar RANLIB=${CROSS}ranlib \
+      ./configure \
+        --host=x86_64-w64-mingw32 \
+        --prefix=${MINGW} \
+        --disable-shared \
+        --enable-static \
+        --disable-frontend \
+        --disable-decoder \
+        --cross-prefix=${CROSS} \
+        --extra-cflags="-static -I${MINGW}/include" \
+        --extra-ldflags="-static -L${MINGW}/lib" && \
+      make -j"$(nproc)" install; \
+    fi
+
+FROM alpine:3.22
+COPY --from=builder /usr/x86_64-w64-mingw32 /usr/x86_64-w64-mingw32
