@@ -29,6 +29,8 @@ RUN apk add $APK_OPTS \
     cmake meson ninja \
     pkgconfig \
     perl \
+    bash \
+    git \
     curl \
     ca-certificates \
     diffutils \
@@ -117,11 +119,14 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
       cmake ../source \
         -G "Unix Makefiles" \
         -DCMAKE_SYSTEM_NAME=Windows \
+        -DCMAKE_SYSTEM_PROCESSOR=x86_64 \
         -DCMAKE_C_COMPILER=${CROSS}gcc \
         -DCMAKE_CXX_COMPILER=${CROSS}g++ \
+        -DCMAKE_RC_COMPILER=${CROSS}windres \
         -DCMAKE_FIND_ROOT_PATH=${MINGW} \
         -DCMAKE_INSTALL_PREFIX=${MINGW} \
         -DENABLE_SHARED=OFF \
+        -DENABLE_CLI=OFF \
         -DSTATIC_LINK_CRT=ON \
         -DCMAKE_BUILD_TYPE=Release && \
       make -j"$(nproc)" install; \
@@ -133,16 +138,15 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
     else \
       cd lame && \
       CC=${CROSS}gcc AR=${CROSS}ar RANLIB=${CROSS}ranlib \
+      CFLAGS="-static -I${MINGW}/include" \
+      LDFLAGS="-static -L${MINGW}/lib" \
       ./configure \
         --host=x86_64-w64-mingw32 \
         --prefix=${MINGW} \
         --disable-shared \
         --enable-static \
         --disable-frontend \
-        --disable-decoder \
-        --cross-prefix=${CROSS} \
-        --extra-cflags="-static -I${MINGW}/include" \
-        --extra-ldflags="-static -L${MINGW}/lib" && \
+        --disable-decoder && \
       make -j"$(nproc)" install; \
     fi
 
