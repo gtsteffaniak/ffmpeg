@@ -78,6 +78,7 @@ RUN mkdir -p aom/build && cd aom/build && \
 
 COPY [ "src/libvpx-*", "./libvpx" ]
 RUN cd libvpx && \
+    LDFLAGS="-static -L${MINGW}/lib" \
     ./configure \
       --target=x86_64-win64-gcc \
       --prefix=${MINGW} \
@@ -86,8 +87,7 @@ RUN cd libvpx && \
       --disable-unit-tests \
       --disable-examples \
       --extra-cflags="-static -I${MINGW}/include" \
-      --extra-cxxflags="-static -I${MINGW}/include" \
-      --extra-ldflags="-static -L${MINGW}/lib" && \
+      --extra-cxxflags="-static -I${MINGW}/include" && \
     make -j"$(nproc)" install
 
 COPY [ "src/x264*", "./x264" ]
