@@ -27,7 +27,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo "Extracting Windows binaries from ${IMAGE}"
-docker create --name "${CONTAINER}" "${IMAGE}" >/dev/null
+docker create --name "${CONTAINER}" "${IMAGE}" /ffmpeg.exe -version >/dev/null
 docker cp "${CONTAINER}:/ffmpeg.exe" "${WORKDIR}/ffmpeg.exe"
 docker cp "${CONTAINER}:/ffprobe.exe" "${WORKDIR}/ffprobe.exe"
 docker rm "${CONTAINER}" >/dev/null
