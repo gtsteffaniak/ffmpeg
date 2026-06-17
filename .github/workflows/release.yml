@@ -60,27 +60,16 @@ jobs:
           echo "make_latest=${MAKE_LATEST}" >> "$GITHUB_OUTPUT"
           echo "Building version ${VERSION} from ${{ github.ref_name }} (make_latest=${MAKE_LATEST})"
 
-  build:
-    name: Build (${{ matrix.arch_suffix }})
+  build-amd64:
+    name: Build amd64 (Linux + Windows)
     needs: resolve-version
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: linux/amd64
-            arch_suffix: amd64
-            runs_on: ubuntu-latest
-          - platform: linux/arm64
-            arch_suffix: arm64
-            runs_on: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runs_on }}
+    runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
       TAG: ${{ needs.resolve-version.outputs.version }}
-      PLATFORM: ${{ matrix.platform }}
-      ARCH_SUFFIX: ${{ matrix.arch_suffix }}
-      FULL_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-${{ matrix.arch_suffix }}
-      DECODE_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-decode-${{ matrix.arch_suffix }}
+      PLATFORM: linux/amd64
+      FULL_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-amd64
+      DECODE_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-decode-amd64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -94,7 +83,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # --- Full build (all encoders) ---
+      # --- Linux amd64 components (full) ---
 
       - name: Build base
         run: make ci-build-component COMPONENT=base DECODE_ONLY=false
@@ -126,10 +115,21 @@ jobs:
       - name: Build processing
         run: make ci-build-component COMPONENT=processing DECODE_ONLY=false
 
-      - name: Build final (full)
+      # --- Final releases (full) ---
+
+      - name: Build final release linux amd64
         run: make ci-build-component COMPONENT=final DECODE_ONLY=false CI_FINAL_IMAGE=${{ env.FULL_IMAGE }}
 
-      # --- Decode-only build ---
+      - name: Build windows components
+        run: make ci-build-component COMPONENT=windows-components DECODE_ONLY=false
+
+      - name: Build final release windows
+        run: make ci-build-component COMPONENT=windows DECODE_ONLY=false
+
+      - name: Package Windows (full)
+        run: make ci-package-windows-release TAG=${{ needs.resolve-version.outputs.version }}
+
+      # --- Linux amd64 components (decode) ---
 
       - name: Build base (decode)
         run: make ci-build-component COMPONENT=base DECODE_ONLY=true
@@ -161,12 +161,127 @@ jobs:
       - name: Build processing (decode)
         run: make ci-build-component COMPONENT=processing DECODE_ONLY=true
 
-      - name: Build final (decode)
+      # --- Final releases (decode) ---
+
+      - name: Build final release linux amd64 (decode)
+        run: make ci-build-component COMPONENT=final DECODE_ONLY=true CI_FINAL_IMAGE=${{ env.DECODE_IMAGE }}
+
+      - name: Build windows components (decode)
+        run: make ci-build-component COMPONENT=windows-components DECODE_ONLY=true
+
+      - name: Build final release windows (decode)
+        run: make ci-build-component COMPONENT=windows DECODE_ONLY=true
+
+      - name: Package Windows (decode)
+        run: make ci-package-windows-release-decode TAG=${{ needs.resolve-version.outputs.version }}
+
+      - name: Upload Windows release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-artifacts
+          path: release-artifacts/*-windows-*.zip
+          retention-days: 7
+
+  build-arm64:
+    name: Build arm64 (Linux)
+    needs: resolve-version
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 360
+    env:
+      TAG: ${{ needs.resolve-version.outputs.version }}
+      PLATFORM: linux/arm64
+      FULL_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-arm64
+      DECODE_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-decode-arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch sources
+        run: ./fetch-sources.sh
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # --- Linux arm64 components (full) ---
+
+      - name: Build base
+        run: make ci-build-component COMPONENT=base DECODE_ONLY=false
+
+      - name: Build graphics
+        run: make ci-build-component COMPONENT=graphics DECODE_ONLY=false
+
+      - name: Build av1
+        run: make ci-build-component COMPONENT=av1 DECODE_ONLY=false
+
+      - name: Build x264-x265
+        run: make ci-build-component COMPONENT=x264-x265 DECODE_ONLY=false
+
+      - name: Build modern-codecs
+        run: make ci-build-component COMPONENT=modern-codecs DECODE_ONLY=false
+
+      - name: Build vpx-avs
+        run: make ci-build-component COMPONENT=vpx-avs DECODE_ONLY=false
+
+      - name: Build image-formats
+        run: make ci-build-component COMPONENT=image-formats DECODE_ONLY=false
+
+      - name: Build audio
+        run: make ci-build-component COMPONENT=audio DECODE_ONLY=false
+
+      - name: Build vaapi
+        run: make ci-build-component COMPONENT=vaapi DECODE_ONLY=false
+
+      - name: Build processing
+        run: make ci-build-component COMPONENT=processing DECODE_ONLY=false
+
+      # --- Final release (full) ---
+
+      - name: Build final release linux arm64
+        run: make ci-build-component COMPONENT=final DECODE_ONLY=false CI_FINAL_IMAGE=${{ env.FULL_IMAGE }}
+
+      # --- Linux arm64 components (decode) ---
+
+      - name: Build base (decode)
+        run: make ci-build-component COMPONENT=base DECODE_ONLY=true
+
+      - name: Build graphics (decode)
+        run: make ci-build-component COMPONENT=graphics DECODE_ONLY=true
+
+      - name: Build av1 (decode)
+        run: make ci-build-component COMPONENT=av1 DECODE_ONLY=true
+
+      - name: Build x264-x265 (decode)
+        run: make ci-build-component COMPONENT=x264-x265 DECODE_ONLY=true
+
+      - name: Build modern-codecs (decode)
+        run: make ci-build-component COMPONENT=modern-codecs DECODE_ONLY=true
+
+      - name: Build vpx-avs (decode)
+        run: make ci-build-component COMPONENT=vpx-avs DECODE_ONLY=true
+
+      - name: Build image-formats (decode)
+        run: make ci-build-component COMPONENT=image-formats DECODE_ONLY=true
+
+      - name: Build audio (decode)
+        run: make ci-build-component COMPONENT=audio DECODE_ONLY=true
+
+      - name: Build vaapi (decode)
+        run: make ci-build-component COMPONENT=vaapi DECODE_ONLY=true
+
+      - name: Build processing (decode)
+        run: make ci-build-component COMPONENT=processing DECODE_ONLY=true
+
+      # --- Final release (decode) ---
+
+      - name: Build final release linux arm64 (decode)
         run: make ci-build-component COMPONENT=final DECODE_ONLY=true CI_FINAL_IMAGE=${{ env.DECODE_IMAGE }}
 
   release:
     name: Merge manifests and publish release
-    needs: [resolve-version, build]
+    needs: [resolve-version, build-amd64, build-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -188,10 +303,16 @@ jobs:
           make ci-merge-manifest TAG=${{ needs.resolve-version.outputs.version }}
           make ci-merge-manifest-decode TAG=${{ needs.resolve-version.outputs.version }}
 
-      - name: Package release binaries
+      - name: Package Linux release binaries
         run: |
           make ci-package-release TAG=${{ needs.resolve-version.outputs.version }}
           make ci-package-release-decode TAG=${{ needs.resolve-version.outputs.version }}
+
+      - name: Download Windows release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-release-artifacts
+          path: release-artifacts
 
       - name: Create or update GitHub release
         uses: softprops/action-gh-release@v2
@@ -201,8 +322,8 @@ jobs:
           generate_release_notes: true
           make_latest: ${{ needs.resolve-version.outputs.make_latest == 'true' }}
           files: |
-            release-artifacts/*.tar.gz
-            release-artifacts/*.zip
+            release-artifacts/*-linux-*.tar.gz
+            release-artifacts/*-windows-*.zip
           overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

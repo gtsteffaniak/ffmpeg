@@ -264,9 +264,36 @@ if [ "$COMPONENT" != "all" ]; then
             IFS='|' read -r dockerfile name args desc <<< "$FINAL_IMAGE"
             build_image "$dockerfile" "$name" "$args" "$desc"
             ;;
+        windows-components)
+            components_tag="ffmpeg-windows-components:latest"
+            if [ "$DECODE_ONLY" = "true" ]; then
+                components_tag="ffmpeg-windows-components-decode:latest"
+            fi
+            echo -e "${BLUE}Building Windows components -> ${components_tag}${NC}"
+            docker build -f docker/dockerfile.windows-components $CACHE_FLAG \
+                --build-arg DECODE_ONLY="${DECODE_ONLY}" \
+                -t "${components_tag}" .
+            echo -e "${GREEN}✅ windows-components built successfully${NC}"
+            echo ""
+            ;;
+        windows)
+            components_tag="ffmpeg-windows-components:latest"
+            windows_tag="ffmpeg-windows:latest"
+            if [ "$DECODE_ONLY" = "true" ]; then
+                components_tag="ffmpeg-windows-components-decode:latest"
+                windows_tag="ffmpeg-windows-decode:latest"
+            fi
+            echo -e "${BLUE}Building Windows final -> ${windows_tag}${NC}"
+            docker build -f docker/dockerfile.windows $CACHE_FLAG \
+                --build-arg DECODE_ONLY="${DECODE_ONLY}" \
+                --build-arg COMPONENTS_IMAGE="${components_tag}" \
+                -t "${windows_tag}" .
+            echo -e "${GREEN}✅ windows built successfully${NC}"
+            echo ""
+            ;;
         *)
             echo -e "${RED}❌ Unknown component: ${COMPONENT}${NC}"
-            echo -e "${YELLOW}Available components:${NC} base, graphics, av1, x264-x265, modern-codecs, vpx-avs, image-formats, audio, vaapi, processing, final"
+            echo -e "${YELLOW}Available components:${NC} base, graphics, av1, x264-x265, modern-codecs, vpx-avs, image-formats, audio, vaapi, processing, final, windows-components, windows"
             exit 1
             ;;
     esac
