@@ -23,13 +23,23 @@ make build-push IMAGE=docker.io/gtstef/ffmpeg:8.0
 make build-push IMAGE=docker.io/gtstef/ffmpeg:8.0 \
   PLATFORMS=linux/amd64,linux/arm64
 
+# Build Windows amd64 release locally
+make ci-build-windows
+make ci-package-windows-release TAG=8.0
+
 # Show all available commands
 make help
 ```
 
-**Supported Platforms:** Currently `linux/amd64` and `linux/arm64` are supported.
+**Supported Platforms:**
 
-**Multi-Platform Note:** Requires containerd image store (default in Docker Desktop) or QEMU emulation.
+| Platform | Output | Notes |
+|----------|--------|-------|
+| `linux/amd64` | Docker image + `.tar.gz` release | Multi-arch manifest via buildx |
+| `linux/arm64` | Docker image + `.tar.gz` release | Native arm64 CI runner |
+| `windows/amd64` | `.zip` release (`ffmpeg.exe`, `ffprobe.exe`) | Cross-compiled with mingw-w64; not a Docker multi-arch target |
+
+**Multi-Platform Note (Linux):** Requires containerd image store (default in Docker Desktop) or QEMU emulation. Windows builds use a separate cross-compile path (see [Windows Builds](#windows-builds)).
 
 ## File Structure
 
@@ -47,7 +57,16 @@ ffmpeg/
 │   ├── dockerfile.audio           (Audio codecs: lame, vorbis, ogg, rubberband)
 │   ├── dockerfile.vaapi           (Hardware acceleration: libva, libvpl)
 │   ├── dockerfile.processing      (Processing: vmaf, vidstab, libass, libmysofa)
-│   └── dockerfile.final           (FFmpeg compilation + testing + packaging)
+│   ├── dockerfile.final           (Linux FFmpeg link + ELF validation + scratch image)
+│   ├── dockerfile.alpine          (Wraps scratch image for CI binary extraction)
+│   ├── dockerfile.windows-components  (mingw-w64 codec/library deps for Windows)
+│   ├── dockerfile.windows         (Windows FFmpeg link + scratch .exe image)
+│   └── cross-mingw.ini            (Meson cross-file for Windows targets)
+├── scripts/
+│   ├── build-windows.sh           (Build windows-components + windows)
+│   ├── package-windows-release.sh (Extract .exe binaries into release zip)
+│   ├── package-release.sh         (Extract Linux binaries into release tar.gz)
+│   └── merge-manifest.sh          (Merge per-arch Docker manifests)
 ├── Dockerfile                     (original monolithic - kept for reference)
 ├── checkelf.sh                    (binary validation - used by final stage)
 └── src/                           (library source code)
@@ -55,50 +74,58 @@ ffmpeg/
 
 ## Architecture
 
-The build is split into 11 modular dockerfiles organized in tiers:
+The Linux build is split into 11 modular dockerfiles organized in tiers. Windows uses a separate two-stage cross-compile path (components + final link) that mirrors the Linux flow but targets mingw-w64.
 
 Note: build times are just approximations. Actual build times vary widely based on hardware.
 
 ```
-                    ┌─────────────────┐
-                    │ dockerfile.base │
-                    │  Alpine + glib  │
-                    |      5 min      |
-                    └────────┬────────┘
-                             │
-        ┌────────────────────┼────────────────────┐
-        │                    │                    │
-  ┌─────▼─────┐       ┌─────▼─────┐      ┌──────▼──────┐
-  │ graphics  │       │    av1    │      │ x264-x265   │
-  │  5 min    │       │   5 min   │      │   10 min    │
-  └───────────┘       └───────────┘      └─────────────┘
-        │                    │                    │
-        │             ┌──────▼──────┐             │
-        │             │modern-codecs│             │
-        │             │   10 min    │             │
-        │             └─────────────┘             │
-        │                    │                    │
-  ┌─────▼─────┐       ┌─────▼─────┐      ┌──────▼──────┐
-  │  vpx-avs  │       │   audio   │      │image-formats│
-  │   5 min   │       │   5 min   │      │   10 min    │
-  └───────────┘       └───────────┘      └─────────────┘
-        │                    │                    │
-        │             ┌──────▼──────┐             │
-        │             │    vaapi    │             │
-        │             │    5 min    │             │
-        │             └─────────────┘             │
-        │                    │                    │
-        │             ┌──────▼──────┐             │
-        │             │ processing  │             │
-        │             │   5 min     │             │
-        │             └─────────────┘             │
-        │                    │                    │
-        └────────────────────┴────────────────────┘
+  Linux (linux/amd64, linux/arm64)              Windows (windows/amd64, cross-compile)
+  ─────────────────────────────────             ──────────────────────────────────────
+
+                    ┌─────────────────┐         ┌──────────────────────────┐
+                    │ dockerfile.base │         │ dockerfile.windows-      │
+                    │  Alpine + glib  │         │ components (zlib, ssl,   │
+                    |      5 min      |         │ dav1d, aom, libvpx,      │
+                    └────────┬────────┘         │ x264, x265, lame, …)     │
+                             │                   └────────────┬─────────────┘
+        ┌────────────────────┼────────────────────┐            │
+        │                    │                    │            │
+  ┌─────▼─────┐       ┌─────▼─────┐      ┌──────▼──────┐     │
+  │ graphics  │       │    av1    │      │ x264-x265   │     │
+  │  5 min    │       │   5 min   │      │   10 min    │     │
+  └───────────┘       └───────────┘      └─────────────┘     │
+        │                    │                    │            │
+        │             ┌──────▼──────┐             │            │
+        │             │modern-codecs│             │            │
+        │             │   10 min    │             │            │
+        │             └─────────────┘             │            │
+        │                    │                    │            │
+  ┌─────▼─────┐       ┌─────▼─────┐      ┌──────▼──────┐     │
+  │  vpx-avs  │       │   audio   │      │image-formats│     │
+  │   5 min   │       │   5 min   │      │   10 min    │     │
+  └───────────┘       └───────────┘      └─────────────┘     │
+        │                    │                    │            │
+        │             ┌──────▼──────┐             │            │
+        │             │    vaapi    │             │            │
+        │             │    5 min    │             │            │
+        │             └─────────────┘             │            │
+        │                    │                    │            │
+        │             ┌──────▼──────┐             │            │
+        │             │ processing  │             │            │
+        │             │   5 min     │             │            │
+        │             └─────────────┘             │            │
+        │                    │                    │            │
+        └────────────────────┴────────────────────┘            │
+                             │                                 │
+                    ┌────────▼────────┐              ┌─────────▼─────────┐
+                    │ dockerfile.final│              │ dockerfile.windows│
+                    │ ELF check +     │              │ FFmpeg link +     │
+                    │ scratch image   │              │ scratch .exe image│
+                    |      5 min      |              |      ~5 min       |
+                    └─────────────────┘              └───────────────────┘
                              │
                     ┌────────▼────────┐
-                    │ dockerfile.final│
-                    │ FFmpeg + package│
-                    |      5 min      |
+                    │ dockerfile.alpine│  (CI only: extract binaries from scratch)
                     └─────────────────┘
 ```
 ## Components
@@ -119,9 +146,16 @@ Note: build times are just approximations. Actual build times vary widely based 
 - **dockerfile.vaapi**: Hardware acceleration (libva, libvpl)
 - **dockerfile.processing**: Video processing (vid.stab, vmaf, libass, lcms2, libmysofa)
 
-### Tier 3: Final Assembly
+### Tier 3: Final Assembly (Linux)
 
-- **dockerfile.final**: FFmpeg compilation + testing + minimal scratch-based package
+- **dockerfile.final**: FFmpeg compilation, `checkelf.sh` validation, inline sanity tests, and a minimal scratch-based image (fonts + TLS certs bundled)
+- **dockerfile.alpine**: Wraps a published scratch image in Alpine so CI can extract `ffmpeg`/`ffprobe` into release tarballs (not used at runtime)
+
+### Windows Cross-Compile (amd64 only)
+
+- **dockerfile.windows-components**: Static mingw-w64 dependencies (zlib, OpenSSL, dav1d, aom, libvpx, x264, x265, lame) built once per `DECODE_ONLY` mode
+- **dockerfile.windows**: FFmpeg/ffprobe link step; outputs a scratch image containing `ffmpeg.exe` and `ffprobe.exe`
+- **cross-mingw.ini**: Meson cross-file shared by Windows component builds
 
 ## Common Commands
 
@@ -132,6 +166,8 @@ Note: build times are just approximations. Actual build times vary widely based 
 | `make build-push` | Build and push final image (add PLATFORMS for multi-platform) |
 | `make test` | Run tests on built image |
 | `make clean` | Remove all local FFmpeg images |
+| `make ci-build-windows` | Build Windows components + final (local or CI) |
+| `make ci-package-windows-release TAG=x.y.z` | Package full Windows zip from local image |
 | `make help` | Show all available commands |
 
 ### Testing
@@ -158,7 +194,8 @@ docker run --rm ffmpeg-final:latest -buildconf
 | `REGISTRY` | `docker.io/gtstef` | Docker registry (used to construct IMAGE if not set) |
 | `IMAGE_NAME` | `ffmpeg` | Image name without registry/tag |
 | `TAG` | `latest` | Tag (used to construct IMAGE if not set) |
-| `PLATFORMS` | `linux/amd64,linux/arm64` | Target platforms (supported: `linux/amd64`, `linux/arm64`) |
+| `PLATFORMS` | `linux/amd64,linux/arm64` | Linux target platforms for buildx multi-arch pushes |
+| `ALPINE_VERSION` | `alpine:3.22` | Base Alpine image tag used across dockerfiles |
 
 ### Advanced Options (for direct script usage)
 
@@ -231,8 +268,40 @@ IMAGE=docker.io/gtstef/ffmpeg:8.0-decode \
 
 # Note: All component and final images are built for specified platforms
 # Components remain local, only the final image gets pushed
-# Currently supported: linux/amd64, linux/arm64
+# Linux only: linux/amd64, linux/arm64 (Windows uses a separate build path)
 ```
+
+### Windows Builds
+
+Windows binaries are cross-compiled on Linux using mingw-w64. They are **not** part of the `PLATFORMS` buildx flow; instead they produce local scratch images and release zips.
+
+```bash
+# Build full Windows release locally
+make ci-build-windows
+
+# Build decode-only Windows release
+make ci-build-windows DECODE_ONLY=true
+
+# Or use the script directly
+./scripts/build-windows.sh
+DECODE_ONLY=true ./scripts/build-windows.sh
+
+# Package into release zip (requires image built above)
+make ci-package-windows-release TAG=8.1.1
+make ci-package-windows-release-decode TAG=8.1.1
+
+# Output: release-artifacts/ffmpeg-8.1.1-windows-amd64.zip
+#         release-artifacts/ffmpeg-decode-8.1.1-windows-amd64.zip
+```
+
+Local images produced:
+
+| Image | Description |
+|-------|-------------|
+| `ffmpeg-windows-components:latest` | mingw-w64 static libraries |
+| `ffmpeg-windows:latest` | Full build (`ffmpeg.exe`, `ffprobe.exe`) |
+| `ffmpeg-windows-components-decode:latest` | Decode-only libraries |
+| `ffmpeg-windows-decode:latest` | Decode-only binaries |
 
 **About Containerd Image Store:**
 - Docker Desktop: Enabled by default (Settings → General → "Use containerd for pulling and storing images")
@@ -247,6 +316,10 @@ make build-base
 make build-av1
 make build-x264-x265
 make build-final
+
+# Windows components (cross-compile)
+COMPONENT=windows-components ./build.sh
+COMPONENT=windows ./build.sh
 
 # Using script directly for more control
 COMPONENT=av1 NO_CACHE=true ./build.sh
@@ -304,26 +377,42 @@ COMPONENT=final NO_CACHE=true ./build.sh
 make build
 make test
 
-# 2. If tests pass, build and push both versions for multiple platforms
+# 2. If tests pass, build and push Linux multi-arch images
 make build-push IMAGE=docker.io/yourusername/ffmpeg:8.0 \
   PLATFORMS=linux/amd64,linux/arm64
 make build-decode-push IMAGE=docker.io/yourusername/ffmpeg:8.0-decode \
   PLATFORMS=linux/amd64,linux/arm64
 
-# 3. Verify on another machine
-docker pull docker.io/yourusername/ffmpeg-final:8.0
-docker run --rm docker.io/yourusername/ffmpeg-final:8.0 -version
+# 3. Build and package Windows release
+make ci-build-windows
+make ci-build-windows DECODE_ONLY=true
+make ci-package-windows-release TAG=8.0
+make ci-package-windows-release-decode TAG=8.0
+
+# 4. Verify on another machine
+docker pull docker.io/yourusername/ffmpeg:8.0
+docker run --rm docker.io/yourusername/ffmpeg:8.0 -version
 ```
 
 ### Scenario 4: CI/CD Pipeline
 
+The GitHub Actions release workflow (`.github/workflows/release.yml`) builds per-arch on native runners, then merges manifests and publishes release artifacts:
+
+- **build-amd64** (ubuntu-latest): Linux amd64 components + final, Windows components + final, Windows zip artifacts
+- **build-arm64** (ubuntu-24.04-arm): Linux arm64 components + final
+- **release**: Merge Docker manifests, package Linux tarballs, attach Windows zips to GitHub release
+
 ```bash
-# In your CI system (GitHub Actions, GitLab CI, etc.)
-make update
-make fetch-sources
-make build
-make ci-test
-make ci-build-and-push REGISTRY=ghcr.io/myorg TAG=${CI_COMMIT_TAG}
+# Per-platform native CI (one arch per runner)
+make ci-build-component COMPONENT=base PLATFORM=linux/amd64
+make ci-build-component COMPONENT=final CI_FINAL_IMAGE=docker.io/user/ffmpeg:8.0-amd64
+make ci-build-component COMPONENT=windows-components
+make ci-build-component COMPONENT=windows
+make ci-package-windows-release TAG=8.0
+
+# Merge and publish (after per-arch pushes)
+make ci-merge-manifest TAG=8.0
+make ci-package-release TAG=8.0
 ```
 
 ### Scenario 5: Quick Iteration During Development
@@ -425,11 +514,15 @@ make clean && make build      # Clean rebuild
 make build-push REGISTRY=docker.io/user TAG=8.0
 make build-decode-push REGISTRY=docker.io/user
 
-# Multi-Platform (linux/amd64,linux/arm64 supported)
+# Multi-Platform Linux (linux/amd64, linux/arm64)
 make build-push IMAGE=docker.io/user/ffmpeg:8.0 \
   PLATFORMS=linux/amd64,linux/arm64
 make build-decode-push IMAGE=docker.io/user/ffmpeg:decode \
   PLATFORMS=linux/amd64,linux/arm64
+
+# Windows amd64 (cross-compile, release zip)
+make ci-build-windows
+make ci-package-windows-release TAG=8.0
 
 # Direct script usage
 IMAGE=docker.io/user/ffmpeg:8.0-decode DECODE_ONLY=true \

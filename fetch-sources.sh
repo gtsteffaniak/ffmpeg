@@ -80,8 +80,12 @@ fetch_and_unpack_git_tag() {
   fi
 
   echo "--- Cloning $name tag ${version} ---"
-  if ! git clone --depth 1 --branch "${version}" "$url" "$dir"; then
-    echo "Git clone failed for $name tag ${version}"
+  if git clone --depth 1 --branch "${version}" "$url" "$dir"; then
+    :
+  elif git clone --depth 1 --branch "v${version}" "$url" "$dir"; then
+    echo "Using tag v${version}"
+  else
+    echo "Git clone failed for $name tag ${version} (also tried v${version})"
     return 1
   fi
 
@@ -358,13 +362,13 @@ fetch_and_unpack_git x264 "" X264_URL "" X264_COMMIT
 # Use 'vid.stab' as name, function expects dir 'vid.stab-${VIDSTAB_VERSION}'
 fetch_and_unpack vid.stab VIDSTAB_VERSION VIDSTAB_URL
 
-# bump: uavs3d /UAVS3D_COMMIT=([[:xdigit:]]+)/ gitrefs:https://github.com/uavs3/uavs3d.git|re:#^refs/heads/master$#|@commit
+# bump: uavs3d /UAVS3D_VERSION=([\d.]+)/ https://github.com/uavs3/uavs3d.git|*
 # bump: uavs3d after ./hashupdate Dockerfile UAVS3D $LATEST
-# bump: uavs3d link "Source diff $CURRENT..$LATEST" https://github.com/uavs3/uavs3d/compare/$CURRENT..$LATEST
+# bump: uavs3d link "Source diff $CURRENT..$LATEST" https://github.com/uavs3/uavs3d/compare/v$CURRENT..v$LATEST
+: "${UAVS3D_VERSION:=1.1}"
 : "${UAVS3D_URL:=https://github.com/uavs3/uavs3d.git}"
-: "${UAVS3D_COMMIT:=1.1}"
 # Removes BIT_DEPTH 10 to be able to build on other platforms. 10 was overkill anyways. (This comment refers to build steps, not fetch)
-fetch_and_unpack_git uavs3d "" UAVS3D_URL "" UAVS3D_COMMIT
+fetch_and_unpack_git_tag uavs3d UAVS3D_VERSION UAVS3D_URL
 
 # bump: twolame /TWOLAME_VERSION=([\d.]+)/ https://github.com/njh/twolame.git|*
 # bump: twolame after ./hashupdate Dockerfile TWOLAME $LATEST
@@ -411,8 +415,8 @@ fetch_and_unpack openjpeg OPENJPEG_VERSION OPENJPEG_URL
 # bump: lcms2 /LCMS2_VERSION=([\d.]+)/ https://github.com/mm2/Little-CMS.git|^2
 # bump: lcms2 after ./hashupdate Dockerfile LCMS2 $LATEST
 # bump: lcms2 link "Release" https://github.com/mm2/Little-CMS/releases/tag/lcms$LATEST
-: "${LCMS2_VERSION:=lcms2.2.19.1}"
-: "${LCMS2_URL:=https://github.com/mm2/Little-CMS/releases/download/lcms$LCMS2_VERSION/lcms2-$LCMS2_VERSION.tar.gz}"
+: "${LCMS2_VERSION:=2.19.1}"
+: "${LCMS2_URL:=https://github.com/mm2/Little-CMS/releases/download/lcms2.${LCMS2_VERSION#2.}/lcms2-${LCMS2_VERSION}.tar.gz}"
 fetch_and_unpack lcms2 LCMS2_VERSION LCMS2_URL
 
 # bump: mp3lame /MP3LAME_VERSION=([\d.]+)/ svn:http://svn.code.sf.net/p/lame/svn|/^RELEASE__(.*)$/|/_/./|*
