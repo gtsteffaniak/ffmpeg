@@ -366,9 +366,31 @@ fetch_and_unpack vid.stab VIDSTAB_VERSION VIDSTAB_URL
 # bump: uavs3d after ./hashupdate Dockerfile UAVS3D $LATEST
 # bump: uavs3d link "Source diff $CURRENT..$LATEST" https://github.com/uavs3/uavs3d/compare/v$CURRENT..v$LATEST
 : "${UAVS3D_VERSION:=1.1}"
+: "${UAVS3D_COMMIT:=0e20d2c}"
 : "${UAVS3D_URL:=https://github.com/uavs3/uavs3d.git}"
-# Removes BIT_DEPTH 10 to be able to build on other platforms. 10 was overkill anyways. (This comment refers to build steps, not fetch)
-fetch_and_unpack_git_tag uavs3d UAVS3D_VERSION UAVS3D_URL
+# v1.1 tag lacks CPU-aware CMakeLists; 0e20d2c adds arm64/x86_64 detection (Apple Silicon fix).
+# Legacy unversioned src/uavs3d breaks COPY src/uavs3d-* and must not remain.
+if [[ -d uavs3d ]]; then
+  rm -rf uavs3d
+fi
+uavs3d_dir="uavs3d-${UAVS3D_VERSION}"
+if [[ -d "$uavs3d_dir" ]]; then
+  current_commit="$(git -C "$uavs3d_dir" rev-parse --short HEAD 2>/dev/null || true)"
+  if [[ "$current_commit" == "$UAVS3D_COMMIT" ]]; then
+    echo "Skipping uavs3d, already at commit ${UAVS3D_COMMIT}"
+  else
+    echo "--- Updating uavs3d to commit ${UAVS3D_COMMIT} ---"
+    rm -rf "$uavs3d_dir"
+    git clone --depth 100 "$UAVS3D_URL" "$uavs3d_dir"
+    (cd "$uavs3d_dir" && git checkout "${UAVS3D_COMMIT}")
+    echo "--- Finished ${uavs3d_dir} at ${UAVS3D_COMMIT} ---"
+  fi
+else
+  echo "--- Cloning uavs3d at commit ${UAVS3D_COMMIT} ---"
+  git clone --depth 100 "$UAVS3D_URL" "$uavs3d_dir"
+  (cd "$uavs3d_dir" && git checkout "${UAVS3D_COMMIT}")
+  echo "--- Finished ${uavs3d_dir} at ${UAVS3D_COMMIT} ---"
+fi
 
 # bump: twolame /TWOLAME_VERSION=([\d.]+)/ https://github.com/njh/twolame.git|*
 # bump: twolame after ./hashupdate Dockerfile TWOLAME $LATEST
