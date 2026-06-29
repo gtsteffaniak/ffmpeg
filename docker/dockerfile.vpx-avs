@@ -33,37 +33,12 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
   fi
 
 # uavs3d (AVS3 decoder - niche Chinese codec)
-COPY [ "src/uavs3d*", "./uavs3d" ]
+COPY [ "src/uavs3d-*", "./uavs3d" ]
 RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping uavs3d build"; \
-  elif [ "$(uname -m)" = "aarch64" ]; then \
-    cd uavs3d && \
-      if [ -d .git ]; then sh version.sh .; fi && \
-      BUILD=$(grep '#define VERSION_STR' version.h | sed 's/.*"\([^"]*\)".*/\1/' | awk -F. '{print $NF}') && \
-      if [ -z "$BUILD" ] || [ "$BUILD" -lt 41 ] 2>/dev/null; then \
-        sed -i 's/#define VERSION_STR  ".*"/#define VERSION_STR  "1.1.89"/' version.h && \
-        sed -i 's/#define VER_BUILD.*/#define VER_BUILD  89/' version.h; \
-      fi && \
-      sed -i '/aux_source_directory(\.\/decore DIR_UAVS3D_CORE)/a aux_source_directory(./decore/arm64 DIR_ARM64_SRC)' source/CMakeLists.txt && \
-      mkdir -p build/linux && cd build/linux && \
-      cmake \
-        -G"Unix Makefiles" \
-        -DCMAKE_VERBOSE_MAKEFILE=ON \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DBUILD_SHARED_LIBS=OFF \
-        ../.. && \
-      make -j$(nproc) install; \
   else \
     cd uavs3d && \
-      if [ -d .git ]; then sh version.sh .; fi && \
-      BUILD=$(grep '#define VERSION_STR' version.h | sed 's/.*"\([^"]*\)".*/\1/' | awk -F. '{print $NF}') && \
-      if [ -z "$BUILD" ] || [ "$BUILD" -lt 41 ] 2>/dev/null; then \
-        sed -i 's/#define VERSION_STR  ".*"/#define VERSION_STR  "1.1.89"/' version.h && \
-        sed -i 's/#define VER_BUILD.*/#define VER_BUILD  89/' version.h; \
-      fi && \
-      sed -i '/aux_source_directory(\.\/decore DIR_UAVS3D_CORE)/a aux_source_directory(./decore/avx2 DIR_X86_256_SRC)' source/CMakeLists.txt && \
-      sed -i '/aux_source_directory(\.\/decore DIR_UAVS3D_CORE)/a aux_source_directory(./decore/sse DIR_X86_SRC)' source/CMakeLists.txt && \
-      sed -i '/set_source_files_properties.*DIR_UAVS3D_SRC.*COMPILE_FLAGS/a set_source_files_properties(${DIR_X86_SRC} PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -msse4.1 -fPIC -std=c99 -O3")\nset_source_files_properties(${DIR_X86_256_SRC} PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -mavx2 -fPIC -std=c99 -O3")' source/CMakeLists.txt && \
+      sed -i '/armv7\.c/d' source/CMakeLists.txt && \
       mkdir -p build/linux && cd build/linux && \
       cmake \
         -G"Unix Makefiles" \

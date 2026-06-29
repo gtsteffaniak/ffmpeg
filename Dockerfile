@@ -204,7 +204,7 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
   fi
 
 # uavs3d (AVS3 decoder - niche, already in your DECODE_ONLY section)
-COPY [ "src/uavs3d*", "./uavs3d" ]
+COPY [ "src/uavs3d-*", "./uavs3d" ]
 RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
   echo "Skipping uavs3d build"; \
   else \
