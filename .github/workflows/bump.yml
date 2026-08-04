@@ -2,8 +2,8 @@ name: Automatic version updates
 
 on:
   schedule:
-    # minute hour dom month dow (UTC)
-    - cron: '0 16 * * *'
+    # Monday 16:00 UTC — weekly dependency check
+    - cron: '0 16 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -43,16 +43,37 @@ jobs:
             git diff fetch-sources.sh
           fi
 
+      - name: Prepare pull request metadata
+        if: steps.changes.outputs.changed == 'true'
+        id: pr
+        run: |
+          DATE=$(date -u +%Y-%m-%d)
+          WEEK=$(date -u +%V)
+          YEAR=$(date -u +%Y)
+
+          echo "branch=automated/version-bump-${WEEK}-${YEAR}" >> "$GITHUB_OUTPUT"
+          echo "date=${DATE}" >> "$GITHUB_OUTPUT"
+
+          TITLE="chore(deps): update library versions (${DATE})"
+
+          OLD_FFMPEG=$(git show HEAD:fetch-sources.sh | grep 'FFMPEG_VERSION:=' | head -1 | sed -E 's/.*FFMPEG_VERSION:=([0-9.]+).*/\1/')
+          NEW_FFMPEG=$(grep 'FFMPEG_VERSION:=' fetch-sources.sh | head -1 | sed -E 's/.*FFMPEG_VERSION:=([0-9.]+).*/\1/')
+          if [ -n "$OLD_FFMPEG" ] && [ -n "$NEW_FFMPEG" ] && [ "$OLD_FFMPEG" != "$NEW_FFMPEG" ]; then
+            TITLE="chore(deps): update library versions - ffmpeg ${NEW_FFMPEG} (${DATE})"
+          fi
+
+          echo "title=${TITLE}" >> "$GITHUB_OUTPUT"
+
       - name: Create pull request
         if: steps.changes.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.PAT }}
-          commit-message: 'chore(deps): update library versions'
-          title: 'chore(deps): update library versions'
+          commit-message: ${{ steps.pr.outputs.title }}
+          title: ${{ steps.pr.outputs.title }}
           body: |
-            Automated dependency version updates from `helper.go`.
+            Automated dependency version updates from `helper.go` (${{ steps.pr.outputs.date }}).
 
             Review version bumps in `fetch-sources.sh` before merging.
-          branch: automated/version-bump
+          branch: ${{ steps.pr.outputs.branch }}
           delete-branch: true

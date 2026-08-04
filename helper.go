@@ -295,10 +295,9 @@ func getLatestNumericVersionForLCMS2(tags []string) (string, error) {
 		return compareSemanticVersions(numericVersions[i], numericVersions[j]) > 0
 	})
 
-	// Return in lcms2.X format (script expects this format)
+	// Return numeric version (e.g. 2.19.1); fetch-sources.sh uses LCMS2_VERSION without prefix
 	latest := numericVersions[0]
-	cleanVersion := stripPrefixes(latest.Tag)
-	return "lcms2." + cleanVersion, nil
+	return stripPrefixes(latest.Tag), nil
 }
 
 // isNewerVersion checks if newVersion is newer than currentVersion
@@ -394,7 +393,7 @@ func getLatestGitHubTag(repoURL string) (string, error) {
 		tagNames = append(tagNames, tag.Name)
 	}
 
-	// Special handling for lcms2 which expects "lcms2.X" format
+	// Special handling for lcms2 tags (lcms2.X.Y.Z on GitHub)
 	if repo == "Little-CMS" {
 		return getLatestNumericVersionForLCMS2(tagNames)
 	}
