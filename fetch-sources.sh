@@ -437,7 +437,7 @@ fetch_and_unpack openjpeg OPENJPEG_VERSION OPENJPEG_URL
 # bump: lcms2 /LCMS2_VERSION=([\d.]+)/ https://github.com/mm2/Little-CMS.git|^2
 # bump: lcms2 after ./hashupdate Dockerfile LCMS2 $LATEST
 # bump: lcms2 link "Release" https://github.com/mm2/Little-CMS/releases/tag/lcms$LATEST
-: "${LCMS2_VERSION:=2.19.1}"
+: "${LCMS2_VERSION:=lcms2.2.19.1}"
 : "${LCMS2_URL:=https://github.com/mm2/Little-CMS/releases/download/lcms2.${LCMS2_VERSION#2.}/lcms2-${LCMS2_VERSION}.tar.gz}"
 fetch_and_unpack lcms2 LCMS2_VERSION LCMS2_URL
 
