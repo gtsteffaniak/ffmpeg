@@ -151,7 +151,7 @@ fetch_and_unpack SVT-AV1 SVTAV1_VERSION SVTAV1_URL
 # bump: ffmpeg after ./hashupdate Dockerfile FFMPEG $LATEST
 # bump: ffmpeg link "Changelog" https://github.com/FFmpeg/FFmpeg/blob/n$LATEST/Changelog
 # bump: ffmpeg link "Source diff $CURRENT..$LATEST" https://github.com/FFmpeg/FFmpeg/compare/n$CURRENT..n$LATEST
-: "${FFMPEG_VERSION:=8.1.2}"
+: "${FFMPEG_VERSION:=9.0}"
 : "${FFMPEG_URL:=https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.bz2}"
 fetch_and_unpack ffmpeg FFMPEG_VERSION FFMPEG_URL
 
@@ -189,7 +189,7 @@ fetch_and_unpack libva LIBVA_VERSION LIBVA_URL
 # bump: srt /SRT_VERSION=([\d.]+)/ https://github.com/Haivision/srt.git|^1
 # bump: srt after ./hashupdate Dockerfile SRT $LATEST
 # bump: srt link "Release notes" https://github.com/Haivision/srt/releases/tag/v$LATEST
-: "${SRT_VERSION:=1.5.5}"
+: "${SRT_VERSION:=1.5.6}"
 : "${SRT_URL:=https://github.com/Haivision/srt/archive/v${SRT_VERSION}.tar.gz}"
 fetch_and_unpack srt SRT_VERSION SRT_URL
 
@@ -263,7 +263,7 @@ fetch_and_unpack dav1d DAV1D_VERSION DAV1D_URL
 # bump: glib /GLIB_VERSION=([\d.]+)/ https://gitlab.gnome.org/GNOME/glib.git|^2
 # bump: glib after ./hashupdate Dockerfile GLIB $LATEST
 # bump: glib link "NEWS" https://gitlab.gnome.org/GNOME/glib/-/blob/main/NEWS?ref_type=heads
-#: "${GLIB_VERSION:=2.89.1}"
+#: "${GLIB_VERSION:=2.89.3}"
 #: "${GLIB_URL:=https://download.gnome.org/sources/glib/2.84/glib-$GLIB_VERSION.tar.xz}"
 #: "${GLIB_SHA256:=2b4bc2ec49611a5fc35f86aca855f2ed0196e69e53092bab6bb73396bf30789a}"
 #fetch_and_unpack glib GLIB_VERSION GLIB_URL GLIB_SHA256
@@ -357,7 +357,7 @@ fetch_and_unpack_git x264 "" X264_URL "" X264_COMMIT
 # bump: vid.stab /VIDSTAB_VERSION=([\d.]+)/ https://github.com/georgmartius/vid.stab.git|*
 # bump: vid.stab after ./hashupdate Dockerfile VIDSTAB $LATEST
 # bump: vid.stab link "Changelog" https://github.com/georgmartius/vid.stab/blob/master/Changelog
-: "${VIDSTAB_VERSION:=1.1.1}"
+: "${VIDSTAB_VERSION:=1.1.2}"
 : "${VIDSTAB_URL:=https://github.com/georgmartius/vid.stab/archive/v$VIDSTAB_VERSION.tar.gz}"
 # Use 'vid.stab' as name, function expects dir 'vid.stab-${VIDSTAB_VERSION}'
 fetch_and_unpack vid.stab VIDSTAB_VERSION VIDSTAB_URL
@@ -437,7 +437,7 @@ fetch_and_unpack openjpeg OPENJPEG_VERSION OPENJPEG_URL
 # bump: lcms2 /LCMS2_VERSION=([\d.]+)/ https://github.com/mm2/Little-CMS.git|^2
 # bump: lcms2 after ./hashupdate Dockerfile LCMS2 $LATEST
 # bump: lcms2 link "Release" https://github.com/mm2/Little-CMS/releases/tag/lcms$LATEST
-: "${LCMS2_VERSION:=2.19.1}"
+: "${LCMS2_VERSION:=lcms2.2.19.1}"
 : "${LCMS2_URL:=https://github.com/mm2/Little-CMS/releases/download/lcms2.${LCMS2_VERSION#2.}/lcms2-${LCMS2_VERSION}.tar.gz}"
 fetch_and_unpack lcms2 LCMS2_VERSION LCMS2_URL
 
@@ -478,7 +478,7 @@ git clone --depth 1 --branch v$AOM_VERSION "$AOM_URL" && cd aom && test $(git re
 # bump: harfbuzz /LIBHARFBUZZ_VERSION=([\d.]+)/ https://github.com/harfbuzz/harfbuzz.git|*
 # bump: harfbuzz after ./hashupdate Dockerfile LIBHARFBUZZ $LATEST
 # bump: harfbuzz link "NEWS" https://github.com/harfbuzz/harfbuzz/blob/main/NEWS
-: "${LIBHARFBUZZ_VERSION:=14.2.1}"
+: "${LIBHARFBUZZ_VERSION:=14.3.0}"
 : "${LIBHARFBUZZ_URL:=https://github.com/harfbuzz/harfbuzz/releases/download/$LIBHARFBUZZ_VERSION/harfbuzz-$LIBHARFBUZZ_VERSION.tar.xz}"
 fetch_and_unpack harfbuzz LIBHARFBUZZ_VERSION LIBHARFBUZZ_URL
 
@@ -519,7 +519,7 @@ fetch_and_unpack pango PANGO_VERSION PANGO_URL
 # bump: libmysofa after ./hashupdate Dockerfile LIBMYSOFA $LATEST
 # bump: libmysofa link "Release" https://github.com/hoene/libmysofa/releases/tag/v$LATEST
 # bump: libmysofa link "Source diff $CURRENT..$LATEST" https://github.com/hoene/libmysofa/compare/v$CURRENT..v$LATEST
-: "${LIBMYSOFA_VERSION:=1.3.4}"
+: "${LIBMYSOFA_VERSION:=1.3.5}"
 : "${LIBMYSOFA_URL:=https://github.com/hoene/libmysofa/archive/refs/tags/v$LIBMYSOFA_VERSION.tar.gz}"
 fetch_and_unpack libmysofa LIBMYSOFA_VERSION LIBMYSOFA_URL
 
