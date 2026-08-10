@@ -287,7 +287,7 @@ fetch_and_unpack libvpl LIBVPL_VERSION LIBVPL_URL
 # bump: xevd link "CHANGELOG" https://github.com/mpeg5/xevd/releases/tag/v$LATEST
 # TODO: better -DARM? possible to build on non arm and intel?
 # TODO: report upstream about lib/libxevd.a?
-: "${XEVD_VERSION:=0.5.0}"
+: "${XEVD_VERSION:=0.7.0}"
 : "${XEVD_URL:=https://github.com/mpeg5/xevd/archive/refs/tags/v$XEVD_VERSION.tar.gz}"
 fetch_and_unpack xevd XEVD_VERSION XEVD_URL
 # Custom step for xevd: create version.txt
@@ -304,7 +304,7 @@ fi
 # bump: xeve link "CHANGELOG" https://github.com/mpeg5/xeve/releases/tag/v$LATEST
 # TODO: better -DARM? possible to build on non arm and intel?
 # TODO: report upstream about lib/libxeve.a?
-: "${XEVE_VERSION:=0.5.1}"
+: "${XEVE_VERSION:=0.7.0}"
 : "${XEVE_URL:=https://github.com/mpeg5/xeve/archive/refs/tags/v$XEVE_VERSION.tar.gz}"
 fetch_and_unpack xeve XEVE_VERSION XEVE_URL
 # Custom step for xeve: create version.txt
@@ -365,7 +365,7 @@ fetch_and_unpack vid.stab VIDSTAB_VERSION VIDSTAB_URL
 # bump: uavs3d /UAVS3D_VERSION=([\d.]+)/ https://github.com/uavs3/uavs3d.git|*
 # bump: uavs3d after ./hashupdate Dockerfile UAVS3D $LATEST
 # bump: uavs3d link "Source diff $CURRENT..$LATEST" https://github.com/uavs3/uavs3d/compare/v$CURRENT..v$LATEST
-: "${UAVS3D_VERSION:=1.1}"
+: "${UAVS3D_VERSION:=1.2}"
 : "${UAVS3D_COMMIT:=0e20d2c}"
 : "${UAVS3D_URL:=https://github.com/uavs3/uavs3d.git}"
 # v1.1 tag lacks CPU-aware CMakeLists; 0e20d2c adds arm64/x86_64 detection (Apple Silicon fix).
