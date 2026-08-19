@@ -151,7 +151,7 @@ fetch_and_unpack SVT-AV1 SVTAV1_VERSION SVTAV1_URL
 # bump: ffmpeg after ./hashupdate Dockerfile FFMPEG $LATEST
 # bump: ffmpeg link "Changelog" https://github.com/FFmpeg/FFmpeg/blob/n$LATEST/Changelog
 # bump: ffmpeg link "Source diff $CURRENT..$LATEST" https://github.com/FFmpeg/FFmpeg/compare/n$CURRENT..n$LATEST
-: "${FFMPEG_VERSION:=9.0}"
+: "${FFMPEG_VERSION:=9.0.1}"
 : "${FFMPEG_URL:=https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.bz2}"
 fetch_and_unpack ffmpeg FFMPEG_VERSION FFMPEG_URL
 
@@ -246,7 +246,7 @@ fetch_and_unpack libwebp LIBWEBP_VERSION LIBWEBP_URL
 # bump: librsvg /LIBRSVG_VERSION=([\d.]+)/ https://gitlab.gnome.org/GNOME/librsvg.git|^2
 # bump: librsvg after ./hashupdate Dockerfile LIBRSVG $LATEST
 # bump: librsvg link "NEWS" https://gitlab.gnome.org/GNOME/librsvg/-/blob/master/NEWS
-: "${LIBRSVG_VERSION:=2.62.90}"
+: "${LIBRSVG_VERSION:=2.62.91}"
 short_version=$(echo $LIBRSVG_VERSION | cut -d'.' -f1-2)
 : "${LIBRSVG_URL:=https://download.gnome.org/sources/librsvg/$short_version/librsvg-$LIBRSVG_VERSION.tar.xz}"
 fetch_and_unpack librsvg LIBRSVG_VERSION LIBRSVG_URL
@@ -478,7 +478,7 @@ git clone --depth 1 --branch v$AOM_VERSION "$AOM_URL" && cd aom && test $(git re
 # bump: harfbuzz /LIBHARFBUZZ_VERSION=([\d.]+)/ https://github.com/harfbuzz/harfbuzz.git|*
 # bump: harfbuzz after ./hashupdate Dockerfile LIBHARFBUZZ $LATEST
 # bump: harfbuzz link "NEWS" https://github.com/harfbuzz/harfbuzz/blob/main/NEWS
-: "${LIBHARFBUZZ_VERSION:=14.3.0}"
+: "${LIBHARFBUZZ_VERSION:=14.3.1}"
 : "${LIBHARFBUZZ_URL:=https://github.com/harfbuzz/harfbuzz/releases/download/$LIBHARFBUZZ_VERSION/harfbuzz-$LIBHARFBUZZ_VERSION.tar.xz}"
 fetch_and_unpack harfbuzz LIBHARFBUZZ_VERSION LIBHARFBUZZ_URL
 
