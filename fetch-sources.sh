@@ -263,7 +263,7 @@ fetch_and_unpack dav1d DAV1D_VERSION DAV1D_URL
 # bump: glib /GLIB_VERSION=([\d.]+)/ https://gitlab.gnome.org/GNOME/glib.git|^2
 # bump: glib after ./hashupdate Dockerfile GLIB $LATEST
 # bump: glib link "NEWS" https://gitlab.gnome.org/GNOME/glib/-/blob/main/NEWS?ref_type=heads
-#: "${GLIB_VERSION:=2.89.3}"
+#: "${GLIB_VERSION:=2.89.4}"
 #: "${GLIB_URL:=https://download.gnome.org/sources/glib/2.84/glib-$GLIB_VERSION.tar.xz}"
 #: "${GLIB_SHA256:=2b4bc2ec49611a5fc35f86aca855f2ed0196e69e53092bab6bb73396bf30789a}"
 #fetch_and_unpack glib GLIB_VERSION GLIB_URL GLIB_SHA256
