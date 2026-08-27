@@ -98,7 +98,7 @@
       "id": "x264",
       "name": "x264",
       "enabled": true,
-      "commit": "31e19f92f00c7003fa115047ce50978bc98c3a0d",
+      "commit": "b35605ace3ddf7c1a5d67a2eb553f034aef41d55",
       "fetch": {
         "method": "git_commit",
         "url": "https://code.videolan.org/videolan/x264.git",
@@ -108,10 +108,10 @@
         "gate": "decode_skip"
       },
       "bump": {
-        "method": "commit",
         "repo": "gitrefs:https://code.videolan.org/videolan/x264.git",
-        "branch": "stable",
-        "tag_filter": "re:#^refs/heads/stable$#|@commit"
+        "tag_filter": "re:#^refs/heads/stable$#|@commit",
+        "method": "commit",
+        "branch": "stable"
       }
     },
     {
@@ -136,7 +136,7 @@
       "id": "libvpx",
       "name": "libvpx",
       "enabled": true,
-      "version": "1.16.0",
+      "version": "1.17.0",
       "fetch": {
         "method": "archive",
         "url": "https://github.com/webmproject/libvpx/archive/v{version}.tar.gz",
@@ -490,7 +490,7 @@
       "id": "harfbuzz",
       "name": "harfbuzz",
       "enabled": true,
-      "version": "14.3.1",
+      "version": "14.4.0",
       "fetch": {
         "method": "archive",
         "url": "https://github.com/harfbuzz/harfbuzz/releases/download/{version}/harfbuzz-{version}.tar.xz",
@@ -577,7 +577,7 @@
       "id": "srt",
       "name": "srt",
       "enabled": true,
-      "version": "1.5.6",
+      "version": "1.5.7",
       "fetch": {
         "method": "archive",
         "url": "https://github.com/Haivision/srt/archive/v{version}.tar.gz",
@@ -644,10 +644,10 @@
         "dir": "libgsm"
       },
       "bump": {
-        "method": "commit",
         "repo": "gitrefs:https://github.com/timothytylee/libgsm.git",
-        "branch": "master",
-        "tag_filter": "re:#^refs/heads/master$#|@commit"
+        "tag_filter": "re:#^refs/heads/master$#|@commit",
+        "method": "commit",
+        "branch": "master"
       }
     }
   ]
