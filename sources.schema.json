@@ -77,10 +77,10 @@
       "required": ["repo"],
       "additionalProperties": false,
       "properties": {
-        "repo": { "type": "string", "minLength": 1 },
-        "tag_filter": { "type": "string" },
         "method": { "type": "string", "enum": ["tag", "commit"] },
-        "branch": { "type": "string" }
+        "repo": { "type": "string", "minLength": 1 },
+        "branch": { "type": "string" },
+        "tag_filter": { "type": "string" }
       }
     }
   }

@@ -52,10 +52,10 @@ type ReleaseMeta struct {
 }
 
 type BumpConfig struct {
-	Repo      string `json:"repo"`
-	TagFilter string `json:"tag_filter,omitempty"`
 	Method    string `json:"method,omitempty"`
+	Repo      string `json:"repo"`
 	Branch    string `json:"branch,omitempty"`
+	TagFilter string `json:"tag_filter,omitempty"`
 }
 
 func sourcesPath() string {

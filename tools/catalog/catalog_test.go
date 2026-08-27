@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -126,6 +127,54 @@ func TestIsNewerVersion(t *testing.T) {
 	}
 	if isNewerVersion("2.0.0", "1.9.9") {
 		t.Fatal("expected 2.0.0 not older")
+	}
+}
+
+func TestBumpConfigJSONKeyOrder(t *testing.T) {
+	b := BumpConfig{
+		Method:    "commit",
+		Repo:      "gitrefs:https://github.com/example/libgsm.git",
+		Branch:    "master",
+		TagFilter: "re:#^refs/heads/master$#|@commit",
+	}
+	data, err := json.MarshalIndent(b, "  ", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	wantOrder := []string{"method", "repo", "branch", "tag_filter"}
+	last := -1
+	for _, key := range wantOrder {
+		idx := strings.Index(got, `"`+key+`"`)
+		if idx < 0 {
+			t.Fatalf("missing key %q in %s", key, got)
+		}
+		if idx <= last {
+			t.Fatalf("key %q out of order in %s", key, got)
+		}
+		last = idx
+	}
+}
+
+func TestCatalogBumpRoundTripStable(t *testing.T) {
+	cat, err := loadCatalog(sourcesPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.MarshalIndent(cat, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var again Catalog
+	if err := json.Unmarshal(data, &again); err != nil {
+		t.Fatal(err)
+	}
+	data2, err := json.MarshalIndent(&again, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != string(data2) {
+		t.Fatal("catalog JSON not stable across marshal round-trip")
 	}
 }
 
