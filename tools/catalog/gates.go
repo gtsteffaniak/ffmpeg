@@ -19,7 +19,7 @@ func versionKey(ver string) int {
 	return nums[0]*1_0000_0000 + nums[1]*1_0000 + nums[2]
 }
 
-// releaseGateInDecode mirrors scripts/version-gates.sh eval_release_gate for DECODE_ONLY=true.
+// releaseGateInDecode evaluates release.gate for the decode-only image (DECODE_ONLY=true).
 func releaseGateInDecode(gate, ffmpegVersion string) bool {
 	switch gate {
 	case "always":

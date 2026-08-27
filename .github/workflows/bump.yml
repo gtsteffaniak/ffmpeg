@@ -21,10 +21,10 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: tools/catalog/go.mod
 
       - name: Validate sources.json
-        run: go run . validate
+        run: go run -C tools/catalog . validate
 
       - name: Update source versions
         env:
@@ -60,7 +60,7 @@ jobs:
           TITLE="chore(deps): update library versions (${DATE})"
 
           OLD_FFMPEG=$(git show HEAD:sources.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["release"]["ffmpeg_version"])')
-          NEW_FFMPEG=$(go run . read release.ffmpeg_version)
+          NEW_FFMPEG=$(go run -C tools/catalog . read release.ffmpeg_version)
           if [ -n "$OLD_FFMPEG" ] && [ -n "$NEW_FFMPEG" ] && [ "$OLD_FFMPEG" != "$NEW_FFMPEG" ]; then
             TITLE="chore(deps): update library versions - ffmpeg ${NEW_FFMPEG} (${DATE})"
           fi
@@ -68,7 +68,7 @@ jobs:
           {
             echo "title=${TITLE}"
             echo "summary<<EOF"
-            go run . bump-summary
+            go run -C tools/catalog . bump-summary
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 

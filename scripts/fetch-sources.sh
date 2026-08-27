@@ -1,21 +1,23 @@
 #!/bin/bash
 # Fetch dependency sources listed in sources.json.
-# Versions and URLs come from: go run helper.go fetch-script
+# Versions and URLs come from: go run -C tools/catalog . fetch-script
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/version-gates.sh
-source "${SCRIPT_DIR}/scripts/version-gates.sh"
-# shellcheck source=scripts/fetch-utils.sh
-source "${SCRIPT_DIR}/scripts/fetch-utils.sh"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# shellcheck source=version-gates.sh
+source "${SCRIPT_DIR}/version-gates.sh"
+# shellcheck source=fetch-utils.sh
+source "${SCRIPT_DIR}/fetch-utils.sh"
 
 : "${DECODE_ONLY:=false}"
 if [ -z "${FFMPEG_VERSION:-}" ]; then
-  FFMPEG_VERSION="$(cd "$SCRIPT_DIR" && go run . read release.ffmpeg_version)"
+  FFMPEG_VERSION="$(cd "$REPO_ROOT" && go run -C tools/catalog . read release.ffmpeg_version)"
 fi
 export FFMPEG_VERSION DECODE_ONLY
 
-mkdir -p src && cd src
+mkdir -p "${REPO_ROOT}/src"
+cd "${REPO_ROOT}/src"
 ROOT_DIR=$(pwd)
 
 WGET_OPTS=(
@@ -148,6 +150,6 @@ fetch_uavs3d() {
 
 echo "Fetching sources from sources.json (FFMPEG_VERSION=${FFMPEG_VERSION}, DECODE_ONLY=${DECODE_ONLY})"
 # shellcheck disable=SC1090
-eval "$(cd "$SCRIPT_DIR" && go run . fetch-script)"
+eval "$(cd "$REPO_ROOT" && go run -C tools/catalog . fetch-script)"
 
 echo "All fetching and unpacking complete."

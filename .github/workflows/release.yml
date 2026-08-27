@@ -39,7 +39,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: tools/catalog/go.mod
 
       - name: Determine version
         id: version
@@ -47,7 +47,7 @@ jobs:
           if [ -n "${{ github.event.inputs.version }}" ]; then
             VERSION="${{ github.event.inputs.version }}"
           else
-            VERSION="$(go run . read release.ffmpeg_version)"
+            VERSION="$(go run -C tools/catalog . read release.ffmpeg_version)"
           fi
 
           if [ -z "$VERSION" ]; then
@@ -60,7 +60,7 @@ jobs:
             if [ "${{ github.event.inputs.update_latest }}" = "true" ]; then
               MAKE_LATEST=true
             fi
-          elif [ "$(go run . read release.mark_github_latest)" = "true" ]; then
+          elif [ "$(go run -C tools/catalog . read release.mark_github_latest)" = "true" ]; then
             MAKE_LATEST=true
           fi
 
@@ -69,8 +69,8 @@ jobs:
           echo "Building version ${VERSION} from ${{ github.ref_name }} (make_latest=${MAKE_LATEST})"
 
           # Skip Dockerfile ARG drift check when releasing a non-default version.
-          if [ -z "${{ github.event.inputs.version }}" ] || [ "${{ github.event.inputs.version }}" = "$(go run . read release.ffmpeg_version)" ]; then
-            go run . validate
+          if [ -z "${{ github.event.inputs.version }}" ] || [ "${{ github.event.inputs.version }}" = "$(go run -C tools/catalog . read release.ffmpeg_version)" ]; then
+            go run -C tools/catalog . validate
           fi
 
   build-amd64:
@@ -92,7 +92,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: tools/catalog/go.mod
 
       - name: Verify release version
         run: |
@@ -225,7 +225,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: tools/catalog/go.mod
 
       - name: Verify release version
         run: |
@@ -331,7 +331,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: tools/catalog/go.mod
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

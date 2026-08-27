@@ -44,13 +44,11 @@ type FetchConfig struct {
 	Dir     string `json:"dir,omitempty"`
 	Gate    string `json:"gate,omitempty"`
 	Post    string `json:"post,omitempty"`
-	SHA256  string `json:"sha256,omitempty"`
 	Package string `json:"package,omitempty"`
 }
 
 type ReleaseMeta struct {
-	Gate    string `json:"gate"`
-	SrcGlob string `json:"src_glob,omitempty"`
+	Gate string `json:"gate"`
 }
 
 type BumpConfig struct {
@@ -62,9 +60,12 @@ type BumpConfig struct {
 
 func sourcesPath() string {
 	if p := os.Getenv("SOURCES_JSON"); p != "" {
-		return p
+		if filepath.IsAbs(p) {
+			return p
+		}
+		return filepath.Join(repoRoot(), p)
 	}
-	return defaultSourcesPath
+	return filepath.Join(repoRoot(), defaultSourcesPath)
 }
 
 func loadCatalog(path string) (*Catalog, error) {
@@ -129,16 +130,30 @@ func resolveFFmpegVersion(c *Catalog) string {
 }
 
 func repoRoot() string {
-	if wd, err := os.Getwd(); err == nil {
-		return wd
+	if root := os.Getenv("FFMPEG_ROOT"); root != "" {
+		return root
 	}
-	return "."
+	wd, err := os.Getwd()
+	if err != nil {
+		return "."
+	}
+	dir := wd
+	for {
+		if _, err := os.Stat(filepath.Join(dir, defaultSourcesPath)); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return wd
+		}
+		dir = parent
+	}
 }
 
 func dockerfilePaths() []string {
 	root := repoRoot()
 	candidates := []string{
-		filepath.Join(root, "Dockerfile"),
+		filepath.Join(root, "docker", "dockerfile.monolithic"),
 		filepath.Join(root, "docker", "dockerfile.final"),
 		filepath.Join(root, "docker", "dockerfile.av1"),
 		filepath.Join(root, "docker", "dockerfile.audio"),

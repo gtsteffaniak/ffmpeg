@@ -1,5 +1,5 @@
 #!/bin/bash
-# Archive download validation for fetch-sources.sh (no side effects when sourced).
+# Archive download validation for scripts/fetch-sources.sh (no side effects when sourced).
 
 archive_is_valid() {
   local file=$1

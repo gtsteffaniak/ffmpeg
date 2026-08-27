@@ -18,8 +18,13 @@
         "url": "https://ffmpeg.org/releases/ffmpeg-{version}.tar.bz2",
         "dir": "ffmpeg-{version}"
       },
-      "release": { "gate": "always", "src_glob": "ffmpeg-*" },
-      "bump": { "repo": "https://github.com/FFmpeg/FFmpeg.git", "tag_filter": "*" }
+      "release": {
+        "gate": "always"
+      },
+      "bump": {
+        "repo": "https://github.com/FFmpeg/FFmpeg.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "dav1d",
@@ -31,8 +36,13 @@
         "url": "https://github.com/videolan/dav1d.git",
         "dir": "dav1d-{version}"
       },
-      "release": { "gate": "always", "src_glob": "dav1d-*" },
-      "bump": { "repo": "https://code.videolan.org/videolan/dav1d.git", "tag_filter": "*" }
+      "release": {
+        "gate": "always"
+      },
+      "bump": {
+        "repo": "https://code.videolan.org/videolan/dav1d.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "aom",
@@ -46,8 +56,13 @@
         "dir": "aom",
         "post": "aom_verify"
       },
-      "release": { "gate": "needs_libaom", "src_glob": "aom" },
-      "bump": { "repo": "git:https://aomedia.googlesource.com/aom", "tag_filter": "*" }
+      "release": {
+        "gate": "needs_libaom"
+      },
+      "bump": {
+        "repo": "git:https://aomedia.googlesource.com/aom",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "svtav1",
@@ -59,15 +74,25 @@
         "url": "https://gitlab.com/AOMediaCodec/SVT-AV1/-/archive/v{version}/SVT-AV1-v{version}.tar.bz2",
         "dir": "SVT-AV1-{version}"
       },
-      "release": { "gate": "decode_skip", "src_glob": "SVT-AV1-*" },
-      "bump": { "repo": "https://gitlab.com/AOMediaCodec/SVT-AV1.git", "tag_filter": "*" }
+      "release": {
+        "gate": "decode_skip"
+      },
+      "bump": {
+        "repo": "https://gitlab.com/AOMediaCodec/SVT-AV1.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "rav1e",
       "name": "rav1e",
       "enabled": true,
-      "fetch": { "method": "alpine", "package": "rav1e-dev" },
-      "release": { "gate": "decode_skip", "src_glob": "__alpine__" }
+      "fetch": {
+        "method": "alpine",
+        "package": "rav1e-dev"
+      },
+      "release": {
+        "gate": "decode_skip"
+      }
     },
     {
       "id": "x264",
@@ -79,7 +104,9 @@
         "url": "https://code.videolan.org/videolan/x264.git",
         "dir": "x264"
       },
-      "release": { "gate": "decode_skip", "src_glob": "x264*" },
+      "release": {
+        "gate": "decode_skip"
+      },
       "bump": {
         "method": "commit",
         "repo": "gitrefs:https://code.videolan.org/videolan/x264.git",
@@ -97,8 +124,13 @@
         "url": "https://bitbucket.org/multicoreware/x265_git.git",
         "dir": "x265-{version}"
       },
-      "release": { "gate": "decode_skip", "src_glob": "x265-*" },
-      "bump": { "repo": "https://bitbucket.org/multicoreware/x265_git.git", "tag_filter": "*" }
+      "release": {
+        "gate": "decode_skip"
+      },
+      "bump": {
+        "repo": "https://bitbucket.org/multicoreware/x265_git.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "libvpx",
@@ -110,8 +142,13 @@
         "url": "https://github.com/webmproject/libvpx/archive/v{version}.tar.gz",
         "dir": "libvpx-{version}"
       },
-      "release": { "gate": "needs_libvpx", "src_glob": "libvpx-*" },
-      "bump": { "repo": "https://github.com/webmproject/libvpx.git", "tag_filter": "*" }
+      "release": {
+        "gate": "needs_libvpx"
+      },
+      "bump": {
+        "repo": "https://github.com/webmproject/libvpx.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "libwebp",
@@ -124,8 +161,13 @@
         "dir": "libwebp-{version}",
         "gate": "needs_libwebp"
       },
-      "release": { "gate": "needs_libwebp", "src_glob": "__alpine__" },
-      "bump": { "repo": "https://github.com/webmproject/libwebp.git", "tag_filter": "^1" }
+      "release": {
+        "gate": "needs_libwebp"
+      },
+      "bump": {
+        "repo": "https://github.com/webmproject/libwebp.git",
+        "tag_filter": "^1"
+      }
     },
     {
       "id": "openjpeg",
@@ -137,8 +179,13 @@
         "url": "https://github.com/uclouvain/openjpeg/archive/v{version}.tar.gz",
         "dir": "openjpeg-{version}"
       },
-      "release": { "gate": "needs_openjpeg", "src_glob": "openjpeg-*" },
-      "bump": { "repo": "https://github.com/uclouvain/openjpeg.git", "tag_filter": "*" }
+      "release": {
+        "gate": "needs_openjpeg"
+      },
+      "bump": {
+        "repo": "https://github.com/uclouvain/openjpeg.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "zimg",
@@ -150,8 +197,13 @@
         "url": "https://github.com/sekrit-twc/zimg/archive/release-{version}.tar.gz",
         "dir": "zimg-{version}"
       },
-      "release": { "gate": "always", "src_glob": "zimg-*" },
-      "bump": { "repo": "https://github.com/sekrit-twc/zimg.git", "tag_filter": "*" }
+      "release": {
+        "gate": "always"
+      },
+      "bump": {
+        "repo": "https://github.com/sekrit-twc/zimg.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "libvpl",
@@ -163,8 +215,13 @@
         "url": "https://github.com/intel/libvpl/archive/refs/tags/v{version}.tar.gz",
         "dir": "libvpl-{version}"
       },
-      "release": { "gate": "needs_libvpl_build", "src_glob": "libvpl-*" },
-      "bump": { "repo": "https://github.com/intel/libvpl.git", "tag_filter": "^2" }
+      "release": {
+        "gate": "needs_libvpl_build"
+      },
+      "bump": {
+        "repo": "https://github.com/intel/libvpl.git",
+        "tag_filter": "^2"
+      }
     },
     {
       "id": "xeve",
@@ -177,8 +234,13 @@
         "dir": "xeve-{version}",
         "post": "version_txt"
       },
-      "release": { "gate": "needs_modern_codecs_build", "src_glob": "xeve-*" },
-      "bump": { "repo": "https://github.com/mpeg5/xeve.git", "tag_filter": "*" }
+      "release": {
+        "gate": "needs_modern_codecs_build"
+      },
+      "bump": {
+        "repo": "https://github.com/mpeg5/xeve.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "xevd",
@@ -191,8 +253,13 @@
         "dir": "xevd-{version}",
         "post": "version_txt"
       },
-      "release": { "gate": "needs_modern_codecs_build", "src_glob": "xevd-*" },
-      "bump": { "repo": "https://github.com/mpeg5/xevd.git", "tag_filter": "*" }
+      "release": {
+        "gate": "needs_modern_codecs_build"
+      },
+      "bump": {
+        "repo": "https://github.com/mpeg5/xevd.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "vvenc",
@@ -204,8 +271,13 @@
         "url": "https://github.com/fraunhoferhhi/vvenc/archive/refs/tags/v{version}.tar.gz",
         "dir": "vvenc-{version}"
       },
-      "release": { "gate": "needs_modern_codecs_build", "src_glob": "vvenc-*" },
-      "bump": { "repo": "https://github.com/fraunhoferhhi/vvenc.git", "tag_filter": "*" }
+      "release": {
+        "gate": "needs_modern_codecs_build"
+      },
+      "bump": {
+        "repo": "https://github.com/fraunhoferhhi/vvenc.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "davs2",
@@ -217,8 +289,13 @@
         "url": "https://github.com/pkuvcl/davs2/archive/refs/tags/{version}.tar.gz",
         "dir": "davs2-{version}"
       },
-      "release": { "gate": "decode_skip", "src_glob": "davs2-*" },
-      "bump": { "repo": "https://github.com/pkuvcl/davs2.git", "tag_filter": "^1" }
+      "release": {
+        "gate": "decode_skip"
+      },
+      "bump": {
+        "repo": "https://github.com/pkuvcl/davs2.git",
+        "tag_filter": "^1"
+      }
     },
     {
       "id": "uavs3d",
@@ -232,8 +309,13 @@
         "dir": "uavs3d-{version}",
         "post": "uavs3d_commit"
       },
-      "release": { "gate": "decode_skip", "src_glob": "uavs3d-*" },
-      "bump": { "repo": "https://github.com/uavs3/uavs3d.git", "tag_filter": "*" }
+      "release": {
+        "gate": "decode_skip"
+      },
+      "bump": {
+        "repo": "https://github.com/uavs3/uavs3d.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "lame",
@@ -245,7 +327,9 @@
         "url": "https://sourceforge.net/projects/lame/files/lame/{version}/lame-{version}.tar.gz/download",
         "dir": "lame-{version}"
       },
-      "release": { "gate": "decode_skip", "src_glob": "lame-*" },
+      "release": {
+        "gate": "decode_skip"
+      },
       "bump": {
         "repo": "svn:http://svn.code.sf.net/p/lame/svn",
         "tag_filter": "/^RELEASE__(.*)$/|/_/./|*"
@@ -261,8 +345,13 @@
         "url": "https://breakfastquay.com/files/releases/rubberband-{version}.tar.bz2",
         "dir": "rubberband-{version}"
       },
-      "release": { "gate": "decode_skip", "src_glob": "rubberband-*" },
-      "bump": { "repo": "https://github.com/breakfastquay/rubberband.git", "tag_filter": "^2" }
+      "release": {
+        "gate": "decode_skip"
+      },
+      "bump": {
+        "repo": "https://github.com/breakfastquay/rubberband.git",
+        "tag_filter": "^2"
+      }
     },
     {
       "id": "libvorbis",
@@ -275,22 +364,37 @@
         "dir": "libvorbis-{version}",
         "gate": "needs_libvorbis"
       },
-      "release": { "gate": "needs_libvorbis", "src_glob": "__alpine__" },
-      "bump": { "repo": "https://github.com/xiph/vorbis.git", "tag_filter": "*" }
+      "release": {
+        "gate": "needs_libvorbis"
+      },
+      "bump": {
+        "repo": "https://github.com/xiph/vorbis.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "opus",
       "name": "opus",
       "enabled": true,
-      "fetch": { "method": "alpine", "package": "opus-dev" },
-      "release": { "gate": "always", "src_glob": "__alpine__" }
+      "fetch": {
+        "method": "alpine",
+        "package": "opus-dev"
+      },
+      "release": {
+        "gate": "always"
+      }
     },
     {
       "id": "vo-amrwbenc",
       "name": "vo-amrwbenc",
       "enabled": true,
-      "fetch": { "method": "alpine", "package": "vo-amrwbenc-dev" },
-      "release": { "gate": "decode_skip", "src_glob": "__alpine__" }
+      "fetch": {
+        "method": "alpine",
+        "package": "vo-amrwbenc-dev"
+      },
+      "release": {
+        "gate": "decode_skip"
+      }
     },
     {
       "id": "libass",
@@ -302,8 +406,13 @@
         "url": "https://github.com/libass/libass/releases/download/{version}/libass-{version}.tar.gz",
         "dir": "libass-{version}"
       },
-      "release": { "gate": "always", "src_glob": "libass-*" },
-      "bump": { "repo": "https://github.com/libass/libass.git", "tag_filter": "*" }
+      "release": {
+        "gate": "always"
+      },
+      "bump": {
+        "repo": "https://github.com/libass/libass.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "lcms2",
@@ -315,8 +424,13 @@
         "url": "https://github.com/mm2/Little-CMS/releases/download/lcms2.{version_minor}/lcms2-{version}.tar.gz",
         "dir": "lcms2-{version}"
       },
-      "release": { "gate": "always", "src_glob": "lcms2-*" },
-      "bump": { "repo": "https://github.com/mm2/Little-CMS.git", "tag_filter": "^2" }
+      "release": {
+        "gate": "always"
+      },
+      "bump": {
+        "repo": "https://github.com/mm2/Little-CMS.git",
+        "tag_filter": "^2"
+      }
     },
     {
       "id": "libmysofa",
@@ -328,8 +442,13 @@
         "url": "https://github.com/hoene/libmysofa/archive/refs/tags/v{version}.tar.gz",
         "dir": "libmysofa-{version}"
       },
-      "release": { "gate": "decode_skip", "src_glob": "libmysofa-*" },
-      "bump": { "repo": "https://github.com/hoene/libmysofa.git", "tag_filter": "^1" }
+      "release": {
+        "gate": "decode_skip"
+      },
+      "bump": {
+        "repo": "https://github.com/hoene/libmysofa.git",
+        "tag_filter": "^1"
+      }
     },
     {
       "id": "vmaf",
@@ -341,8 +460,13 @@
         "url": "https://github.com/Netflix/vmaf/archive/refs/tags/v{version}.tar.gz",
         "dir": "vmaf-{version}"
       },
-      "release": { "gate": "decode_skip", "src_glob": "vmaf-*" },
-      "bump": { "repo": "https://github.com/Netflix/vmaf.git", "tag_filter": "*" }
+      "release": {
+        "gate": "decode_skip"
+      },
+      "bump": {
+        "repo": "https://github.com/Netflix/vmaf.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "vidstab",
@@ -354,8 +478,13 @@
         "url": "https://github.com/georgmartius/vid.stab/archive/v{version}.tar.gz",
         "dir": "vid.stab-{version}"
       },
-      "release": { "gate": "decode_skip", "src_glob": "vid.stab-*" },
-      "bump": { "repo": "https://github.com/georgmartius/vid.stab.git", "tag_filter": "*" }
+      "release": {
+        "gate": "decode_skip"
+      },
+      "bump": {
+        "repo": "https://github.com/georgmartius/vid.stab.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "harfbuzz",
@@ -367,8 +496,13 @@
         "url": "https://github.com/harfbuzz/harfbuzz/releases/download/{version}/harfbuzz-{version}.tar.xz",
         "dir": "harfbuzz-{version}"
       },
-      "release": { "gate": "always", "src_glob": "__alpine__" },
-      "bump": { "repo": "https://github.com/harfbuzz/harfbuzz.git", "tag_filter": "*" }
+      "release": {
+        "gate": "always"
+      },
+      "bump": {
+        "repo": "https://github.com/harfbuzz/harfbuzz.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "cairo",
@@ -380,8 +514,13 @@
         "url": "https://cairographics.org/releases/cairo-{version}.tar.xz",
         "dir": "cairo-{version}"
       },
-      "release": { "gate": "decode_skip", "src_glob": "__alpine__" },
-      "bump": { "repo": "https://gitlab.freedesktop.org/cairo/cairo.git", "tag_filter": "^1" }
+      "release": {
+        "gate": "decode_skip"
+      },
+      "bump": {
+        "repo": "https://gitlab.freedesktop.org/cairo/cairo.git",
+        "tag_filter": "^1"
+      }
     },
     {
       "id": "pango",
@@ -393,8 +532,13 @@
         "url": "https://download.gnome.org/sources/pango/{short_version}/pango-{version}.tar.xz",
         "dir": "pango-{version}"
       },
-      "release": { "gate": "decode_skip", "src_glob": "pango-*" },
-      "bump": { "repo": "https://github.com/GNOME/pango.git", "tag_filter": "/\\d+\\.\\d+\\.\\d+/|*" }
+      "release": {
+        "gate": "decode_skip"
+      },
+      "bump": {
+        "repo": "https://github.com/GNOME/pango.git",
+        "tag_filter": "/\\d+\\.\\d+\\.\\d+/|*"
+      }
     },
     {
       "id": "libva",
@@ -406,8 +550,13 @@
         "url": "https://github.com/intel/libva/archive/refs/tags/{version}.tar.gz",
         "dir": "libva-{version}"
       },
-      "release": { "gate": "always", "src_glob": "__alpine__" },
-      "bump": { "repo": "https://github.com/intel/libva.git", "tag_filter": "^2" }
+      "release": {
+        "gate": "always"
+      },
+      "bump": {
+        "repo": "https://github.com/intel/libva.git",
+        "tag_filter": "^2"
+      }
     },
     {
       "id": "librsvg",
@@ -419,7 +568,10 @@
         "url": "https://download.gnome.org/sources/librsvg/{short_version}/librsvg-{version}.tar.xz",
         "dir": "librsvg-{version}"
       },
-      "bump": { "repo": "https://gitlab.gnome.org/GNOME/librsvg.git", "tag_filter": "^2" }
+      "bump": {
+        "repo": "https://gitlab.gnome.org/GNOME/librsvg.git",
+        "tag_filter": "^2"
+      }
     },
     {
       "id": "srt",
@@ -431,7 +583,10 @@
         "url": "https://github.com/Haivision/srt/archive/v{version}.tar.gz",
         "dir": "srt-{version}"
       },
-      "bump": { "repo": "https://github.com/Haivision/srt.git", "tag_filter": "^1" }
+      "bump": {
+        "repo": "https://github.com/Haivision/srt.git",
+        "tag_filter": "^1"
+      }
     },
     {
       "id": "libbluray",
@@ -443,7 +598,10 @@
         "url": "https://code.videolan.org/videolan/libbluray/-/archive/{version}/libbluray-{version}.tar.gz",
         "dir": "libbluray-{version}"
       },
-      "bump": { "repo": "https://code.videolan.org/videolan/libbluray.git", "tag_filter": "*" }
+      "bump": {
+        "repo": "https://code.videolan.org/videolan/libbluray.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "twolame",
@@ -455,7 +613,10 @@
         "url": "https://github.com/njh/twolame/releases/download/{version}/twolame-{version}.tar.gz",
         "dir": "twolame-{version}"
       },
-      "bump": { "repo": "https://github.com/njh/twolame.git", "tag_filter": "*" }
+      "bump": {
+        "repo": "https://github.com/njh/twolame.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "shine",
@@ -467,7 +628,10 @@
         "url": "https://github.com/toots/shine/releases/download/{version}/shine-{version}.tar.gz",
         "dir": "shine-{version}"
       },
-      "bump": { "repo": "https://github.com/toots/shine.git", "tag_filter": "*" }
+      "bump": {
+        "repo": "https://github.com/toots/shine.git",
+        "tag_filter": "*"
+      }
     },
     {
       "id": "libgsm",

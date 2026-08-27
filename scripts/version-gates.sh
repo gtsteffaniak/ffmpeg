@@ -95,10 +95,7 @@ eval_fetch_gate() {
   esac
 }
 
-# Same gate names for release-table "In decode build" (decode_only forced true).
-eval_release_gate() {
-  eval_fetch_gate "$1" "$2" "true"
-}
+# Same gate names as releaseGateInDecode() in gates.go (DECODE_ONLY=true).
 
 needs_svtav1_api_patch() {
   [ -f libavcodec/libsvtav1.c ] && \

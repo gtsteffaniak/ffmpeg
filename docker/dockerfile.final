@@ -47,7 +47,7 @@ RUN cd ffmpeg && \
 RUN FFMPEG_VERSION="$FFMPEG_VERSION" DECODE_ONLY="$DECODE_ONLY" sh /tmp/verify-native-webp.sh
 
 # Validate binaries (security checks: no dependencies, relro, pie, stack nx)
-COPY checkelf.sh /
+COPY scripts/checkelf.sh /checkelf.sh
 RUN \
   /checkelf.sh /usr/local/bin/ffmpeg && \
   /checkelf.sh /usr/local/bin/ffprobe

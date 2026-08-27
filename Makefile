@@ -11,7 +11,8 @@ IMAGE_NAME ?= ffmpeg
 TAG ?= latest
 DECODE_TAG ?= decode
 ALPINE_VERSION ?= alpine:3.22
-FFMPEG_VERSION ?= $(shell go run . read release.ffmpeg_version)
+CATALOG ?= go run -C tools/catalog .
+FFMPEG_VERSION ?= $(shell $(CATALOG) read release.ffmpeg_version)
 export FFMPEG_VERSION
 RELEASE_BODY ?= release-notes.md
 PLATFORMS ?= linux/amd64,linux/arm64
@@ -69,21 +70,21 @@ help: ## Show this help message
 
 build: ## Build full FFmpeg locally (all encoders enabled)
 	@echo "$(CYAN)Building full FFmpeg locally...$(NC)"
-	./build.sh
+	./scripts/build.sh
 
 build-local: build ## Alias for 'build' - build everything locally
 
 build-decode: ## Build decode-only version locally (no encoders)
 	@echo "$(CYAN)Building decode-only FFmpeg locally...$(NC)"
-	DECODE_ONLY=true ./build.sh
+	DECODE_ONLY=true ./scripts/build.sh
 
 build-parallel: ## Build locally using parallel mode (faster)
 	@echo "$(CYAN)Building with parallel mode...$(NC)"
-	BUILD_MODE=parallel ./build.sh
+	BUILD_MODE=parallel ./scripts/build.sh
 
 build-decode-parallel: ## Build decode-only with parallel mode
 	@echo "$(CYAN)Building decode-only with parallel mode...$(NC)"
-	DECODE_ONLY=true BUILD_MODE=parallel ./build.sh
+	DECODE_ONLY=true BUILD_MODE=parallel ./scripts/build.sh
 
 # ==================== Push to Registry ====================
 
@@ -93,7 +94,7 @@ build-push: ## Build and push final image (set PLATFORMS for multi-platform)
 		echo "$(YELLOW)Building for platforms: $(PLATFORMS)$(NC)"; \
 		echo "$(YELLOW)Note: Components will be built locally first$(NC)"; \
 	fi
-	IMAGE=$(IMAGE) PLATFORMS=$(PLATFORMS) PUSH=true ./build.sh
+	IMAGE=$(IMAGE) PLATFORMS=$(PLATFORMS) PUSH=true ./scripts/build.sh
 
 build-decode-push: ## Build and push decode-only (set IMAGE and PLATFORMS as needed)
 	@echo "$(CYAN)Building and pushing to: $(DECODE_PUSH_IMAGE)$(NC)"
@@ -101,43 +102,43 @@ build-decode-push: ## Build and push decode-only (set IMAGE and PLATFORMS as nee
 		echo "$(YELLOW)Building for platforms: $(PLATFORMS)$(NC)"; \
 		echo "$(YELLOW)Note: Components will be built locally first$(NC)"; \
 	fi
-	DECODE_ONLY=true IMAGE=$(DECODE_PUSH_IMAGE) PLATFORMS=$(PLATFORMS) PUSH=true ./build.sh
+	DECODE_ONLY=true IMAGE=$(DECODE_PUSH_IMAGE) PLATFORMS=$(PLATFORMS) PUSH=true ./scripts/build.sh
 
 # ==================== Component Builds ====================
 
 build-base: ## Build only base component
 	@echo "$(CYAN)Building base component...$(NC)"
-	COMPONENT=base ./build.sh
+	COMPONENT=base ./scripts/build.sh
 
 build-av1: ## Build only AV1 codecs component
 	@echo "$(CYAN)Building AV1 component...$(NC)"
-	COMPONENT=av1 ./build.sh
+	COMPONENT=av1 ./scripts/build.sh
 
 build-x264-x265: ## Build only x264/x265 component
 	@echo "$(CYAN)Building x264-x265 component...$(NC)"
-	COMPONENT=x264-x265 ./build.sh
+	COMPONENT=x264-x265 ./scripts/build.sh
 
 build-final: ## Build only final FFmpeg component (requires components built)
 	@echo "$(CYAN)Building final component...$(NC)"
-	COMPONENT=final ./build.sh
+	COMPONENT=final ./scripts/build.sh
 
 # ==================== Development & Maintenance ====================
 
 update: ## Update source versions in sources.json
 	@echo "$(CYAN)Updating source versions...$(NC)"
-	go run . update
+	$(CATALOG) update
 
 validate-sources: ## Validate sources.json catalog
 	@echo "$(CYAN)Validating sources.json...$(NC)"
-	go run . validate
+	$(CATALOG) validate
 
 fetch-sources: ## Fetch/download all source packages
 	@echo "$(CYAN)Fetching sources (FFMPEG_VERSION=$(FFMPEG_VERSION))...$(NC)"
-	DECODE_ONLY=$(DECODE_ONLY) FFMPEG_VERSION=$(FFMPEG_VERSION) ./fetch-sources.sh
+	DECODE_ONLY=$(DECODE_ONLY) FFMPEG_VERSION=$(FFMPEG_VERSION) ./scripts/fetch-sources.sh
 
 generate-release-body: ## Write GitHub release notes (dependency matrix) to RELEASE_BODY file
 	@echo "$(CYAN)Generating release notes (FFMPEG_VERSION=$(FFMPEG_VERSION))...$(NC)"
-	FFMPEG_VERSION=$(FFMPEG_VERSION) go run . release-body $(RELEASE_BODY)
+	FFMPEG_VERSION=$(FFMPEG_VERSION) $(CATALOG) release-body $(RELEASE_BODY)
 
 update-and-build: update fetch-sources build ## Update sources and build locally
 
@@ -169,7 +170,7 @@ test-version-gates: ## Run version-gates.sh unit checks
 
 test-helper: ## Run sources.json helper unit tests
 	@echo "$(CYAN)Testing helper CLI...$(NC)"
-	go test . -count=1
+	go test -C tools/catalog . -count=1
 
 test-fetch: ## Run fetch archive validation checks
 	@echo "$(CYAN)Testing fetch archive validation...$(NC)"
@@ -246,25 +247,25 @@ ci-build-component: ## CI: Build one component (COMPONENT=base|graphics|...|fina
 	@if [ "$(COMPONENT)" = "final" ]; then \
 		FFMPEG_VERSION=$(FFMPEG_VERSION) BUILD_MODE=$(CI_BUILD_MODE) LOAD_IMAGE=$(LOAD_IMAGE) DECODE_ONLY=$(DECODE_ONLY) \
 			PLATFORMS=$(PLATFORM) PUSH=true IMAGE=$(CI_FINAL_IMAGE) \
-			COMPONENT=final ./build.sh; \
+			COMPONENT=final ./scripts/build.sh; \
 	elif [ "$(COMPONENT)" = "windows-components" ] || [ "$(COMPONENT)" = "windows" ]; then \
-		FFMPEG_VERSION=$(FFMPEG_VERSION) BUILD_MODE=$(CI_BUILD_MODE) DECODE_ONLY=$(DECODE_ONLY) COMPONENT=$(COMPONENT) ./build.sh; \
+		FFMPEG_VERSION=$(FFMPEG_VERSION) BUILD_MODE=$(CI_BUILD_MODE) DECODE_ONLY=$(DECODE_ONLY) COMPONENT=$(COMPONENT) ./scripts/build.sh; \
 	else \
 		FFMPEG_VERSION=$(FFMPEG_VERSION) BUILD_MODE=$(CI_BUILD_MODE) LOAD_IMAGE=$(LOAD_IMAGE) DECODE_ONLY=$(DECODE_ONLY) \
-			PLATFORMS=$(PLATFORM) PUSH=false COMPONENT=$(COMPONENT) ./build.sh; \
+			PLATFORMS=$(PLATFORM) PUSH=false COMPONENT=$(COMPONENT) ./scripts/build.sh; \
 	fi
 
 ci-push-platform: ## CI: Build and push full image for a single platform (set ARCH_SUFFIX, PLATFORM)
 	@echo "$(CYAN)CI: Building full image for $(PLATFORM) -> $(REGISTRY)/$(IMAGE_NAME):$(TAG)-$(ARCH_SUFFIX)$(NC)"
 	BUILD_MODE=$(CI_BUILD_MODE) LOAD_IMAGE=$(LOAD_IMAGE) \
 		IMAGE=$(REGISTRY)/$(IMAGE_NAME):$(TAG)-$(ARCH_SUFFIX) \
-		PLATFORMS=$(PLATFORM) PUSH=true ./build.sh
+		PLATFORMS=$(PLATFORM) PUSH=true ./scripts/build.sh
 
 ci-push-platform-decode: ## CI: Build and push decode image for a single platform
 	@echo "$(CYAN)CI: Building decode image for $(PLATFORM) -> $(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode-$(ARCH_SUFFIX)$(NC)"
 	BUILD_MODE=$(CI_BUILD_MODE) LOAD_IMAGE=$(LOAD_IMAGE) DECODE_ONLY=true \
 		IMAGE=$(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode-$(ARCH_SUFFIX) \
-		PLATFORMS=$(PLATFORM) PUSH=true ./build.sh
+		PLATFORMS=$(PLATFORM) PUSH=true ./scripts/build.sh
 
 ci-merge-manifest: ## CI: Merge per-arch full images into multi-arch manifest
 	@echo "$(CYAN)CI: Merging manifest for $(REGISTRY)/$(IMAGE_NAME):$(TAG)$(NC)"

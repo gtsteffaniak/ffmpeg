@@ -51,7 +51,7 @@ func TestReleaseGateInDecode(t *testing.T) {
 }
 
 func TestLoadCatalogAndRead(t *testing.T) {
-	cat, err := loadCatalog("sources.json")
+	cat, err := loadCatalog(sourcesPath())
 	if err != nil {
 		t.Fatalf("loadCatalog: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestLoadCatalogAndRead(t *testing.T) {
 }
 
 func TestFetchScriptContainsFFmpeg(t *testing.T) {
-	cat, err := loadCatalog("sources.json")
+	cat, err := loadCatalog(sourcesPath())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestFetchScriptContainsFFmpeg(t *testing.T) {
 func TestSaveCatalogRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sources.json")
-	src, err := os.ReadFile("sources.json")
+	src, err := os.ReadFile(sourcesPath())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestDecodeBuildEmoji(t *testing.T) {
 }
 
 func TestReleaseBodyFormat(t *testing.T) {
-	cat, err := loadCatalog("sources.json")
+	cat, err := loadCatalog(sourcesPath())
 	if err != nil {
 		t.Fatal(err)
 	}
