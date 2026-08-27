@@ -146,6 +146,18 @@ func TestTrimVersionTagPrefixesLCMS(t *testing.T) {
 	}
 }
 
+func TestResolveOutputPath(t *testing.T) {
+	root := repoRoot()
+	got := resolveOutputPath("release-notes.md")
+	want := filepath.Join(root, "release-notes.md")
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if resolveOutputPath("/tmp/out.md") != "/tmp/out.md" {
+		t.Fatal("absolute path should be unchanged")
+	}
+}
+
 func TestIsNewerVersion(t *testing.T) {
 	if !isNewerVersion("1.0.0", "1.0.1") {
 		t.Fatal("expected 1.0.1 newer")

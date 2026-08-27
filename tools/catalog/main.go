@@ -273,6 +273,9 @@ func (c *ReleaseBodyCmd) Run() error {
 			continue
 		}
 		version := releaseVersionLabel(s, alpine, alpineVers)
+		if s.ID == "ffmpeg" {
+			version = ffmpegVer
+		}
 		inDecode := decodeBuildEmoji(releaseGateInDecode(s.Release.Gate, ffmpegVer))
 		b.WriteString(fmt.Sprintf("| %s | %s | %s |\n", s.Name, version, inDecode))
 	}
@@ -283,7 +286,7 @@ func (c *ReleaseBodyCmd) Run() error {
 		fmt.Print(out)
 		return nil
 	}
-	return os.WriteFile(c.Output, []byte(out), 0o644)
+	return os.WriteFile(resolveOutputPath(c.Output), []byte(out), 0o644)
 }
 
 func (c *BumpSummaryCmd) Run() error {

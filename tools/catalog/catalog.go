@@ -69,6 +69,13 @@ func sourcesPath() string {
 	return filepath.Join(repoRoot(), defaultSourcesPath)
 }
 
+func resolveOutputPath(path string) string {
+	if path == "" || path == "-" || filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(repoRoot(), path)
+}
+
 func loadCatalog(path string) (*Catalog, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
