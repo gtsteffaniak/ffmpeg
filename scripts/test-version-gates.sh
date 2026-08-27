@@ -41,19 +41,24 @@ assert "7.0 full needs modern codecs build" 0 needs_modern_codecs_build "7.0.0" 
 assert "6.1 skips modern codecs build" 1 needs_modern_codecs_build "6.1.3" "false"
 assert "7.0 decode skips modern codecs build" 1 needs_modern_codecs_build "7.0.0" "true"
 
-default_version="$("${SCRIPT_DIR}/read-ffmpeg-version.sh")"
+default_version="$(cd "${SCRIPT_DIR}/.." && go run . read release.ffmpeg_version)"
 if [ -z "$default_version" ]; then
-  echo "FAIL: read-ffmpeg-version.sh returned empty" >&2
+  echo "FAIL: go run . read release.ffmpeg_version returned empty" >&2
   exit 1
 fi
-echo "OK: read-ffmpeg-version default=${default_version}"
+echo "OK: sources.json ffmpeg version=${default_version}"
 
-override="$(FFMPEG_VERSION=8.1.2 "${SCRIPT_DIR}/read-ffmpeg-version.sh")"
+override="$(cd "${SCRIPT_DIR}/.." && FFMPEG_VERSION=8.1.2 go run . read release.ffmpeg_version)"
 if [ "$override" != "8.1.2" ]; then
-  echo "FAIL: read-ffmpeg-version env override (got ${override})" >&2
+  echo "FAIL: ffmpeg version env override (got ${override})" >&2
   exit 1
 fi
-echo "OK: read-ffmpeg-version env override"
+echo "OK: ffmpeg version env override"
+
+assert "eval_fetch_gate always" 0 eval_fetch_gate always "9.0.1" "true"
+assert "eval_release_gate decode_skip" 1 eval_release_gate decode_skip "9.0.1"
+assert "eval_release_gate needs_libwebp on 9.0" 1 eval_release_gate needs_libwebp "9.0.1"
+assert "eval_release_gate needs_libvpl_build on 6.1" 0 eval_release_gate needs_libvpl_build "6.1.3"
 
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT

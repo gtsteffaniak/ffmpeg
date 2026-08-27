@@ -16,7 +16,7 @@ IMAGE=${IMAGE:-""}  # Full image name (e.g., docker.io/user/ffmpeg:8.0)
 DECODE_ONLY=${DECODE_ONLY:-"false"}
 ALPINE_VERSION=${ALPINE_VERSION:-"alpine:3.22"}
 read_ffmpeg_version() {
-    "$(dirname "$0")/scripts/read-ffmpeg-version.sh"
+    (cd "$(dirname "$0")" && go run . read release.ffmpeg_version)
 }
 FFMPEG_VERSION="${FFMPEG_VERSION:-$(read_ffmpeg_version)}"
 export FFMPEG_VERSION

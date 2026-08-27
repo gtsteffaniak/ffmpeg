@@ -71,6 +71,35 @@ needs_modern_codecs_build() {
   [ "$decode_only" != "true" ] && ffmpeg_version_ge "$ver" "7.0.0"
 }
 
+# Evaluate a named fetch/release gate from sources.json.
+# Returns 0 when the dependency should be included.
+eval_fetch_gate() {
+  local gate=$1
+  local ffmpeg_version=$2
+  local decode_only=$3
+  case "$gate" in
+    always) return 0 ;;
+    never) return 1 ;;
+    decode_skip) [ "$decode_only" != "true" ] ;;
+    needs_libwebp) needs_libwebp "$ffmpeg_version" "$decode_only" ;;
+    needs_libvorbis) needs_libvorbis "$ffmpeg_version" "$decode_only" ;;
+    needs_libvpx) needs_libvpx "$ffmpeg_version" "$decode_only" ;;
+    needs_openjpeg) needs_openjpeg "$ffmpeg_version" "$decode_only" ;;
+    needs_libaom) needs_libaom "$ffmpeg_version" "$decode_only" ;;
+    needs_libvpl_build) needs_libvpl_build "$ffmpeg_version" ;;
+    needs_modern_codecs_build) needs_modern_codecs_build "$ffmpeg_version" "$decode_only" ;;
+    *)
+      echo "Unknown fetch gate: $gate" >&2
+      return 1
+      ;;
+  esac
+}
+
+# Same gate names for release-table "In decode build" (decode_only forced true).
+eval_release_gate() {
+  eval_fetch_gate "$1" "$2" "true"
+}
+
 needs_svtav1_api_patch() {
   [ -f libavcodec/libsvtav1.c ] && \
     grep -q 'svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc,' libavcodec/libsvtav1.c

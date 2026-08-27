@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gtsteffaniak/ffmpeg/sources.schema.json",
+  "title": "FFmpeg dependency sources catalog",
+  "type": "object",
+  "required": ["release", "build", "sources"],
+  "additionalProperties": false,
+  "properties": {
+    "release": {
+      "type": "object",
+      "required": ["ffmpeg_version", "mark_github_latest"],
+      "additionalProperties": false,
+      "properties": {
+        "ffmpeg_version": { "type": "string", "minLength": 1 },
+        "mark_github_latest": { "type": "boolean" }
+      }
+    },
+    "build": {
+      "type": "object",
+      "required": ["alpine_image"],
+      "additionalProperties": false,
+      "properties": {
+        "alpine_image": { "type": "string", "minLength": 1 },
+        "apk_repository": { "type": "string", "minLength": 1 }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/source" }
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "required": ["id", "name", "enabled"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "enabled": { "type": "boolean" },
+        "version": { "type": "string" },
+        "commit": { "type": "string" },
+        "fetch": { "$ref": "#/$defs/fetch" },
+        "release": { "$ref": "#/$defs/releaseMeta" },
+        "bump": { "$ref": "#/$defs/bump" }
+      }
+    },
+    "fetch": {
+      "type": "object",
+      "required": ["method"],
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["archive", "git_tag", "git_commit", "custom", "alpine"]
+        },
+        "url": { "type": "string" },
+        "dir": { "type": "string" },
+        "gate": { "type": "string" },
+        "post": {
+          "type": "string",
+          "enum": ["version_txt", "aom_verify", "uavs3d_commit"]
+        },
+        "sha256": { "type": "string" },
+        "package": { "type": "string", "minLength": 1 }
+      }
+    },
+    "releaseMeta": {
+      "type": "object",
+      "required": ["gate"],
+      "additionalProperties": false,
+      "properties": {
+        "gate": { "type": "string", "minLength": 1 },
+        "src_glob": { "type": "string" }
+      }
+    },
+    "bump": {
+      "type": "object",
+      "required": ["repo"],
+      "additionalProperties": false,
+      "properties": {
+        "repo": { "type": "string", "minLength": 1 },
+        "tag_filter": { "type": "string" },
+        "method": { "type": "string", "enum": ["tag", "commit"] },
+        "branch": { "type": "string" }
+      }
+    }
+  }
+}

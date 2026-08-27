@@ -1,506 +1,329 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"net/url"
 	"os"
-	"os/exec"
+	"path/filepath"
 	"regexp"
-	"sort"
-	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/alecthomas/kong"
 )
 
 var cli struct {
-	Update UpdateCmd `cmd:"" help:"Check for new dependency versions and update fetch-sources.sh."`
+	Validate     ValidateCmd     `cmd:"" help:"Validate sources.json (schema, consistency, Dockerfile ARG drift)."`
+	Read         ReadCmd         `cmd:"" help:"Read a dotted path from sources.json (e.g. release.ffmpeg_version)."`
+	Update       UpdateCmd       `cmd:"" help:"Check for new dependency versions and update sources.json."`
+	FetchScript  FetchScriptCmd  `cmd:"" help:"Emit bash fetch commands for sources.json."`
+	ReleaseBody  ReleaseBodyCmd  `cmd:"" help:"Write GitHub release notes (dependency matrix)."`
+	BumpSummary  BumpSummaryCmd  `cmd:"" help:"Summarize sources.json changes vs HEAD for bump PRs."`
+}
+
+type ValidateCmd struct{}
+
+type ReadCmd struct {
+	Path string `arg:"" name:"path" help:"Dotted path (release.ffmpeg_version, release.mark_github_latest, build.alpine_image)."`
 }
 
 type UpdateCmd struct {
-	DryRun bool `help:"Show what would be updated without applying any changes."`
+	DryRun bool `help:"Show what would be updated without writing."`
 }
 
-func (u *UpdateCmd) Run() error {
-	log.Println("Starting version check for", fetchScriptPath)
+type FetchScriptCmd struct{}
 
-	fileContent, err := os.ReadFile(fetchScriptPath)
-	if err != nil {
-		log.Fatalf("Failed to read %s: %v", fetchScriptPath, err)
-	}
-
-	libraries := parseLibraries(string(fileContent))
-
-	var wg sync.WaitGroup
-	for i := range libraries {
-		wg.Add(1)
-		go func(lib *Library) {
-			defer wg.Done()
-			getLatestVersion(lib)
-		}(&libraries[i])
-	}
-	wg.Wait()
-
-	// Update the script file with new versions
-	updatesFound := false
-	newContent := string(fileContent)
-	for _, lib := range libraries {
-		if lib.LatestVersion != "" && lib.CurrentVersion != "" && lib.LatestVersion != lib.CurrentVersion {
-			// Only update if it's actually a newer version
-			if isNewerVersion(lib.CurrentVersion, lib.LatestVersion) {
-				updatesFound = true
-				log.Printf("New version for %s: %s -> %s", lib.Name, lib.CurrentVersion, lib.LatestVersion)
-
-				oldLine := fmt.Sprintf(`: "${%s:=%s}"`, lib.VarName, lib.CurrentVersion)
-				newLine := fmt.Sprintf(`: "${%s:=%s}"`, lib.VarName, lib.LatestVersion)
-				newContent = strings.Replace(newContent, oldLine, newLine, 1)
-			}
-		}
-	}
-
-	if updatesFound {
-		if u.DryRun {
-			log.Println("Dry run enabled. No changes will be written.")
-			return nil
-		}
-		// Create a backup
-		if err := os.Rename(fetchScriptPath, fetchScriptPath+".bak"); err != nil {
-			log.Fatalf("Failed to create backup: %v", err)
-		}
-		// Write the updated content
-		if err := os.WriteFile(fetchScriptPath, []byte(newContent), 0755); err != nil {
-			log.Fatalf("Failed to write updated script: %v", err)
-		}
-		log.Println("Successfully updated", fetchScriptPath)
-	} else {
-		log.Println("All libraries are up to date.")
-	}
-
-	log.Println("Version check finished.")
-	return nil
+type ReleaseBodyCmd struct {
+	Output string `arg:"" optional:"" name:"file" help:"Output file (default stdout)."`
 }
 
-const fetchScriptPath = "fetch-sources.sh"
-
-type Library struct {
-	Name           string
-	VersionRegex   string
-	URL            string
-	Filter         string
-	VarNameBase    string
-	VarName        string
-	CurrentVersion string
-	LatestVersion  string
-	IsCommitBased  bool
-}
-
-type SemanticVersion struct {
-	Major int
-	Minor int
-	Patch int
-	Tag   string
-}
-
-// isNumericVersion checks if a tag represents a numeric version (x.y or x.y.z format)
-func isNumericVersion(tag string) bool {
-	// Remove common prefixes (v, n, release-, lcms)
-	cleanTag := strings.TrimPrefix(tag, "v")
-	cleanTag = strings.TrimPrefix(cleanTag, "n")
-	cleanTag = strings.TrimPrefix(cleanTag, "release-")
-	cleanTag = strings.TrimPrefix(cleanTag, "lcms")
-	cleanTag = strings.TrimPrefix(cleanTag, "lcms2.")
-
-	// Handle PANGO_X_Y_Z format
-	if strings.HasPrefix(tag, "PANGO_") {
-		// Convert PANGO_1_23_0 to 1.23.0
-		pangoRegex := regexp.MustCompile(`^PANGO_(\d+)_(\d+)_(\d+)$`)
-		if pangoRegex.MatchString(tag) {
-			return true
-		}
-		// Convert PANGO_1_23 to 1.23
-		pangoRegex2 := regexp.MustCompile(`^PANGO_(\d+)_(\d+)$`)
-		if pangoRegex2.MatchString(tag) {
-			return true
-		}
-		return false
-	}
-
-	// Skip development tags and rc versions
-	if strings.Contains(cleanTag, "dev") || strings.Contains(cleanTag, "rc") || strings.Contains(cleanTag, "alpha") || strings.Contains(cleanTag, "Alpha") {
-		return false
-	}
-
-	// Skip year-based versions (2022.x, 2023.x, 2024.x, etc.) for libraries that switched versioning schemes
-	yearBasedRegex := regexp.MustCompile(`^20\d{2}\.`)
-	if yearBasedRegex.MatchString(cleanTag) {
-		return false
-	}
-
-	// Match numeric version pattern: x.y or x.y.z (no suffixes allowed)
-	numVerRegex := regexp.MustCompile(`^(\d+)\.(\d+)(\.(\d+))?$`)
-	return numVerRegex.MatchString(cleanTag)
-}
-
-// stripPrefixes removes common version prefixes and returns clean numeric version
-func stripPrefixes(tag string) string {
-	// Handle PANGO_X_Y_Z format
-	if strings.HasPrefix(tag, "PANGO_") {
-		// Convert PANGO_1_23_0 to 1.23.0
-		pangoRegex := regexp.MustCompile(`^PANGO_(\d+)_(\d+)_(\d+)$`)
-		matches := pangoRegex.FindStringSubmatch(tag)
-		if len(matches) == 4 {
-			return fmt.Sprintf("%s.%s.%s", matches[1], matches[2], matches[3])
-		}
-		// Convert PANGO_1_23 to 1.23
-		pangoRegex2 := regexp.MustCompile(`^PANGO_(\d+)_(\d+)$`)
-		matches2 := pangoRegex2.FindStringSubmatch(tag)
-		if len(matches2) == 3 {
-			return fmt.Sprintf("%s.%s", matches2[1], matches2[2])
-		}
-	}
-
-	cleanTag := strings.TrimPrefix(tag, "v")
-	cleanTag = strings.TrimPrefix(cleanTag, "n")
-	cleanTag = strings.TrimPrefix(cleanTag, "release-")
-	cleanTag = strings.TrimPrefix(cleanTag, "lcms")
-	cleanTag = strings.TrimPrefix(cleanTag, "lcms2.")
-	return cleanTag
-}
-
-// parseSemanticVersion parses a semantic version tag into components
-func parseSemanticVersion(tag string) (SemanticVersion, error) {
-	cleanTag := tag
-
-	// Handle PANGO_X_Y_Z format
-	if strings.HasPrefix(tag, "PANGO_") {
-		// Convert PANGO_1_23_0 to 1.23.0
-		pangoRegex := regexp.MustCompile(`^PANGO_(\d+)_(\d+)_(\d+)$`)
-		matches := pangoRegex.FindStringSubmatch(tag)
-		if len(matches) == 4 {
-			cleanTag = fmt.Sprintf("%s.%s.%s", matches[1], matches[2], matches[3])
-		} else {
-			// Convert PANGO_1_23 to 1.23
-			pangoRegex2 := regexp.MustCompile(`^PANGO_(\d+)_(\d+)$`)
-			matches2 := pangoRegex2.FindStringSubmatch(tag)
-			if len(matches2) == 3 {
-				cleanTag = fmt.Sprintf("%s.%s", matches2[1], matches2[2])
-			}
-		}
-	} else {
-		cleanTag = strings.TrimPrefix(cleanTag, "v")
-		cleanTag = strings.TrimPrefix(cleanTag, "n")
-		cleanTag = strings.TrimPrefix(cleanTag, "release-")
-		cleanTag = strings.TrimPrefix(cleanTag, "lcms")
-		cleanTag = strings.TrimPrefix(cleanTag, "lcms2.")
-	}
-
-	// Match semantic version pattern: x.y.z or x.y (optionally with suffixes like -beta, -rc1, etc)
-	semVerRegex := regexp.MustCompile(`^(\d+)\.(\d+)(\.(\d+))?(-.*)?$`)
-	matches := semVerRegex.FindStringSubmatch(cleanTag)
-	if len(matches) < 3 {
-		return SemanticVersion{}, fmt.Errorf("invalid semantic version: %s", tag)
-	}
-
-	major, _ := strconv.Atoi(matches[1])
-	minor, _ := strconv.Atoi(matches[2])
-	patch := 0
-	if matches[4] != "" {
-		patch, _ = strconv.Atoi(matches[4])
-	}
-
-	return SemanticVersion{
-		Major: major,
-		Minor: minor,
-		Patch: patch,
-		Tag:   tag,
-	}, nil
-}
-
-// compareSemanticVersions compares two semantic versions. Returns:
-// -1 if a < b, 0 if a == b, 1 if a > b
-func compareSemanticVersions(a, b SemanticVersion) int {
-	if a.Major != b.Major {
-		if a.Major > b.Major {
-			return 1
-		}
-		return -1
-	}
-	if a.Minor != b.Minor {
-		if a.Minor > b.Minor {
-			return 1
-		}
-		return -1
-	}
-	if a.Patch != b.Patch {
-		if a.Patch > b.Patch {
-			return 1
-		}
-		return -1
-	}
-	return 0
-}
-
-// getLatestNumericVersion filters and sorts tags to find the latest numeric version
-func getLatestNumericVersion(tags []string) (string, error) {
-	var numericVersions []SemanticVersion
-
-	for _, tag := range tags {
-		if isNumericVersion(tag) {
-			semVer, err := parseSemanticVersion(tag)
-			if err == nil {
-				numericVersions = append(numericVersions, semVer)
-			}
-		}
-	}
-
-	if len(numericVersions) == 0 {
-		return "", fmt.Errorf("no numeric version tags found")
-	}
-
-	// Sort by semantic version (latest first)
-	sort.Slice(numericVersions, func(i, j int) bool {
-		return compareSemanticVersions(numericVersions[i], numericVersions[j]) > 0
-	})
-
-	// Return the original tag without prefix modifications
-	return stripPrefixes(numericVersions[0].Tag), nil
-}
-
-// getLatestNumericVersionForLCMS2 handles lcms2's special tag format
-func getLatestNumericVersionForLCMS2(tags []string) (string, error) {
-	var numericVersions []SemanticVersion
-
-	for _, tag := range tags {
-		// Look for tags like "lcms2.17" or clean versions like "2.17"
-		if strings.HasPrefix(tag, "lcms2.") || isNumericVersion(tag) {
-			semVer, err := parseSemanticVersion(tag)
-			if err == nil {
-				numericVersions = append(numericVersions, semVer)
-			}
-		}
-	}
-
-	if len(numericVersions) == 0 {
-		return "", fmt.Errorf("no numeric version tags found")
-	}
-
-	// Sort by semantic version (latest first)
-	sort.Slice(numericVersions, func(i, j int) bool {
-		return compareSemanticVersions(numericVersions[i], numericVersions[j]) > 0
-	})
-
-	// Return numeric version (e.g. 2.19.1); fetch-sources.sh uses LCMS2_VERSION without prefix
-	latest := numericVersions[0]
-	return stripPrefixes(latest.Tag), nil
-}
-
-// isNewerVersion checks if newVersion is newer than currentVersion
-func isNewerVersion(currentVersion, newVersion string) bool {
-	// Handle original tag formats (with prefixes)
-	currentSemVer, err1 := parseSemanticVersion(currentVersion)
-	newSemVer, err2 := parseSemanticVersion(newVersion)
-
-	if err1 != nil || err2 != nil {
-		// If we can't parse as versions, do string comparison
-		return newVersion != currentVersion
-	}
-
-	return compareSemanticVersions(newSemVer, currentSemVer) > 0
-}
+type BumpSummaryCmd struct{}
 
 func main() {
-	ctx := kong.Parse(&cli)
+	ctx := kong.Parse(&cli,
+		kong.Name("helper"),
+		kong.Description("FFmpeg sources.json catalog tool"),
+	)
 	err := ctx.Run()
 	ctx.FatalIfErrorf(err)
 }
 
-func getLatestVersion(lib *Library) {
-	var err error
-
-	if strings.Contains(lib.URL, "github.com") {
-		lib.LatestVersion, err = getLatestGitHubTag(lib.URL)
-	} else if strings.Contains(lib.URL, "gitlab.com") || strings.Contains(lib.URL, "gitlab.gnome.org") {
-		lib.LatestVersion, err = getLatestGitLabTag(lib.URL)
-	} else if strings.HasPrefix(lib.URL, "gitrefs:") {
-		branchRegex := regexp.MustCompile(`re:#^refs/heads/(.*)\$#`)
-		matches := branchRegex.FindStringSubmatch(lib.Filter)
-		if len(matches) > 1 {
-			branch := matches[1]
-			lib.LatestVersion, err = getLatestGitCommit(lib.URL, branch)
+func (c *ValidateCmd) Run() error {
+	path := sourcesPath()
+	cat, err := loadCatalog(path)
+	if err != nil {
+		return err
+	}
+	var errs []string
+	if cat.Release.FFmpegVersion == "" {
+		errs = append(errs, "release.ffmpeg_version is empty")
+	}
+	if cat.Build.AlpineImage == "" {
+		errs = append(errs, "build.alpine_image is empty")
+	}
+	ffmpeg := findSource(cat, "ffmpeg")
+	if ffmpeg == nil {
+		errs = append(errs, "sources missing id=ffmpeg")
+	} else if ffmpeg.Version != "" && ffmpeg.Version != cat.Release.FFmpegVersion {
+		errs = append(errs, fmt.Sprintf("release.ffmpeg_version (%s) != sources[ffmpeg].version (%s)",
+			cat.Release.FFmpegVersion, ffmpeg.Version))
+	}
+	seen := map[string]bool{}
+	for i, s := range cat.Sources {
+		if s.ID == "" {
+			errs = append(errs, fmt.Sprintf("sources[%d]: missing id", i))
+			continue
 		}
-	} else {
-		// log.Printf("Skipping unsupported URL for %s: %s", lib.Name, lib.URL)
-	}
-
-	if err != nil {
-		log.Printf("Failed to get latest version for %s: %v", lib.Name, err)
-	}
-}
-
-func getLatestGitHubTag(repoURL string) (string, error) {
-	re := regexp.MustCompile(`github\.com/([^/]+)/(.+)`)
-	matches := re.FindStringSubmatch(repoURL)
-	if len(matches) < 3 {
-		return "", fmt.Errorf("invalid github URL: %s", repoURL)
-	}
-	owner, repo := matches[1], strings.TrimSuffix(matches[2], ".git")
-
-	token := os.Getenv("GITHUB_TOKEN")
-	if token == "" {
-		token = os.Getenv("PAT")
-	}
-	if token == "" {
-		return "", fmt.Errorf("GITHUB_TOKEN not set")
-	}
-	client := &http.Client{}
-
-	// Get all tags instead of just the latest release
-	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/tags?per_page=100", owner, repo)
-	req, err := http.NewRequest("GET", apiURL, nil)
-	if err != nil {
-		return "", err
-	}
-	if token != "" {
-		req.Header.Set("Authorization", "token "+token)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	var tags []struct {
-		Name string `json:"name"`
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read tags response for %s: %v", repoURL, err)
-	}
-	if err := json.Unmarshal(body, &tags); err != nil || len(tags) == 0 {
-		return "", fmt.Errorf("failed to decode tags or no tags found for %s. Body: %s", repoURL, string(body))
-	}
-
-	// Extract tag names and filter for numeric versions
-	var tagNames []string
-	for _, tag := range tags {
-		tagNames = append(tagNames, tag.Name)
-	}
-
-	// Special handling for lcms2 tags (lcms2.X.Y.Z on GitHub)
-	if repo == "Little-CMS" {
-		return getLatestNumericVersionForLCMS2(tagNames)
-	}
-
-	return getLatestNumericVersion(tagNames)
-}
-
-func getLatestGitLabTag(repoURL string) (string, error) {
-	re := regexp.MustCompile(`gitlab(?:\.gnome)?\.org/(.+)`)
-	matches := re.FindStringSubmatch(repoURL)
-	if len(matches) < 2 {
-		return "", fmt.Errorf("invalid gitlab URL: %s", repoURL)
-	}
-
-	baseAPI := "https://gitlab.com"
-	if strings.Contains(repoURL, "gitlab.gnome.org") {
-		baseAPI = "https://gitlab.gnome.org"
-	}
-
-	project := url.PathEscape(strings.TrimSuffix(matches[1], ".git"))
-
-	apiURL := fmt.Sprintf("%s/api/v4/projects/%s/repository/tags", baseAPI, project)
-	resp, err := http.Get(apiURL)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	var tags []struct {
-		Name string `json:"name"`
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read tags response for %s: %v", repoURL, err)
-	}
-	if err := json.Unmarshal(body, &tags); err != nil || len(tags) == 0 {
-		return "", fmt.Errorf("failed to decode tags or no tags found for %s. Body: %s", repoURL, string(body))
-	}
-
-	// Extract tag names and filter for numeric versions
-	var tagNames []string
-	for _, tag := range tags {
-		tagNames = append(tagNames, tag.Name)
-	}
-
-	return getLatestNumericVersion(tagNames)
-}
-
-func getLatestGitCommit(repoURL, branch string) (string, error) {
-	repoURL = strings.TrimPrefix(repoURL, "gitrefs:")
-	cmd := exec.Command("git", "ls-remote", repoURL, "refs/heads/"+branch)
-	out, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	fields := strings.Fields(string(out))
-	if len(fields) > 0 {
-		return fields[0], nil
-	}
-	return "", fmt.Errorf("no commit found for %s on branch %s", repoURL, branch)
-}
-
-func parseLibraries(content string) []Library {
-	var libs []Library
-	bumpRegex := regexp.MustCompile(`^# bump: (\S+)\s+(\S+)\s+(\S+.*)`)
-
-	scanner := bufio.NewScanner(strings.NewReader(content))
-	for scanner.Scan() {
-		line := scanner.Text()
-		if matches := bumpRegex.FindStringSubmatch(line); len(matches) > 0 {
-			// Skip "after" and "link" lines
-			if matches[2] == "after" || matches[2] == "link" {
-				continue
+		if seen[s.ID] {
+			errs = append(errs, fmt.Sprintf("duplicate source id: %s", s.ID))
+		}
+		seen[s.ID] = true
+		if !s.Enabled {
+			continue
+		}
+		if s.Fetch == nil {
+			errs = append(errs, fmt.Sprintf("%s: enabled but missing fetch", s.ID))
+			continue
+		}
+		switch s.Fetch.Method {
+		case "archive", "git_tag", "git_commit", "custom":
+			if s.Fetch.URL == "" {
+				errs = append(errs, fmt.Sprintf("%s: fetch.url required for method %s", s.ID, s.Fetch.Method))
 			}
-
-			lib := Library{
-				Name:         matches[1],
-				VersionRegex: matches[2],
+			if s.Fetch.Method != "custom" && s.Version == "" && s.Commit == "" {
+				errs = append(errs, fmt.Sprintf("%s: version or commit required", s.ID))
 			}
-
-			urlAndFilter := strings.Split(matches[3], "|")
-			lib.URL = urlAndFilter[0]
-			if len(urlAndFilter) > 1 {
-				lib.Filter = strings.Join(urlAndFilter[1:], "|")
+		case "alpine":
+			if s.Fetch.Package == "" {
+				errs = append(errs, fmt.Sprintf("%s: fetch.package required for alpine fetch", s.ID))
 			}
-
-			lib.IsCommitBased = strings.Contains(lib.Filter, "@commit")
-
-			// Extract VarNameBase and set VarName
-			varNameRegex := regexp.MustCompile(`/([A-Z0-9]+)_(VERSION|COMMIT)`)
-			if varNameMatches := varNameRegex.FindStringSubmatch(lib.VersionRegex); len(varNameMatches) > 2 {
-				lib.VarNameBase = varNameMatches[1]
-				if lib.IsCommitBased {
-					lib.VarName = lib.VarNameBase + "_COMMIT"
-				} else {
-					lib.VarName = lib.VarNameBase + "_VERSION"
-				}
-			}
-
-			// Extract current version
-			versionLineRegex := regexp.MustCompile(fmt.Sprintf(`: "\${%s:=(.*)}"`, lib.VarName))
-			if versionMatches := versionLineRegex.FindStringSubmatch(content); len(versionMatches) > 1 {
-				lib.CurrentVersion = versionMatches[1]
-			}
-
-			libs = append(libs, lib)
+		default:
+			errs = append(errs, fmt.Sprintf("%s: unknown fetch.method %q", s.ID, s.Fetch.Method))
+		}
+		if s.Release != nil && s.Release.Gate == "" {
+			errs = append(errs, fmt.Sprintf("%s: release.gate required when release is set", s.ID))
 		}
 	}
-	return libs
+	argRe := regexp.MustCompile(`(?m)^ARG FFMPEG_VERSION=(.+)$`)
+	for _, df := range dockerfilePaths() {
+		data, err := os.ReadFile(df)
+		if err != nil {
+			continue
+		}
+		m := argRe.FindSubmatch(data)
+		if m == nil {
+			continue
+		}
+		argVer := strings.TrimSpace(string(m[1]))
+		if argVer != cat.Release.FFmpegVersion {
+			rel, _ := filepath.Rel(repoRoot(), df)
+			errs = append(errs, fmt.Sprintf("%s ARG FFMPEG_VERSION=%s drifts from sources.json %s",
+				rel, argVer, cat.Release.FFmpegVersion))
+		}
+	}
+	if len(errs) > 0 {
+		for _, e := range errs {
+			fmt.Fprintln(os.Stderr, "ERROR:", e)
+		}
+		return fmt.Errorf("validate failed with %d error(s)", len(errs))
+	}
+	if _, err := resolveAlpinePackages(cat); err != nil {
+		fmt.Fprintln(os.Stderr, "ERROR:", err)
+		return fmt.Errorf("validate failed: alpine package resolution")
+	}
+	fmt.Println("OK:", path)
+	return nil
+}
+
+func (c *ReadCmd) Run() error {
+	cat, err := loadCatalog(sourcesPath())
+	if err != nil {
+		return err
+	}
+	switch c.Path {
+	case "release.ffmpeg_version":
+		fmt.Print(resolveFFmpegVersion(cat))
+	case "release.mark_github_latest":
+		if cat.Release.MarkGitHubLatest {
+			fmt.Print("true")
+		} else {
+			fmt.Print("false")
+		}
+	case "build.alpine_image":
+		fmt.Print(cat.Build.AlpineImage)
+	default:
+		return fmt.Errorf("unknown path %q (supported: release.ffmpeg_version, release.mark_github_latest, build.alpine_image)", c.Path)
+	}
+	return nil
+}
+
+func (c *FetchScriptCmd) Run() error {
+	cat, err := loadCatalog(sourcesPath())
+	if err != nil {
+		return err
+	}
+	ffmpegVer := resolveFFmpegVersion(cat)
+	var b strings.Builder
+	b.WriteString("# Generated by: go run . fetch-script\n")
+	b.WriteString(fmt.Sprintf(": \"${FFMPEG_VERSION:=%s}\"\n", ffmpegVer))
+	b.WriteString(": \"${DECODE_ONLY:=false}\"\n\n")
+
+	for _, s := range cat.Sources {
+		if !s.Enabled || s.Fetch == nil || s.Fetch.Method == "alpine" {
+			continue
+		}
+		url := expandTemplate(s.Fetch.URL, s.Version, s.Commit)
+		dir := expandTemplate(s.Fetch.Dir, s.Version, s.Commit)
+		b.WriteString(fmt.Sprintf("# --- %s ---\n", s.ID))
+		gated := s.Fetch.Gate != ""
+		indent := ""
+		if gated {
+			b.WriteString(fmt.Sprintf("if eval_fetch_gate %s \"$FFMPEG_VERSION\" \"$DECODE_ONLY\"; then\n", shellQuote(s.Fetch.Gate)))
+			indent = "  "
+		}
+		switch s.Fetch.Method {
+		case "archive":
+			name := archiveName(s, dir)
+			b.WriteString(fmt.Sprintf("%sfetch_values_archive %s %s %s\n",
+				indent, shellQuote(name), shellQuote(s.Version), shellQuote(url)))
+		case "git_tag":
+			name := strings.TrimSuffix(dir, "-"+s.Version)
+			if name == dir {
+				name = s.ID
+			}
+			b.WriteString(fmt.Sprintf("%sfetch_values_git_tag %s %s %s\n",
+				indent, shellQuote(name), shellQuote(s.Version), shellQuote(url)))
+		case "git_commit":
+			name := s.Fetch.Dir
+			if name == "" {
+				name = s.ID
+			}
+			b.WriteString(fmt.Sprintf("%sfetch_values_git_commit %s %s %s\n",
+				indent, shellQuote(name), shellQuote(url), shellQuote(s.Commit)))
+		case "custom":
+			switch s.Fetch.Post {
+			case "aom_verify":
+				b.WriteString(fmt.Sprintf("%sfetch_aom %s %s %s\n",
+					indent, shellQuote(url), shellQuote(s.Version), shellQuote(s.Commit)))
+			case "uavs3d_commit":
+				b.WriteString(fmt.Sprintf("%sfetch_uavs3d %s %s %s\n",
+					indent, shellQuote(url), shellQuote(s.Version), shellQuote(s.Commit)))
+			default:
+				return fmt.Errorf("%s: unsupported custom post %q", s.ID, s.Fetch.Post)
+			}
+		}
+		if s.Fetch.Post == "version_txt" {
+			b.WriteString(fmt.Sprintf("%swrite_version_txt %s %s\n",
+				indent, shellQuote(dir), shellQuote(s.Version)))
+		}
+		if gated {
+			b.WriteString(fmt.Sprintf("else\n  echo \"Skipping %s (gate %s)\"\nfi\n", s.ID, s.Fetch.Gate))
+		}
+		b.WriteString("\n")
+	}
+	fmt.Print(b.String())
+	return nil
+}
+
+func archiveName(s Source, dir string) string {
+	// fetch_values_archive builds dir as name-version; derive name from dir template.
+	suffix := "-" + s.Version
+	if strings.HasSuffix(dir, suffix) {
+		return strings.TrimSuffix(dir, suffix)
+	}
+	return s.ID
+}
+
+func (c *ReleaseBodyCmd) Run() error {
+	cat, err := loadCatalog(sourcesPath())
+	if err != nil {
+		return err
+	}
+	ffmpegVer := resolveFFmpegVersion(cat)
+	alpine := cat.Build.AlpineImage
+	alpineVers, err := resolveAlpinePackages(cat)
+	if err != nil {
+		return err
+	}
+
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("Static FFmpeg build **%s** — dependency versions.\n\n", ffmpegVer))
+	b.WriteString("| Component | Version | In decode build |\n")
+	b.WriteString("| --- | --- | --- |\n")
+
+	for _, s := range cat.Sources {
+		if s.Release == nil {
+			continue
+		}
+		version := releaseVersionLabel(s, alpine, alpineVers)
+		inDecode := decodeBuildEmoji(releaseGateInDecode(s.Release.Gate, ffmpegVer))
+		b.WriteString(fmt.Sprintf("| %s | %s | %s |\n", s.Name, version, inDecode))
+	}
+	b.WriteString("\n**In decode build** reflects the decode-only image (`DECODE_ONLY=true`): encode-only libraries and wrappers omitted where FFmpeg provides native decoders.\n")
+
+	out := b.String()
+	if c.Output == "" || c.Output == "-" {
+		fmt.Print(out)
+		return nil
+	}
+	return os.WriteFile(c.Output, []byte(out), 0o644)
+}
+
+func (c *BumpSummaryCmd) Run() error {
+	// Diff current sources.json against git HEAD version.
+	out, err := runGit(".", "show", "HEAD:"+defaultSourcesPath)
+	if err != nil {
+		fmt.Println("Unable to read HEAD sources.json (new file?).")
+		return nil
+	}
+	var old Catalog
+	if err := jsonUnmarshal([]byte(out), &old); err != nil {
+		return err
+	}
+	cur, err := loadCatalog(sourcesPath())
+	if err != nil {
+		return err
+	}
+	oldMap := map[string]Source{}
+	for _, s := range old.Sources {
+		oldMap[s.ID] = s
+	}
+	var lines []string
+	if old.Release.FFmpegVersion != cur.Release.FFmpegVersion {
+		lines = append(lines, fmt.Sprintf("- FFmpeg: %s → %s", old.Release.FFmpegVersion, cur.Release.FFmpegVersion))
+	}
+	for _, s := range cur.Sources {
+		o, ok := oldMap[s.ID]
+		if !ok {
+			lines = append(lines, fmt.Sprintf("- %s: added", s.Name))
+			continue
+		}
+		if s.Version != o.Version && s.Version != "" {
+			lines = append(lines, fmt.Sprintf("- %s: %s → %s", s.Name, o.Version, s.Version))
+		}
+		if s.Commit != o.Commit && s.Commit != "" {
+			lines = append(lines, fmt.Sprintf("- %s commit: %s → %s", s.Name, shortCommit(o.Commit), shortCommit(s.Commit)))
+		}
+	}
+	if len(lines) == 0 {
+		fmt.Println("No version changes.")
+		return nil
+	}
+	for _, l := range lines {
+		fmt.Println(l)
+	}
+	return nil
+}
+
+func shortCommit(c string) string {
+	if len(c) > 12 {
+		return c[:12]
+	}
+	if c == "" {
+		return "—"
+	}
+	return c
+}
+
+func jsonUnmarshal(data []byte, v any) error {
+	return json.Unmarshal(data, v)
 }

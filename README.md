@@ -437,15 +437,29 @@ make build-final
 
 Build behavior is controlled by `FFMPEG_VERSION` and `DECODE_ONLY`. Gating logic lives in [`scripts/version-gates.sh`](scripts/version-gates.sh).
 
+**Dependency catalog:** all versions, bump remotes, fetch methods, and the GitHub release matrix live in [`sources.json`](sources.json). The helper CLI is the single reader:
+
+```bash
+go run . validate
+go run . read release.ffmpeg_version
+go run . update                 # weekly bumps (also: make update)
+go run . fetch-script           # used by fetch-sources.sh
+go run . release-body out.md    # GitHub release notes (no fetch-sources needed)
+```
+
+Release notes are generated from `sources.json` only. Alpine packages (`rav1e`, `opus`, `vo-amrwbenc`) resolve their APK version from the Alpine release matching `build.alpine_image` (main + community, plus optional `build.apk_repository`). The decode column uses ✅/❌.
+
 **Version resolution** (same everywhere):
 
 | Context | How `FFMPEG_VERSION` is chosen |
 |---|---|
-| Default | [`fetch-sources.sh`](fetch-sources.sh) `FFMPEG_VERSION:=…` line |
+| Default | [`sources.json`](sources.json) `release.ffmpeg_version` |
 | Override | `FFMPEG_VERSION=9.0.1` env (local builds, release CI) |
-| Reader | [`scripts/read-ffmpeg-version.sh`](scripts/read-ffmpeg-version.sh) — env first, else `fetch-sources.sh` |
+| Reader | `go run . read release.ffmpeg_version` — env first, else catalog |
 
 Release CI ([`.github/workflows/release.yml`](.github/workflows/release.yml)) resolves the version once in `resolve-version`, then exports it as job `FFMPEG_VERSION` for `make fetch-sources`, `make ci-build-component`, Docker tags, and the GitHub release tag.
+
+Push-to-main releases read `release.mark_github_latest` from [`sources.json`](sources.json) to set GitHub’s release **Latest** badge. Manual **workflow_dispatch** runs use the **update_latest** checkbox instead. This does not change Docker Hub `:latest` tags.
 
 | Dependency | Full build | Decode-only |
 |---|---|---|

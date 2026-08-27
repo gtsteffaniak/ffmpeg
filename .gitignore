@@ -1,3 +1,4 @@
 /src
 .github-token
+sources.json.bak
 fetch-sources.sh.bak

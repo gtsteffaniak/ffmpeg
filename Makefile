@@ -1,6 +1,6 @@
 .PHONY: help build build-local build-push-all build-decode build-decode-push \
         build-multiplatform build-multiplatform-decode update fetch-sources generate-release-body \
-        clean test test-encoders test-version test-version-gates test-fetch \
+        validate-sources clean test test-encoders test-version test-version-gates test-helper test-fetch \
         ci-push-platform ci-push-platform-decode ci-merge-manifest ci-merge-manifest-decode \
         ci-package-release ci-package-release-decode ci-build-component \
         ci-build-windows ci-package-windows-release ci-package-windows-release-decode
@@ -11,7 +11,7 @@ IMAGE_NAME ?= ffmpeg
 TAG ?= latest
 DECODE_TAG ?= decode
 ALPINE_VERSION ?= alpine:3.22
-FFMPEG_VERSION ?= $(shell ./scripts/read-ffmpeg-version.sh)
+FFMPEG_VERSION ?= $(shell go run . read release.ffmpeg_version)
 export FFMPEG_VERSION
 RELEASE_BODY ?= release-notes.md
 PLATFORMS ?= linux/amd64,linux/arm64
@@ -54,7 +54,7 @@ help: ## Show this help message
 	@echo "  REGISTRY          - Docker registry (default: $(REGISTRY))"
 	@echo "  IMAGE_NAME        - Image name without registry (default: $(IMAGE_NAME))"
 	@echo "  TAG               - Image tag (default: $(TAG))"
-	@echo "  FFMPEG_VERSION    - From fetch-sources.sh (default: $(FFMPEG_VERSION))"
+	@echo "  FFMPEG_VERSION    - From sources.json (default: $(FFMPEG_VERSION))"
 	@echo "  PLATFORMS         - Target platforms (default: $(PLATFORMS))"
 	@echo ""
 	@echo "$(YELLOW)Supported Platforms:$(NC) linux/amd64, linux/arm64"
@@ -123,13 +123,13 @@ build-final: ## Build only final FFmpeg component (requires components built)
 
 # ==================== Development & Maintenance ====================
 
-update: ## Update source versions using helper program
+update: ## Update source versions in sources.json
 	@echo "$(CYAN)Updating source versions...$(NC)"
-	@if [ -f helper.go ]; then \
-		go run helper.go update; \
-	else \
-		echo "$(YELLOW)helper.go not found - skipping update$(NC)"; \
-	fi
+	go run . update
+
+validate-sources: ## Validate sources.json catalog
+	@echo "$(CYAN)Validating sources.json...$(NC)"
+	go run . validate
 
 fetch-sources: ## Fetch/download all source packages
 	@echo "$(CYAN)Fetching sources (FFMPEG_VERSION=$(FFMPEG_VERSION))...$(NC)"
@@ -137,7 +137,7 @@ fetch-sources: ## Fetch/download all source packages
 
 generate-release-body: ## Write GitHub release notes (dependency matrix) to RELEASE_BODY file
 	@echo "$(CYAN)Generating release notes (FFMPEG_VERSION=$(FFMPEG_VERSION))...$(NC)"
-	FFMPEG_VERSION=$(FFMPEG_VERSION) ./scripts/generate-release-body.sh $(RELEASE_BODY)
+	FFMPEG_VERSION=$(FFMPEG_VERSION) go run . release-body $(RELEASE_BODY)
 
 update-and-build: update fetch-sources build ## Update sources and build locally
 
@@ -166,6 +166,10 @@ test-version: ## Show FFmpeg version and build configuration
 test-version-gates: ## Run version-gates.sh unit checks
 	@echo "$(CYAN)Testing version gates...$(NC)"
 	./scripts/test-version-gates.sh
+
+test-helper: ## Run sources.json helper unit tests
+	@echo "$(CYAN)Testing helper CLI...$(NC)"
+	go test . -count=1
 
 test-fetch: ## Run fetch archive validation checks
 	@echo "$(CYAN)Testing fetch archive validation...$(NC)"
