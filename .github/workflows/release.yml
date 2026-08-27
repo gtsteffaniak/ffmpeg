@@ -40,7 +40,7 @@ jobs:
           if [ -n "${{ github.event.inputs.version }}" ]; then
             VERSION="${{ github.event.inputs.version }}"
           else
-            VERSION=$(grep 'FFMPEG_VERSION:=' fetch-sources.sh | head -1 | sed -E 's/.*FFMPEG_VERSION:=([0-9.]+).*/\1/')
+            VERSION="$(./scripts/read-ffmpeg-version.sh)"
           fi
 
           if [ -z "$VERSION" ]; then
@@ -66,6 +66,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
+      # Single version for tags, source fetch, Docker build-args, and GitHub release.
+      FFMPEG_VERSION: ${{ needs.resolve-version.outputs.version }}
       TAG: ${{ needs.resolve-version.outputs.version }}
       PLATFORM: linux/amd64
       FULL_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-amd64
@@ -74,8 +76,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify release version
+        run: |
+          echo "FFMPEG_VERSION=${FFMPEG_VERSION}"
+          test "$(./scripts/read-ffmpeg-version.sh)" = "${FFMPEG_VERSION}"
+
       - name: Fetch sources
-        run: ./fetch-sources.sh
+        run: make fetch-sources DECODE_ONLY=false
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -188,6 +195,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     env:
+      FFMPEG_VERSION: ${{ needs.resolve-version.outputs.version }}
       TAG: ${{ needs.resolve-version.outputs.version }}
       PLATFORM: linux/arm64
       FULL_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-arm64
@@ -196,8 +204,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify release version
+        run: |
+          echo "FFMPEG_VERSION=${FFMPEG_VERSION}"
+          test "$(./scripts/read-ffmpeg-version.sh)" = "${FFMPEG_VERSION}"
+
       - name: Fetch sources
-        run: ./fetch-sources.sh
+        run: make fetch-sources DECODE_ONLY=false
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -285,6 +298,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      FFMPEG_VERSION: ${{ needs.resolve-version.outputs.version }}
+      TAG: ${{ needs.resolve-version.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

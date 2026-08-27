@@ -57,7 +57,7 @@ jobs:
           TITLE="chore(deps): update library versions (${DATE})"
 
           OLD_FFMPEG=$(git show HEAD:fetch-sources.sh | grep 'FFMPEG_VERSION:=' | head -1 | sed -E 's/.*FFMPEG_VERSION:=([0-9.]+).*/\1/')
-          NEW_FFMPEG=$(grep 'FFMPEG_VERSION:=' fetch-sources.sh | head -1 | sed -E 's/.*FFMPEG_VERSION:=([0-9.]+).*/\1/')
+          NEW_FFMPEG=$(./scripts/read-ffmpeg-version.sh)
           if [ -n "$OLD_FFMPEG" ] && [ -n "$NEW_FFMPEG" ] && [ "$OLD_FFMPEG" != "$NEW_FFMPEG" ]; then
             TITLE="chore(deps): update library versions - ffmpeg ${NEW_FFMPEG} (${DATE})"
           fi

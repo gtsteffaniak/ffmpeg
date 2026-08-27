@@ -1,23 +1,38 @@
 FROM ffmpeg-base:latest AS image-formats
 
-# libwebp (WebP image format)
-RUN apk add $APK_OPTS libwebp-dev libwebp-static
+ARG FFMPEG_VERSION=9.0.1
+ARG DECODE_ONLY="false"
 
-# openjpeg (JPEG 2000 decoder)
+COPY scripts/version-gates.sh /tmp/version-gates.sh
+
+# libwebp (encode only via --enable-libwebp)
+RUN . /tmp/version-gates.sh && \
+  if needs_libwebp "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
+    apk add $APK_OPTS libwebp-dev libwebp-static; \
+  else \
+    echo "Skipping libwebp (FFmpeg ${FFMPEG_VERSION}, DECODE_ONLY=${DECODE_ONLY})"; \
+  fi
+
+# openjpeg (JPEG 2000 encoding via OpenJPEG; decode is native)
 COPY [ "src/openjpeg-*", "./openjpeg" ]
-RUN cd openjpeg && \
-  mkdir build && cd build && \
-  cmake \
-    -G"Unix Makefiles" \
-    -DCMAKE_VERBOSE_MAKEFILE=ON \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DBUILD_SHARED_LIBS=OFF \
-    -DBUILD_PKGCONFIG_FILES=ON \
-    -DBUILD_CODEC=OFF \
-    -DWITH_ASTYLE=OFF \
-    -DBUILD_TESTING=OFF \
-    .. && \
-  make -j$(nproc) install
+RUN . /tmp/version-gates.sh && \
+  if needs_openjpeg "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
+    cd openjpeg && \
+    mkdir build && cd build && \
+    cmake \
+      -G"Unix Makefiles" \
+      -DCMAKE_VERBOSE_MAKEFILE=ON \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DBUILD_PKGCONFIG_FILES=ON \
+      -DBUILD_CODEC=OFF \
+      -DWITH_ASTYLE=OFF \
+      -DBUILD_TESTING=OFF \
+      .. && \
+    make -j$(nproc) install; \
+  else \
+    echo "Skipping openjpeg (DECODE_ONLY=${DECODE_ONLY})"; \
+  fi
 
 # zimg (high quality image scaling)
 COPY [ "src/zimg-*", "./zimg" ]

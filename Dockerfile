@@ -61,6 +61,9 @@ ARG CXXFLAGS="-static-libgcc -fno-strict-overflow -fPIC"
 ARG LDFLAGS="-Wl,-z,relro,-z,now"
 # Add a DECODE_ONLY argument
 ARG DECODE_ONLY="false" # Set "true" for decode-only, "false" for full build
+ARG FFMPEG_VERSION=9.0.1
+
+COPY scripts/version-gates.sh /tmp/version-gates.sh
 
 RUN apk add $APK_OPTS glib-dev glib-static pcre2-dev pcre2-static
 
@@ -109,11 +112,19 @@ RUN cd vmaf/libvmaf && \
     sed -i 's/-lvmaf /-lvmaf -lstdc++ /' /usr/local/lib/pkgconfig/libvmaf.pc;
 
 
-# aom (AV1 decoder)
-RUN apk add $APK_OPTS aom-dev aom-static
+# aom (AV1 via libaom)
+RUN . /tmp/version-gates.sh && \
+  if needs_libaom "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
+    apk add $APK_OPTS aom-dev aom-static; \
+  else \
+    echo "Skipping libaom (DECODE_ONLY=${DECODE_ONLY})"; \
+  fi
 
-# libogg (niche audio codec)
-RUN apk add $APK_OPTS libogg-dev libogg-static
+# libogg (container for libvorbis when enabled)
+RUN . /tmp/version-gates.sh && \
+  if needs_libvorbis "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
+    apk add $APK_OPTS libogg-dev libogg-static; \
+  fi
 
 # davs2 (very niche)
 COPY [ "src/davs2-*", "./davs2" ]
@@ -154,21 +165,26 @@ RUN cd lcms2 && \
     --disable-shared && \
   make -j$(nproc) install
 
-# Keep openjpeg (JPEG 2000 decoder)
+# openjpeg (JPEG 2000 encoding via OpenJPEG; decode is native)
 COPY [ "src/openjpeg-*", "./openjpeg" ]
-RUN cd openjpeg && \
-  mkdir build && cd build && \
-  cmake \
-    -G"Unix Makefiles" \
-    -DCMAKE_VERBOSE_MAKEFILE=ON \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DBUILD_SHARED_LIBS=OFF \
-    -DBUILD_PKGCONFIG_FILES=ON \
-    -DBUILD_CODEC=OFF \
-    -DWITH_ASTYLE=OFF \
-    -DBUILD_TESTING=OFF \
-    .. && \
-  make -j$(nproc) install
+RUN . /tmp/version-gates.sh && \
+  if needs_openjpeg "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
+    cd openjpeg && \
+    mkdir build && cd build && \
+    cmake \
+      -G"Unix Makefiles" \
+      -DCMAKE_VERBOSE_MAKEFILE=ON \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DBUILD_PKGCONFIG_FILES=ON \
+      -DBUILD_CODEC=OFF \
+      -DWITH_ASTYLE=OFF \
+      -DBUILD_TESTING=OFF \
+      .. && \
+    make -j$(nproc) install; \
+  else \
+    echo "Skipping openjpeg (DECODE_ONLY=${DECODE_ONLY})"; \
+  fi
 
 
 # Remove rubberband (audio processing)
@@ -386,14 +402,20 @@ RUN cd zimg && \
     --enable-static && \
   make -j$(nproc) install
 
-# libwebp (decoder)
-RUN apk add $APK_OPTS libwebp-dev libwebp-static
-
-# libvpx (VP8/VP9 decoder)
-COPY [ "src/libvpx-*", "./libvpx" ]
-RUN if [ "$(uname -m)" = "armv7l" ]; then \
-  echo "DECODE_ONLY is true, skipping libvpx build"; \
+# libwebp (encode only via --enable-libwebp)
+RUN . /tmp/version-gates.sh && \
+  if needs_libwebp "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
+    apk add $APK_OPTS libwebp-dev libwebp-static; \
   else \
+    echo "Skipping libwebp (FFmpeg ${FFMPEG_VERSION}, DECODE_ONLY=${DECODE_ONLY})"; \
+  fi
+
+# libvpx (VP8/VP9 encode; native decoders for decode-only)
+COPY [ "src/libvpx-*", "./libvpx" ]
+RUN . /tmp/version-gates.sh && \
+  if [ "$(uname -m)" = "armv7l" ]; then \
+    echo "Skipping libvpx build on armv7l"; \
+  elif needs_libvpx "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
     cd libvpx && \
     ./configure \
       --enable-static \
@@ -402,10 +424,17 @@ RUN if [ "$(uname -m)" = "armv7l" ]; then \
       --disable-unit-tests \
       --disable-examples && \
     make -j$(nproc) install; \
+  else \
+    echo "Skipping libvpx (DECODE_ONLY=${DECODE_ONLY})"; \
   fi
 
-# libvorbis (decoder)
-RUN apk add $APK_OPTS libvorbis-dev libvorbis-static
+# libvorbis (encode / libvorbis decoder wrapper)
+RUN . /tmp/version-gates.sh && \
+  if needs_libvorbis "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
+    apk add $APK_OPTS libvorbis-dev libvorbis-static; \
+  else \
+    echo "Skipping libvorbis (DECODE_ONLY=${DECODE_ONLY})"; \
+  fi
 
 COPY [ "src/libass-*", "./libass" ]
 RUN cd libass && \
@@ -426,13 +455,27 @@ RUN cd libmysofa/build && \
     .. && \
   make -j$(nproc) install
 
+COPY scripts/verify-native-webp.sh /tmp/verify-native-webp.sh
 COPY [ "src/ffmpeg*", "./ffmpeg" ]
 RUN cd ffmpeg && \
+  . /tmp/version-gates.sh && \
   sed -i 's/svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc, &svt_enc->enc_params)/svt_av1_enc_init_handle(\&svt_enc->svt_handle, \&svt_enc->enc_params)/g' libavcodec/libsvtav1.c && \
-  if [ "$(uname -m)" != "armv7l" ]; then \
-    FEATURES="--enable-libvpx"; \
-  fi; \
-  # Conditional flags based on DECODE_ONLY
+  FEATURES="" && \
+  if needs_libvpx "$FFMPEG_VERSION" "$DECODE_ONLY" && [ "$(uname -m)" != "armv7l" ]; then \
+    FEATURES="$FEATURES --enable-libvpx"; \
+  fi && \
+  if needs_libaom "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
+    FEATURES="$FEATURES --enable-libaom"; \
+  fi && \
+  if needs_openjpeg "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
+    FEATURES="$FEATURES --enable-libopenjpeg"; \
+  fi && \
+  if needs_libvorbis "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
+    FEATURES="$FEATURES --enable-libvorbis"; \
+  fi && \
+  if needs_libwebp "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
+    FEATURES="$FEATURES --enable-libwebp"; \
+  fi && \
   if [ "$DECODE_ONLY" != "true" ]; then \
     FEATURES="$FEATURES --enable-nonfree"; \
     FEATURES="$FEATURES --enable-libx264"; \
@@ -443,26 +486,12 @@ RUN cd ffmpeg && \
     FEATURES="$FEATURES --enable-libxevd"; \
     FEATURES="$FEATURES --enable-libvvenc"; \
     FEATURES="$FEATURES --enable-libdavs2"; \
-    # For the GSM audio codec, used in telephony.
-    #FEATURES="$FEATURES --enable-libgsm"; \
-    # 3d audio support.
     FEATURES="$FEATURES --enable-libmysofa"; \
-    # AMR audio codecs for mobile.
-    # High-quality audio pitch shifting.
-    #FEATURES="$FEATURES --enable-librubberband"; \
-    # libmp3lame is superior and already included.
-    #FEATURES="$FEATURES --enable-libshine"; \
-    #FEATURES="$FEATURES --enable-libtheora"; \
-    #FEATURES="$FEATURES --enable-libtwolame"; \
     FEATURES="$FEATURES --enable-libuavs3d"; \
-    # Video stabilization filter.
     FEATURES="$FEATURES --enable-libvidstab"; \
     FEATURES="$FEATURES --enable-libvmaf"; \
     FEATURES="$FEATURES --enable-libvo-amrwbenc"; \
-    #FEATURES="$FEATURES --enable-libjxl"; \
-    #FEATURES="$FEATURES --enable-librsvg"; \
     FEATURES="$FEATURES --enable-libmp3lame"; \
-    #FEATURES="$FEATURES --enable-libshine"; \
   fi && \
     PKG_CONFIG_PATH="/usr/lib/pkgconfig/:${PKG_CONFIG_PATH}" && \
     ./configure \
@@ -472,22 +501,18 @@ RUN cd ffmpeg && \
     --extra-ldexeflags="-fPIE -static-pie" \
     --extra-libs="-lm -fopenmp" \
     --enable-small \
-    #--enable-vulkan \
     --enable-openssl \
     --disable-shared \
     --disable-ffplay \
     --enable-static \
     --enable-gpl \
     --enable-libvpl \
-    --enable-libvorbis \
     --enable-version3 \
     --enable-libzimg \
     --enable-fontconfig \
     --enable-gray \
     --enable-iconv \
     --enable-lcms2 \
-    --enable-libaom \
-    --enable-libwebp \
     --enable-libxml2 \
     --enable-libdav1d \
     --enable-libass \
@@ -495,11 +520,12 @@ RUN cd ffmpeg && \
     --enable-libfribidi \
     --enable-libharfbuzz \
     --enable-libsoxr \
-    --enable-libopenjpeg \
     --enable-libsnappy \
     $FEATURES \
   || (cat ffbuild/config.log ; false) && \
   make -j$(nproc) install
+
+RUN FFMPEG_VERSION="$FFMPEG_VERSION" DECODE_ONLY="$DECODE_ONLY" sh /tmp/verify-native-webp.sh
 
 # make sure binaries has no dependencies, is relro, pie and stack nx
 COPY checkelf.sh /

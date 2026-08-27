@@ -1,9 +1,17 @@
 FROM ffmpeg-base:latest AS av1
 
+ARG FFMPEG_VERSION=9.0.1
 ARG DECODE_ONLY="false"
 
-# aom (AV1 reference encoder/decoder)
-RUN apk add $APK_OPTS aom-dev aom-static
+COPY scripts/version-gates.sh /tmp/version-gates.sh
+
+# aom (AV1 reference encoder/decoder via libaom)
+RUN . /tmp/version-gates.sh && \
+  if needs_libaom "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
+    apk add $APK_OPTS aom-dev aom-static; \
+  else \
+    echo "Skipping libaom (DECODE_ONLY=${DECODE_ONLY})"; \
+  fi
 
 # dav1d (fast AV1 decoder)
 COPY [ "src/dav1d-*", "./dav1d" ]
@@ -37,4 +45,3 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
       .. && \
     make -j$(nproc) install; \
   fi
-

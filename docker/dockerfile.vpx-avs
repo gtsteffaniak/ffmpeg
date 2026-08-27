@@ -1,12 +1,16 @@
 FROM ffmpeg-base:latest AS vpx-avs
 
+ARG FFMPEG_VERSION=9.0.1
 ARG DECODE_ONLY="false"
 
-# libvpx (VP8/VP9 codec)
+COPY scripts/version-gates.sh /tmp/version-gates.sh
+
+# libvpx (VP8/VP9 encode; native decoders available for decode-only)
 COPY [ "src/libvpx-*", "./libvpx" ]
-RUN if [ "$(uname -m)" = "armv7l" ]; then \
+RUN . /tmp/version-gates.sh && \
+  if [ "$(uname -m)" = "armv7l" ]; then \
     echo "Skipping libvpx build on armv7l"; \
-  else \
+  elif needs_libvpx "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
     cd libvpx && \
     ./configure \
       --enable-static \
@@ -15,6 +19,8 @@ RUN if [ "$(uname -m)" = "armv7l" ]; then \
       --disable-unit-tests \
       --disable-examples && \
     make -j$(nproc) install; \
+  else \
+    echo "Skipping libvpx (DECODE_ONLY=${DECODE_ONLY})"; \
   fi
 
 # davs2 (AVS2 encoder - very niche Chinese codec)

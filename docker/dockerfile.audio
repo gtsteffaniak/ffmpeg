@@ -1,12 +1,17 @@
 FROM ffmpeg-base:latest AS audio
 
+ARG FFMPEG_VERSION=9.0.1
 ARG DECODE_ONLY="false"
 
-# libogg (container format for vorbis)
-RUN apk add $APK_OPTS libogg-dev libogg-static
+COPY scripts/version-gates.sh /tmp/version-gates.sh
 
-# libvorbis (Vorbis audio codec)
-RUN apk add $APK_OPTS libvorbis-dev libvorbis-static
+# libogg + libvorbis (encode / libvorbis decoder wrapper; native Vorbis decode when omitted)
+RUN . /tmp/version-gates.sh && \
+  if needs_libvorbis "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
+    apk add $APK_OPTS libogg-dev libogg-static libvorbis-dev libvorbis-static; \
+  else \
+    echo "Skipping libogg/libvorbis (DECODE_ONLY=${DECODE_ONLY})"; \
+  fi
 
 # opus (Modern high-quality audio codec)
 RUN apk add $APK_OPTS opus-dev
@@ -42,4 +47,8 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
   fi
 
 # vo-amrwbenc (AMR-WB encoder for mobile audio)
-RUN apk add $APK_OPTS vo-amrwbenc-dev vo-amrwbenc-static
+RUN if [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping vo-amrwbenc"; \
+  else \
+    apk add $APK_OPTS vo-amrwbenc-dev vo-amrwbenc-static; \
+  fi

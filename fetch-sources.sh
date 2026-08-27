@@ -3,6 +3,12 @@
 # Exit on error, undefined variable, or pipe failure
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/version-gates.sh
+source "${SCRIPT_DIR}/scripts/version-gates.sh"
+: "${DECODE_ONLY:=false}"
+# FFMPEG_VERSION: set via env (release CI) or defaulted when fetching ffmpeg below.
+
 # Create source directory if it doesn't exist and change into it
 mkdir -p src && cd src
 # Store the absolute path to the source directory
@@ -161,7 +167,11 @@ fetch_and_unpack ffmpeg FFMPEG_VERSION FFMPEG_URL
 # bump: vorbis link "Source diff $CURRENT..$LATEST" https://github.com/xiph/vorbis/compare/v$CURRENT..v$LATEST
 : "${VORBIS_VERSION:=1.3.7}"
 : "${VORBIS_URL:=https://downloads.xiph.org/releases/vorbis/libvorbis-${VORBIS_VERSION}.tar.gz}"
-fetch_and_unpack libvorbis VORBIS_VERSION VORBIS_URL
+if needs_libvorbis "$FFMPEG_VERSION" "$DECODE_ONLY"; then
+  fetch_and_unpack libvorbis VORBIS_VERSION VORBIS_URL
+else
+  echo "Skipping libvorbis source fetch (DECODE_ONLY=${DECODE_ONLY})"
+fi
 
 # bump: libvpx /VPX_VERSION=([\d.]+)/ https://github.com/webmproject/libvpx.git|*
 # bump: libvpx after ./hashupdate Dockerfile VPX $LATEST
@@ -177,7 +187,11 @@ fetch_and_unpack libvpx VPX_VERSION VPX_URL
 # bump: libwebp link "Source diff $CURRENT..$LATEST" https://github.com/webmproject/libwebp/compare/v$CURRENT..v$LATEST
 : "${LIBWEBP_VERSION:=1.6.0}"
 : "${LIBWEBP_URL:=https://github.com/webmproject/libwebp/archive/v${LIBWEBP_VERSION}.tar.gz}"
-fetch_and_unpack libwebp LIBWEBP_VERSION LIBWEBP_URL
+if needs_libwebp "$FFMPEG_VERSION" "$DECODE_ONLY"; then
+  fetch_and_unpack libwebp LIBWEBP_VERSION LIBWEBP_URL
+else
+  echo "Skipping libwebp source fetch (FFmpeg ${FFMPEG_VERSION}, DECODE_ONLY=${DECODE_ONLY})"
+fi
 
 # bump: libva /LIBVA_VERSION=([\d.]+)/ https://github.com/intel/libva.git|^2
 # bump: libva after ./hashupdate Dockerfile LIBVA $LATEST
@@ -218,30 +232,6 @@ fetch_and_unpack zimg ZIMG_VERSION ZIMG_URL
 #: "${RAV1E_URL:=https://github.com/xiph/rav1e/archive/v${RAV1E_VERSION}.tar.gz}"
 #: "${RAV1E_SHA256:=da7ae0df2b608e539de5d443c096e109442cdfa6c5e9b4014361211cf61d030c}"
 #fetch_and_unpack rav1e RAV1E_VERSION RAV1E_URL RAV1E_SHA256
-
-# bump: vorbis /VORBIS_VERSION=([\d.]+)/ https://github.com/xiph/vorbis.git|*
-# bump: vorbis after ./hashupdate Dockerfile VORBIS $LATEST
-# bump: vorbis link "CHANGES" https://github.com/xiph/vorbis/blob/master/CHANGES
-# bump: vorbis link "Source diff $CURRENT..$LATEST" https://github.com/xiph/vorbis/compare/v$CURRENT..v$LATEST
-: "${VORBIS_VERSION:=1.3.7}"
-: "${VORBIS_URL:=https://downloads.xiph.org/releases/vorbis/libvorbis-${VORBIS_VERSION}.tar.gz}"
-fetch_and_unpack libvorbis VORBIS_VERSION VORBIS_URL
-
-# bump: libvpx /VPX_VERSION=([\d.]+)/ https://github.com/webmproject/libvpx.git|*
-# bump: libvpx after ./hashupdate Dockerfile VPX $LATEST
-# bump: libvpx link "CHANGELOG" https://github.com/webmproject/libvpx/blob/master/CHANGELOG
-# bump: libvpx link "Source diff $CURRENT..$LATEST" https://github.com/webmproject/libvpx/compare/v$CURRENT..v$LATEST
-: "${VPX_VERSION:=1.16.0}"
-: "${VPX_URL:=https://github.com/webmproject/libvpx/archive/v${VPX_VERSION}.tar.gz}"
-fetch_and_unpack libvpx VPX_VERSION VPX_URL
-
-# bump: libwebp /LIBWEBP_VERSION=([\d.]+)/ https://github.com/webmproject/libwebp.git|^1
-# bump: libwebp after ./hashupdate Dockerfile LIBWEBP $LATEST
-# bump: libwebp link "Release notes" https://github.com/webmproject/libwebp/releases/tag/v$LATEST
-# bump: libwebp link "Source diff $CURRENT..$LATEST" https://github.com/webmproject/libwebp/compare/v$CURRENT..v$LATEST
-: "${LIBWEBP_VERSION:=1.6.0}"
-: "${LIBWEBP_URL:=https://github.com/webmproject/libwebp/archive/v${LIBWEBP_VERSION}.tar.gz}"
-fetch_and_unpack libwebp LIBWEBP_VERSION LIBWEBP_URL
 
 # bump: librsvg /LIBRSVG_VERSION=([\d.]+)/ https://gitlab.gnome.org/GNOME/librsvg.git|^2
 # bump: librsvg after ./hashupdate Dockerfile LIBRSVG $LATEST

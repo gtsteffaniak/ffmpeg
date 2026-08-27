@@ -222,10 +222,9 @@ RUN cd zimg && \
     --enable-static && \
   make -j$(nproc) install
 
-# libwebp (decoder)
-RUN apk add $APK_OPTS libwebp-dev libwebp-static
+# zimg is built in dockerfile.image-formats; libwebp is gated there (encode-only).
 
-# libvpx (VP8/VP9 decoder)
+# libvpx (VP8/VP9)
 COPY [ "src/libvpx-*", "./libvpx" ]
 RUN if [ "$(uname -m)" = "armv7l" ]; then \
   echo "DECODE_ONLY is true, skipping libvpx build"; \
