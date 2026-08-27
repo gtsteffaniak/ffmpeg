@@ -1,5 +1,5 @@
 .PHONY: help build build-local build-push-all build-decode build-decode-push \
-        build-multiplatform build-multiplatform-decode update fetch-sources \
+        build-multiplatform build-multiplatform-decode update fetch-sources generate-release-body \
         clean test test-encoders test-version test-version-gates test-fetch \
         ci-push-platform ci-push-platform-decode ci-merge-manifest ci-merge-manifest-decode \
         ci-package-release ci-package-release-decode ci-build-component \
@@ -13,6 +13,7 @@ DECODE_TAG ?= decode
 ALPINE_VERSION ?= alpine:3.22
 FFMPEG_VERSION ?= $(shell ./scripts/read-ffmpeg-version.sh)
 export FFMPEG_VERSION
+RELEASE_BODY ?= release-notes.md
 PLATFORMS ?= linux/amd64,linux/arm64
 
 # Construct full image names
@@ -133,6 +134,10 @@ update: ## Update source versions using helper program
 fetch-sources: ## Fetch/download all source packages
 	@echo "$(CYAN)Fetching sources (FFMPEG_VERSION=$(FFMPEG_VERSION))...$(NC)"
 	DECODE_ONLY=$(DECODE_ONLY) FFMPEG_VERSION=$(FFMPEG_VERSION) ./fetch-sources.sh
+
+generate-release-body: ## Write GitHub release notes (dependency matrix) to RELEASE_BODY file
+	@echo "$(CYAN)Generating release notes (FFMPEG_VERSION=$(FFMPEG_VERSION))...$(NC)"
+	FFMPEG_VERSION=$(FFMPEG_VERSION) ./scripts/generate-release-body.sh $(RELEASE_BODY)
 
 update-and-build: update fetch-sources build ## Update sources and build locally
 
