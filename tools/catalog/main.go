@@ -56,6 +56,11 @@ func (c *ValidateCmd) Run() error {
 	var errs []string
 	if cat.Release.FFmpegVersion == "" {
 		errs = append(errs, "release.ffmpeg_version is empty")
+	} else if !validFFmpegVersion(cat.Release.FFmpegVersion) {
+		errs = append(errs, fmt.Sprintf("release.ffmpeg_version %q is not a valid semver (expected N.N or N.N.N)", cat.Release.FFmpegVersion))
+	}
+	if envVer := os.Getenv("FFMPEG_VERSION"); envVer != "" && !validFFmpegVersion(envVer) {
+		errs = append(errs, fmt.Sprintf("FFMPEG_VERSION env %q is not a valid semver", envVer))
 	}
 	if cat.Build.AlpineImage == "" {
 		errs = append(errs, "build.alpine_image is empty")
@@ -99,8 +104,13 @@ func (c *ValidateCmd) Run() error {
 		default:
 			errs = append(errs, fmt.Sprintf("%s: unknown fetch.method %q", s.ID, s.Fetch.Method))
 		}
+		if s.Fetch.Gate != "" && !isKnownFetchGate(s.Fetch.Gate) {
+			errs = append(errs, fmt.Sprintf("%s: unknown fetch.gate %q", s.ID, s.Fetch.Gate))
+		}
 		if s.Release != nil && s.Release.Gate == "" {
 			errs = append(errs, fmt.Sprintf("%s: release.gate required when release is set", s.ID))
+		} else if s.Release != nil && !isKnownReleaseGate(s.Release.Gate) {
+			errs = append(errs, fmt.Sprintf("%s: unknown release.gate %q", s.ID, s.Release.Gate))
 		}
 	}
 	argRe := regexp.MustCompile(`(?m)^ARG FFMPEG_VERSION=(.+)$`)
@@ -171,8 +181,9 @@ func (c *FetchScriptCmd) Run() error {
 		if !s.Enabled || s.Fetch == nil || s.Fetch.Method == "alpine" {
 			continue
 		}
-		url := expandTemplate(s.Fetch.URL, s.Version, s.Commit)
-		dir := expandTemplate(s.Fetch.Dir, s.Version, s.Commit)
+		version := sourceFetchVersion(s, ffmpegVer)
+		url := expandTemplate(s.Fetch.URL, version, s.Commit)
+		dir := expandTemplate(s.Fetch.Dir, version, s.Commit)
 		b.WriteString(fmt.Sprintf("# --- %s ---\n", s.ID))
 		gated := s.Fetch.Gate != ""
 		indent := ""
@@ -182,18 +193,18 @@ func (c *FetchScriptCmd) Run() error {
 		}
 		switch s.Fetch.Method {
 		case "archive":
-			name := archiveName(s, dir)
+			name := archiveName(s, dir, version)
 			b.WriteString(fmt.Sprintf("%sfetch_values_archive %s %s %s\n",
-				indent, shellQuote(name), shellQuote(s.Version), shellQuote(url)))
+				indent, shellQuote(name), shellQuote(version), shellQuote(url)))
 		case "git_tag":
-			name := strings.TrimSuffix(dir, "-"+s.Version)
+			name := strings.TrimSuffix(dir, "-"+version)
 			if name == dir {
 				name = s.ID
 			}
 			b.WriteString(fmt.Sprintf("%sfetch_values_git_tag %s %s %s\n",
-				indent, shellQuote(name), shellQuote(s.Version), shellQuote(url)))
+				indent, shellQuote(name), shellQuote(version), shellQuote(url)))
 		case "git_commit":
-			name := s.Fetch.Dir
+			name := dir
 			if name == "" {
 				name = s.ID
 			}
@@ -203,17 +214,17 @@ func (c *FetchScriptCmd) Run() error {
 			switch s.Fetch.Post {
 			case "aom_verify":
 				b.WriteString(fmt.Sprintf("%sfetch_aom %s %s %s\n",
-					indent, shellQuote(url), shellQuote(s.Version), shellQuote(s.Commit)))
+					indent, shellQuote(url), shellQuote(version), shellQuote(s.Commit)))
 			case "uavs3d_commit":
 				b.WriteString(fmt.Sprintf("%sfetch_uavs3d %s %s %s\n",
-					indent, shellQuote(url), shellQuote(s.Version), shellQuote(s.Commit)))
+					indent, shellQuote(url), shellQuote(version), shellQuote(s.Commit)))
 			default:
 				return fmt.Errorf("%s: unsupported custom post %q", s.ID, s.Fetch.Post)
 			}
 		}
 		if s.Fetch.Post == "version_txt" {
 			b.WriteString(fmt.Sprintf("%swrite_version_txt %s %s\n",
-				indent, shellQuote(dir), shellQuote(s.Version)))
+				indent, shellQuote(dir), shellQuote(version)))
 		}
 		if gated {
 			b.WriteString(fmt.Sprintf("else\n  echo \"Skipping %s (gate %s)\"\nfi\n", s.ID, s.Fetch.Gate))
@@ -224,9 +235,16 @@ func (c *FetchScriptCmd) Run() error {
 	return nil
 }
 
-func archiveName(s Source, dir string) string {
+func sourceFetchVersion(s Source, ffmpegVer string) string {
+	if s.ID == "ffmpeg" {
+		return ffmpegVer
+	}
+	return s.Version
+}
+
+func archiveName(s Source, dir, version string) string {
 	// fetch_values_archive builds dir as name-version; derive name from dir template.
-	suffix := "-" + s.Version
+	suffix := "-" + version
 	if strings.HasSuffix(dir, suffix) {
 		return strings.TrimSuffix(dir, suffix)
 	}

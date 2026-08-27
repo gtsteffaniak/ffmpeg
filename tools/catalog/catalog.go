@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -86,9 +87,44 @@ func saveCatalog(path string, c *Catalog) error {
 		return err
 	}
 	data = append(data, '\n')
-	backup := path + ".bak"
-	_ = os.Rename(path, backup)
-	return os.WriteFile(path, data, 0o644)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); err == nil {
+		_ = os.Rename(path, path+".bak")
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+var dockerfileFFmpegArgRE = regexp.MustCompile(`(?m)^ARG FFMPEG_VERSION=.+$`)
+
+func syncDockerfileFFmpegVersion(version string) error {
+	if !validFFmpegVersion(version) {
+		return fmt.Errorf("invalid ffmpeg version %q", version)
+	}
+	replacement := []byte("ARG FFMPEG_VERSION=" + version)
+	for _, df := range dockerfilePaths() {
+		data, err := os.ReadFile(df)
+		if err != nil {
+			return err
+		}
+		if !dockerfileFFmpegArgRE.Match(data) {
+			continue
+		}
+		updated := dockerfileFFmpegArgRE.ReplaceAll(data, replacement)
+		if string(updated) == string(data) {
+			continue
+		}
+		if err := os.WriteFile(df, updated, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func expandTemplate(tmpl, version, commit string) string {

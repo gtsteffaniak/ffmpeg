@@ -44,10 +44,16 @@ jobs:
       - name: Determine version
         id: version
         run: |
+          CATALOG_VERSION="$(go run -C tools/catalog . read release.ffmpeg_version)"
           if [ -n "${{ github.event.inputs.version }}" ]; then
             VERSION="${{ github.event.inputs.version }}"
+            if [ "$VERSION" != "$CATALOG_VERSION" ]; then
+              echo "Manual version ${VERSION} does not match catalog ${CATALOG_VERSION}" >&2
+              echo "Update sources.json or release the catalog version." >&2
+              exit 1
+            fi
           else
-            VERSION="$(go run -C tools/catalog . read release.ffmpeg_version)"
+            VERSION="$CATALOG_VERSION"
           fi
 
           if [ -z "$VERSION" ]; then
@@ -68,10 +74,7 @@ jobs:
           echo "make_latest=${MAKE_LATEST}" >> "$GITHUB_OUTPUT"
           echo "Building version ${VERSION} from ${{ github.ref_name }} (make_latest=${MAKE_LATEST})"
 
-          # Skip Dockerfile ARG drift check when releasing a non-default version.
-          if [ -z "${{ github.event.inputs.version }}" ] || [ "${{ github.event.inputs.version }}" = "$(go run -C tools/catalog . read release.ffmpeg_version)" ]; then
-            go run -C tools/catalog . validate
-          fi
+          go run -C tools/catalog . validate
 
   build-amd64:
     name: Build amd64 (Linux + Windows)

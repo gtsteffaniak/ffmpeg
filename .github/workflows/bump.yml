@@ -31,19 +31,22 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PAT }}
         run: make update
 
+      - name: Validate after update
+        run: go run -C tools/catalog . validate
+
       - name: Remove backup file
         run: rm -f sources.json.bak
 
       - name: Check for changes
         id: changes
         run: |
-          if git diff --quiet sources.json; then
+          if git diff --quiet sources.json docker/; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No dependency updates found."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "Dependency updates found:"
-            git diff sources.json
+            git diff sources.json docker/
           fi
 
       - name: Prepare pull request metadata
@@ -84,6 +87,6 @@ jobs:
 
             ${{ steps.pr.outputs.summary }}
 
-            Review version bumps in `sources.json` before merging.
+            Review version bumps in `sources.json` and synced `docker/` ARG defaults before merging.
           branch: ${{ steps.pr.outputs.branch }}
           delete-branch: true

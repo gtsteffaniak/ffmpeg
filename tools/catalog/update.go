@@ -94,6 +94,9 @@ func (u *UpdateCmd) Run() error {
 		log.Println("Dry run enabled. No changes will be written.")
 		return nil
 	}
+	if err := syncDockerfileFFmpegVersion(cat.Release.FFmpegVersion); err != nil {
+		return err
+	}
 	if err := saveCatalog(path, cat); err != nil {
 		return err
 	}
@@ -131,12 +134,17 @@ func fetchLatestForBump(s Source) (string, error) {
 	return "", fmt.Errorf("unsupported bump repo for %s: %s", s.ID, repo)
 }
 
-func isNumericVersion(tag string) bool {
+func trimVersionTagPrefixes(tag string) string {
 	cleanTag := strings.TrimPrefix(tag, "v")
 	cleanTag = strings.TrimPrefix(cleanTag, "n")
 	cleanTag = strings.TrimPrefix(cleanTag, "release-")
-	cleanTag = strings.TrimPrefix(cleanTag, "lcms")
 	cleanTag = strings.TrimPrefix(cleanTag, "lcms2.")
+	cleanTag = strings.TrimPrefix(cleanTag, "lcms")
+	return cleanTag
+}
+
+func isNumericVersion(tag string) bool {
+	cleanTag := trimVersionTagPrefixes(tag)
 
 	if strings.HasPrefix(tag, "PANGO_") {
 		if regexp.MustCompile(`^PANGO_(\d+)_(\d+)_(\d+)$`).MatchString(tag) {
@@ -163,11 +171,7 @@ func stripPrefixes(tag string) string {
 			return fmt.Sprintf("%s.%s", m[1], m[2])
 		}
 	}
-	cleanTag := strings.TrimPrefix(tag, "v")
-	cleanTag = strings.TrimPrefix(cleanTag, "n")
-	cleanTag = strings.TrimPrefix(cleanTag, "release-")
-	cleanTag = strings.TrimPrefix(cleanTag, "lcms")
-	cleanTag = strings.TrimPrefix(cleanTag, "lcms2.")
+	cleanTag := trimVersionTagPrefixes(tag)
 	return cleanTag
 }
 
@@ -180,11 +184,7 @@ func parseSemanticVersion(tag string) (SemanticVersion, error) {
 			cleanTag = fmt.Sprintf("%s.%s", m[1], m[2])
 		}
 	} else {
-		cleanTag = strings.TrimPrefix(cleanTag, "v")
-		cleanTag = strings.TrimPrefix(cleanTag, "n")
-		cleanTag = strings.TrimPrefix(cleanTag, "release-")
-		cleanTag = strings.TrimPrefix(cleanTag, "lcms")
-		cleanTag = strings.TrimPrefix(cleanTag, "lcms2.")
+		cleanTag = trimVersionTagPrefixes(cleanTag)
 	}
 	matches := regexp.MustCompile(`^(\d+)\.(\d+)(\.(\d+))?(-.*)?$`).FindStringSubmatch(cleanTag)
 	if len(matches) < 3 {

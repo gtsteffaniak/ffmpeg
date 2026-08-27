@@ -63,7 +63,7 @@ func TestLoadCatalogAndRead(t *testing.T) {
 	if ffmpeg == nil || ffmpeg.Version != cat.Release.FFmpegVersion {
 		t.Fatalf("ffmpeg source mismatch: %+v vs %s", ffmpeg, cat.Release.FFmpegVersion)
 	}
-	_ = os.Unsetenv("FFMPEG_VERSION")
+	t.Setenv("FFMPEG_VERSION", "")
 	if resolveFFmpegVersion(cat) != cat.Release.FFmpegVersion {
 		t.Fatal("resolve without env failed")
 	}
@@ -119,6 +119,31 @@ func TestSaveCatalogRoundTrip(t *testing.T) {
 		t.Fatal("expected backup")
 	}
 	_ = orig
+}
+
+func TestValidFFmpegVersion(t *testing.T) {
+	if !validFFmpegVersion("9.0.1") || !validFFmpegVersion("6.1") {
+		t.Fatal("expected valid versions")
+	}
+	if validFFmpegVersion("v9.0.1") || validFFmpegVersion("9") || validFFmpegVersion("9.0.1.2") {
+		t.Fatal("expected invalid versions")
+	}
+	if releaseGateInDecode("needs_libwebp", "v9.0.1") {
+		t.Fatal("malformed version must not enable libwebp gate")
+	}
+}
+
+func TestKnownReleaseGates(t *testing.T) {
+	if !isKnownReleaseGate("decode_skip") || isKnownReleaseGate("decode_skipp") {
+		t.Fatal("release gate validation mismatch")
+	}
+}
+
+func TestTrimVersionTagPrefixesLCMS(t *testing.T) {
+	got := trimVersionTagPrefixes("lcms2.2.16")
+	if got != "2.16" {
+		t.Fatalf("got %q", got)
+	}
 }
 
 func TestIsNewerVersion(t *testing.T) {

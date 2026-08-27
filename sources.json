@@ -571,6 +571,9 @@
       "bump": {
         "repo": "https://gitlab.gnome.org/GNOME/librsvg.git",
         "tag_filter": "^2"
+      },
+      "release": {
+        "gate": "decode_skip"
       }
     },
     {
@@ -586,6 +589,9 @@
       "bump": {
         "repo": "https://github.com/Haivision/srt.git",
         "tag_filter": "^1"
+      },
+      "release": {
+        "gate": "decode_skip"
       }
     },
     {
@@ -601,6 +607,9 @@
       "bump": {
         "repo": "https://code.videolan.org/videolan/libbluray.git",
         "tag_filter": "*"
+      },
+      "release": {
+        "gate": "decode_skip"
       }
     },
     {
@@ -616,6 +625,9 @@
       "bump": {
         "repo": "https://github.com/njh/twolame.git",
         "tag_filter": "*"
+      },
+      "release": {
+        "gate": "decode_skip"
       }
     },
     {
@@ -631,6 +643,9 @@
       "bump": {
         "repo": "https://github.com/toots/shine.git",
         "tag_filter": "*"
+      },
+      "release": {
+        "gate": "decode_skip"
       }
     },
     {
@@ -648,6 +663,9 @@
         "repo": "gitrefs:https://github.com/timothytylee/libgsm.git",
         "branch": "master",
         "tag_filter": "re:#^refs/heads/master$#|@commit"
+      },
+      "release": {
+        "gate": "decode_skip"
       }
     }
   ]
