@@ -410,10 +410,12 @@ make ci-build-component COMPONENT=windows-components
 make ci-build-component COMPONENT=windows
 make ci-package-windows-release TAG=8.0
 
-# Merge and publish (after per-arch pushes)
+# Merge and publish (after per-arch pushes; arch-suffixed tags are removed after merge)
 make ci-merge-manifest TAG=8.0
 make ci-package-release TAG=8.0
 ```
+
+Per-arch Docker tags (`8.0-amd64`, `8.0-arm64`) are used only during the build jobs and are **removed** when manifests are merged. Docker Hub publishes `gtstef/ffmpeg:8.0` (and `8.0-decode`) as multi-arch manifests only.
 
 ### Scenario 5: Quick Iteration During Development
 

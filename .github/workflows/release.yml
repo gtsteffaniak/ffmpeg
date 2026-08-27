@@ -315,6 +315,7 @@ jobs:
 
       - name: Merge multi-arch manifests
         run: |
+          # Per-arch tags (-amd64 / -arm64) are staging only; merge-manifest removes them after publish.
           make ci-merge-manifest TAG=${{ needs.resolve-version.outputs.version }}
           make ci-merge-manifest-decode TAG=${{ needs.resolve-version.outputs.version }}
 

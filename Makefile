@@ -278,13 +278,13 @@ ci-merge-manifest-decode: ## CI: Merge per-arch decode images into multi-arch ma
 
 ci-package-release: ## CI: Package full ffmpeg/ffprobe binaries for both architectures
 	@echo "$(CYAN)CI: Packaging full release binaries for $(TAG)$(NC)"
-	./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-amd64 $(TAG) amd64
-	./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-arm64 $(TAG) arm64
+	PLATFORM=linux/amd64 ./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG) $(TAG) amd64
+	PLATFORM=linux/arm64 ./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG) $(TAG) arm64
 
 ci-package-release-decode: ## CI: Package decode ffmpeg/ffprobe binaries for both architectures
 	@echo "$(CYAN)CI: Packaging decode release binaries for $(TAG)$(NC)"
-	./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode-amd64 $(TAG) amd64 decode
-	./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode-arm64 $(TAG) arm64 decode
+	PLATFORM=linux/amd64 ./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode $(TAG) amd64 decode
+	PLATFORM=linux/arm64 ./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode $(TAG) arm64 decode
 
 ci-build-windows: ## CI: Build Windows components + final (set DECODE_ONLY=true for decode)
 	@echo "$(CYAN)CI: Building Windows release (DECODE_ONLY=$(DECODE_ONLY))$(NC)"

@@ -9,7 +9,14 @@ fi
 
 TARGET="$1"
 shift
+SOURCES=("$@")
 
 echo "Creating multi-arch manifest: ${TARGET}"
-docker buildx imagetools create -t "${TARGET}" "$@"
+docker buildx imagetools create -t "${TARGET}" "${SOURCES[@]}"
 docker buildx imagetools inspect "${TARGET}"
+
+# Per-arch tags are build-time staging only; registry should expose the merged manifest.
+for src in "${SOURCES[@]}"; do
+    echo "Removing arch-specific tag: ${src}"
+    docker buildx imagetools rm "${src}" || true
+done

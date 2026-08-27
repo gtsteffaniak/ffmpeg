@@ -6,6 +6,8 @@ IMAGE="${1:?Docker image reference required}"
 VERSION="${2:?Version required (e.g. 8.1.1)}"
 ARCH="${3:?Architecture required (amd64 or arm64)}"
 VARIANT="${4:-}"  # empty = full build, "decode" = decode-only
+# Optional: PLATFORM=linux/amd64 to pull a single arch from a multi-arch manifest tag.
+PLATFORM="${PLATFORM:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -31,8 +33,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "Pulling ${IMAGE}"
-docker pull "${IMAGE}"
+echo "Pulling ${IMAGE}${PLATFORM:+ (platform ${PLATFORM})}"
+if [ -n "${PLATFORM}" ]; then
+    docker pull --platform "${PLATFORM}" "${IMAGE}"
+else
+    docker pull "${IMAGE}"
+fi
 
 echo "Building Alpine packaging image from ${IMAGE}"
 docker build -f "${PROJECT_ROOT}/docker/dockerfile.alpine" \
