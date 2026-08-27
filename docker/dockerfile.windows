@@ -58,7 +58,7 @@ RUN cd ffmpeg && \
       $BASE_FLAGS \
       $FEATURES \
     || (cat ffbuild/config.log; false) && \
-    make -j"$(nproc)" install
+    install_ffmpeg_progs
 
 RUN ${CROSS}strip ${MINGW}/bin/ffmpeg.exe ${MINGW}/bin/ffprobe.exe
 

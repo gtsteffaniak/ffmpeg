@@ -10,7 +10,7 @@ on:
         description: Release version (default from FFMPEG_VERSION in fetch-sources.sh)
         required: false
       update_latest:
-        description: Mark this release as latest on GitHub (also auto-enabled when run from main)
+        description: Mark this release as latest on GitHub
         required: false
         type: boolean
         default: false
@@ -51,9 +51,6 @@ jobs:
           fi
 
           MAKE_LATEST=false
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            MAKE_LATEST=true
-          fi
           if [ "${{ github.event.inputs.update_latest }}" = "true" ]; then
             MAKE_LATEST=true
           fi
@@ -318,6 +315,7 @@ jobs:
 
       - name: Merge multi-arch manifests
         run: |
+          # Per-arch tags (-amd64 / -arm64) are staging only; merge-manifest removes them after publish.
           make ci-merge-manifest TAG=${{ needs.resolve-version.outputs.version }}
           make ci-merge-manifest-decode TAG=${{ needs.resolve-version.outputs.version }}
 
@@ -332,12 +330,19 @@ jobs:
           name: windows-release-artifacts
           path: release-artifacts
 
+      - name: Fetch sources for release notes
+        run: make fetch-sources DECODE_ONLY=false
+
+      - name: Generate release notes
+        run: ./scripts/generate-release-body.sh release-notes.md
+
       - name: Create or update GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.resolve-version.outputs.version }}
           name: FFmpeg ${{ needs.resolve-version.outputs.version }}
-          generate_release_notes: true
+          body_path: release-notes.md
+          generate_release_notes: false
           make_latest: ${{ needs.resolve-version.outputs.make_latest == 'true' }}
           files: |
             release-artifacts/*-linux-*.tar.gz

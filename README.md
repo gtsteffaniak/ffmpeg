@@ -410,10 +410,12 @@ make ci-build-component COMPONENT=windows-components
 make ci-build-component COMPONENT=windows
 make ci-package-windows-release TAG=8.0
 
-# Merge and publish (after per-arch pushes)
+# Merge and publish (after per-arch pushes; arch-suffixed tags are removed after merge)
 make ci-merge-manifest TAG=8.0
 make ci-package-release TAG=8.0
 ```
+
+Per-arch Docker tags (`8.0-amd64`, `8.0-arm64`) are used only during the build jobs and are **removed** when manifests are merged. Docker Hub publishes `gtstef/ffmpeg:8.0` (and `8.0-decode`) as multi-arch manifests only.
 
 ### Scenario 5: Quick Iteration During Development
 
@@ -454,6 +456,8 @@ Release CI ([`.github/workflows/release.yml`](.github/workflows/release.yml)) re
 | libvorbis | Required | Skipped (native Vorbis decode) |
 
 Optional library configure flags (`--enable-libvpl`, `--enable-libxeve`, `--enable-libharfbuzz`, etc.) are not hardcoded for the repo default version. At build time, [`scripts/version-gates.sh`](scripts/version-gates.sh) probes the checked-out FFmpeg tree’s `./configure --help` and only passes flags that exist for that release. Component stages also skip building libvpl when `FFMPEG_VERSION < 6.0` and xeve/xevd/vvenc when `FFMPEG_VERSION < 7.0`.
+
+Docker builds pass `--disable-doc` when supported and install with `install-progs` so legacy FFmpeg releases do not run Texinfo HTML generation on Alpine 3.22. [`fetch-sources.sh`](fetch-sources.sh) validates downloaded archives (rejecting HTML error pages) and fetches dav1d via GitHub git tags instead of GitLab tarball URLs.
 
 Pass overrides when building: `DECODE_ONLY=true FFMPEG_VERSION=9.0.1 ./build.sh`
 

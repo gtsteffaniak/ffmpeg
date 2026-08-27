@@ -1,6 +1,6 @@
 .PHONY: help build build-local build-push-all build-decode build-decode-push \
-        build-multiplatform build-multiplatform-decode update fetch-sources \
-        clean test test-encoders test-version test-version-gates \
+        build-multiplatform build-multiplatform-decode update fetch-sources generate-release-body \
+        clean test test-encoders test-version test-version-gates test-fetch \
         ci-push-platform ci-push-platform-decode ci-merge-manifest ci-merge-manifest-decode \
         ci-package-release ci-package-release-decode ci-build-component \
         ci-build-windows ci-package-windows-release ci-package-windows-release-decode
@@ -13,6 +13,7 @@ DECODE_TAG ?= decode
 ALPINE_VERSION ?= alpine:3.22
 FFMPEG_VERSION ?= $(shell ./scripts/read-ffmpeg-version.sh)
 export FFMPEG_VERSION
+RELEASE_BODY ?= release-notes.md
 PLATFORMS ?= linux/amd64,linux/arm64
 
 # Construct full image names
@@ -134,6 +135,10 @@ fetch-sources: ## Fetch/download all source packages
 	@echo "$(CYAN)Fetching sources (FFMPEG_VERSION=$(FFMPEG_VERSION))...$(NC)"
 	DECODE_ONLY=$(DECODE_ONLY) FFMPEG_VERSION=$(FFMPEG_VERSION) ./fetch-sources.sh
 
+generate-release-body: ## Write GitHub release notes (dependency matrix) to RELEASE_BODY file
+	@echo "$(CYAN)Generating release notes (FFMPEG_VERSION=$(FFMPEG_VERSION))...$(NC)"
+	FFMPEG_VERSION=$(FFMPEG_VERSION) ./scripts/generate-release-body.sh $(RELEASE_BODY)
+
 update-and-build: update fetch-sources build ## Update sources and build locally
 
 clean: ## Remove all local FFmpeg Docker images
@@ -161,6 +166,10 @@ test-version: ## Show FFmpeg version and build configuration
 test-version-gates: ## Run version-gates.sh unit checks
 	@echo "$(CYAN)Testing version gates...$(NC)"
 	./scripts/test-version-gates.sh
+
+test-fetch: ## Run fetch archive validation checks
+	@echo "$(CYAN)Testing fetch archive validation...$(NC)"
+	./scripts/test-fetch-validation.sh
 
 test-buildconf: ## Show FFmpeg build configuration
 	@echo "$(CYAN)Testing FFmpeg build configuration...$(NC)"
@@ -269,13 +278,13 @@ ci-merge-manifest-decode: ## CI: Merge per-arch decode images into multi-arch ma
 
 ci-package-release: ## CI: Package full ffmpeg/ffprobe binaries for both architectures
 	@echo "$(CYAN)CI: Packaging full release binaries for $(TAG)$(NC)"
-	./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-amd64 $(TAG) amd64
-	./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-arm64 $(TAG) arm64
+	PLATFORM=linux/amd64 ./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG) $(TAG) amd64
+	PLATFORM=linux/arm64 ./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG) $(TAG) arm64
 
 ci-package-release-decode: ## CI: Package decode ffmpeg/ffprobe binaries for both architectures
 	@echo "$(CYAN)CI: Packaging decode release binaries for $(TAG)$(NC)"
-	./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode-amd64 $(TAG) amd64 decode
-	./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode-arm64 $(TAG) arm64 decode
+	PLATFORM=linux/amd64 ./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode $(TAG) amd64 decode
+	PLATFORM=linux/arm64 ./scripts/package-release.sh $(REGISTRY)/$(IMAGE_NAME):$(TAG)-decode $(TAG) arm64 decode
 
 ci-build-windows: ## CI: Build Windows components + final (set DECODE_ONLY=true for decode)
 	@echo "$(CYAN)CI: Building Windows release (DECODE_ONLY=$(DECODE_ONLY))$(NC)"

@@ -486,7 +486,8 @@ RUN cd ffmpeg && \
     $BASE_FLAGS \
     $FEATURES \
   || (cat ffbuild/config.log ; false) && \
-  make -j$(nproc) install
+  install_ffmpeg_progs && \
+  bundle_ffmpeg_doc /doc-bundle
 
 RUN FFMPEG_VERSION="$FFMPEG_VERSION" DECODE_ONLY="$DECODE_ONLY" sh /tmp/verify-native-webp.sh
 
@@ -502,7 +503,7 @@ RUN apk add $APK_OPTS font-terminus font-inconsolata font-dejavu font-awesome
 FROM scratch AS testing
 COPY --from=builder /usr/local/bin/ffmpeg /
 COPY --from=builder /usr/local/bin/ffprobe /
-COPY --from=builder /usr/local/share/doc/ffmpeg/* /doc/
+COPY --from=builder /doc-bundle/ /doc/
 COPY --from=builder /etc/ssl/cert.pem /etc/ssl/cert.pem
 COPY --from=builder /etc/fonts/ /etc/fonts/
 COPY --from=builder /usr/share/fonts/ /usr/share/fonts/
@@ -529,7 +530,7 @@ RUN ["/ffmpeg", "-f", "lavfi", "-i", "testsrc", "-c:v", "libx265", "-t", "100ms"
 FROM scratch
 COPY --from=builder /usr/local/bin/ffmpeg /
 COPY --from=builder /usr/local/bin/ffprobe /
-COPY --from=builder /usr/local/share/doc/ffmpeg/* /doc/
+COPY --from=builder /doc-bundle/ /doc/
 COPY --from=builder /etc/ssl/cert.pem /etc/ssl/cert.pem
 COPY --from=builder /etc/fonts/ /etc/fonts/
 COPY --from=builder /usr/share/fonts/ /usr/share/fonts/
