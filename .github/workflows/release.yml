@@ -15,9 +15,11 @@ on:
         type: boolean
         default: false
 
+# Same explicit version (workflow_dispatch) queues; does not cancel in-progress runs.
+# Push / dispatch without version uses run_id so each run is independent.
 concurrency:
-  group: release-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: release-${{ github.workflow }}-${{ github.event.inputs.version || github.run_id }}
+  cancel-in-progress: false
 
 env:
   REGISTRY: docker.io/gtstef
