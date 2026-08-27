@@ -30,4 +30,18 @@ assert "decode 8.1 keeps libwebp install path" 0 needs_libwebp "8.1.1" "true"
 assert "decode skips openjpeg" 1 needs_openjpeg "9.0.1" "true"
 assert "full needs openjpeg" 0 needs_openjpeg "9.0.1" "false"
 
+default_version="$("${SCRIPT_DIR}/read-ffmpeg-version.sh")"
+if [ -z "$default_version" ]; then
+  echo "FAIL: read-ffmpeg-version.sh returned empty" >&2
+  exit 1
+fi
+echo "OK: read-ffmpeg-version default=${default_version}"
+
+override="$(FFMPEG_VERSION=8.1.2 "${SCRIPT_DIR}/read-ffmpeg-version.sh")"
+if [ "$override" != "8.1.2" ]; then
+  echo "FAIL: read-ffmpeg-version env override (got ${override})" >&2
+  exit 1
+fi
+echo "OK: read-ffmpeg-version env override"
+
 echo "All version-gates checks passed"

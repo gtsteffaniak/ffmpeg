@@ -433,7 +433,17 @@ make build-final
 
 ### Version-aware dependencies
 
-Build behavior is controlled by `FFMPEG_VERSION` (from [`fetch-sources.sh`](fetch-sources.sh)) and `DECODE_ONLY`. Gating logic lives in [`scripts/version-gates.sh`](scripts/version-gates.sh).
+Build behavior is controlled by `FFMPEG_VERSION` and `DECODE_ONLY`. Gating logic lives in [`scripts/version-gates.sh`](scripts/version-gates.sh).
+
+**Version resolution** (same everywhere):
+
+| Context | How `FFMPEG_VERSION` is chosen |
+|---|---|
+| Default | [`fetch-sources.sh`](fetch-sources.sh) `FFMPEG_VERSION:=…` line |
+| Override | `FFMPEG_VERSION=9.0.1` env (local builds, release CI) |
+| Reader | [`scripts/read-ffmpeg-version.sh`](scripts/read-ffmpeg-version.sh) — env first, else `fetch-sources.sh` |
+
+Release CI ([`.github/workflows/release.yml`](.github/workflows/release.yml)) resolves the version once in `resolve-version`, then exports it as job `FFMPEG_VERSION` for `make fetch-sources`, `make ci-build-component`, Docker tags, and the GitHub release tag.
 
 | Dependency | Full build | Decode-only |
 |---|---|---|

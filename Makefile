@@ -11,7 +11,7 @@ IMAGE_NAME ?= ffmpeg
 TAG ?= latest
 DECODE_TAG ?= decode
 ALPINE_VERSION ?= alpine:3.22
-FFMPEG_VERSION ?= $(shell grep 'FFMPEG_VERSION:=' fetch-sources.sh | head -1 | sed -E 's/.*FFMPEG_VERSION:=([0-9.]+).*/\1/')
+FFMPEG_VERSION ?= $(shell ./scripts/read-ffmpeg-version.sh)
 export FFMPEG_VERSION
 PLATFORMS ?= linux/amd64,linux/arm64
 
@@ -231,13 +231,13 @@ ci-build-component: ## CI: Build one component (COMPONENT=base|graphics|...|fina
 		echo "CI_FINAL_IMAGE is required when COMPONENT=final"; exit 1; \
 	fi
 	@if [ "$(COMPONENT)" = "final" ]; then \
-		BUILD_MODE=$(CI_BUILD_MODE) LOAD_IMAGE=$(LOAD_IMAGE) DECODE_ONLY=$(DECODE_ONLY) \
+		FFMPEG_VERSION=$(FFMPEG_VERSION) BUILD_MODE=$(CI_BUILD_MODE) LOAD_IMAGE=$(LOAD_IMAGE) DECODE_ONLY=$(DECODE_ONLY) \
 			PLATFORMS=$(PLATFORM) PUSH=true IMAGE=$(CI_FINAL_IMAGE) \
 			COMPONENT=final ./build.sh; \
 	elif [ "$(COMPONENT)" = "windows-components" ] || [ "$(COMPONENT)" = "windows" ]; then \
-		BUILD_MODE=$(CI_BUILD_MODE) DECODE_ONLY=$(DECODE_ONLY) COMPONENT=$(COMPONENT) ./build.sh; \
+		FFMPEG_VERSION=$(FFMPEG_VERSION) BUILD_MODE=$(CI_BUILD_MODE) DECODE_ONLY=$(DECODE_ONLY) COMPONENT=$(COMPONENT) ./build.sh; \
 	else \
-		BUILD_MODE=$(CI_BUILD_MODE) LOAD_IMAGE=$(LOAD_IMAGE) DECODE_ONLY=$(DECODE_ONLY) \
+		FFMPEG_VERSION=$(FFMPEG_VERSION) BUILD_MODE=$(CI_BUILD_MODE) LOAD_IMAGE=$(LOAD_IMAGE) DECODE_ONLY=$(DECODE_ONLY) \
 			PLATFORMS=$(PLATFORM) PUSH=false COMPONENT=$(COMPONENT) ./build.sh; \
 	fi
 

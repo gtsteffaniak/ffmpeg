@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/version-gates.sh
 source "${SCRIPT_DIR}/scripts/version-gates.sh"
 : "${DECODE_ONLY:=false}"
-: "${FFMPEG_VERSION:=9.0.1}"
+# FFMPEG_VERSION: set via env (release CI) or defaulted when fetching ffmpeg below.
 
 # Create source directory if it doesn't exist and change into it
 mkdir -p src && cd src

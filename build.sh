@@ -16,9 +16,9 @@ IMAGE=${IMAGE:-""}  # Full image name (e.g., docker.io/user/ffmpeg:8.0)
 DECODE_ONLY=${DECODE_ONLY:-"false"}
 ALPINE_VERSION=${ALPINE_VERSION:-"alpine:3.22"}
 read_ffmpeg_version() {
-    grep 'FFMPEG_VERSION:=' "$(dirname "$0")/fetch-sources.sh" | head -1 | sed -E 's/.*FFMPEG_VERSION:=([0-9.]+).*/\1/'
+    "$(dirname "$0")/scripts/read-ffmpeg-version.sh"
 }
-FFMPEG_VERSION=${FFMPEG_VERSION:-$(read_ffmpeg_version)}
+FFMPEG_VERSION="${FFMPEG_VERSION:-$(read_ffmpeg_version)}"
 export FFMPEG_VERSION
 GATED_BUILD_ARGS="--build-arg DECODE_ONLY=${DECODE_ONLY} --build-arg FFMPEG_VERSION=${FFMPEG_VERSION}"
 BUILD_MODE=${BUILD_MODE:-"sequential"}  # sequential, parallel, or max-parallel
