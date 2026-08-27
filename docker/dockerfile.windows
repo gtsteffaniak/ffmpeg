@@ -33,13 +33,12 @@ RUN apk add $APK_OPTS \
 
 COPY --from=deps ${MINGW}/ /usr/x86_64-w64-mingw32/
 
+COPY scripts/version-gates.sh /tmp/version-gates.sh
 COPY [ "src/ffmpeg*", "./ffmpeg" ]
 RUN cd ffmpeg && \
-    sed -i 's/svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc, &svt_enc->enc_params)/svt_av1_enc_init_handle(\&svt_enc->svt_handle, \&svt_enc->enc_params)/g' libavcodec/libsvtav1.c && \
-    FEATURES="" && \
-    if [ "$DECODE_ONLY" != "true" ]; then \
-      FEATURES="$FEATURES --enable-libx264 --enable-libx265 --enable-libmp3lame"; \
-    fi && \
+    . /tmp/version-gates.sh && \
+    apply_svtav1_api_patch && \
+    build_windows_configure_flags ./configure "$DECODE_ONLY" && \
     ./configure \
       --prefix=${MINGW} \
       --pkg-config=pkg-config \
@@ -53,12 +52,10 @@ RUN cd ffmpeg && \
       --enable-gpl \
       --enable-version3 \
       --enable-openssl \
-      --enable-libdav1d \
-      --enable-libaom \
-      --enable-libvpx \
       --extra-cflags="-static -static-libgcc -O3 -I${MINGW}/include" \
       --extra-cxxflags="-static -static-libgcc -O3 -I${MINGW}/include" \
       --extra-ldflags="-static -static-libgcc -L${MINGW}/lib" \
+      $BASE_FLAGS \
       $FEATURES \
     || (cat ffbuild/config.log; false) && \
     make -j"$(nproc)" install

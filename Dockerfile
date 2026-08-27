@@ -287,7 +287,8 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
 
 # xeve (HEVC encoder)
 COPY [ "src/xeve-*", "./xeve" ]
-RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+RUN . /tmp/version-gates.sh && \
+  if [ "$(uname -m)" = "armv7l" ] || ! needs_modern_codecs_build "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
   echo "Skipping xeve build"; \
   else \
     cd xeve && \
@@ -304,7 +305,8 @@ RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
 
 # xevd (VVC/H.266 encoder)
 COPY [ "src/xevd-*", "./xevd" ]
-RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+RUN . /tmp/version-gates.sh && \
+  if [ "$(uname -m)" = "armv7l" ] || ! needs_modern_codecs_build "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
   echo "Skipping xevd build"; \
   else \
     cd xevd && \
@@ -352,7 +354,11 @@ RUN if [ "$(uname -m)" = "armv7l" ]; then \
 
 # hardware acceleration for intel cpu
 COPY [ "src/libvpl-*", "./libvpl" ]
-RUN cd libvpl && \
+RUN . /tmp/version-gates.sh && \
+  if ! needs_libvpl_build "$FFMPEG_VERSION"; then \
+    echo "Skipping libvpl build (FFmpeg ${FFMPEG_VERSION} < 6.0)"; \
+  else \
+    cd libvpl && \
     cmake -B build \
       -G"Unix Makefiles" \
       -DCMAKE_BUILD_TYPE=Release \
@@ -363,11 +369,13 @@ RUN cd libvpl && \
       -DBUILD_TESTS=OFF \
       -DENABLE_WARNING_AS_ERROR=ON && \
     cmake --build build -j$(nproc) && \
-    cmake --install build;
+    cmake --install build; \
+  fi
 
 # vvenc (HEVC encoder)
 COPY [ "src/vvenc-*", "./vvenc" ]
-RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+RUN . /tmp/version-gates.sh && \
+  if [ "$(uname -m)" = "armv7l" ] || ! needs_modern_codecs_build "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
     echo "Skipping vvenc build"; \
     else \
     cd vvenc && \
@@ -459,42 +467,10 @@ COPY scripts/verify-native-webp.sh /tmp/verify-native-webp.sh
 COPY [ "src/ffmpeg*", "./ffmpeg" ]
 RUN cd ffmpeg && \
   . /tmp/version-gates.sh && \
-  sed -i 's/svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc, &svt_enc->enc_params)/svt_av1_enc_init_handle(\&svt_enc->svt_handle, \&svt_enc->enc_params)/g' libavcodec/libsvtav1.c && \
-  FEATURES="" && \
-  if needs_libvpx "$FFMPEG_VERSION" "$DECODE_ONLY" && [ "$(uname -m)" != "armv7l" ]; then \
-    FEATURES="$FEATURES --enable-libvpx"; \
-  fi && \
-  if needs_libaom "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
-    FEATURES="$FEATURES --enable-libaom"; \
-  fi && \
-  if needs_openjpeg "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
-    FEATURES="$FEATURES --enable-libopenjpeg"; \
-  fi && \
-  if needs_libvorbis "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
-    FEATURES="$FEATURES --enable-libvorbis"; \
-  fi && \
-  if needs_libwebp "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
-    FEATURES="$FEATURES --enable-libwebp"; \
-  fi && \
-  if [ "$DECODE_ONLY" != "true" ]; then \
-    FEATURES="$FEATURES --enable-nonfree"; \
-    FEATURES="$FEATURES --enable-libx264"; \
-    FEATURES="$FEATURES --enable-librav1e"; \
-    FEATURES="$FEATURES --enable-libsvtav1"; \
-    FEATURES="$FEATURES --enable-libx265"; \
-    FEATURES="$FEATURES --enable-libxeve"; \
-    FEATURES="$FEATURES --enable-libxevd"; \
-    FEATURES="$FEATURES --enable-libvvenc"; \
-    FEATURES="$FEATURES --enable-libdavs2"; \
-    FEATURES="$FEATURES --enable-libmysofa"; \
-    FEATURES="$FEATURES --enable-libuavs3d"; \
-    FEATURES="$FEATURES --enable-libvidstab"; \
-    FEATURES="$FEATURES --enable-libvmaf"; \
-    FEATURES="$FEATURES --enable-libvo-amrwbenc"; \
-    FEATURES="$FEATURES --enable-libmp3lame"; \
-  fi && \
-    PKG_CONFIG_PATH="/usr/lib/pkgconfig/:${PKG_CONFIG_PATH}" && \
-    ./configure \
+  apply_svtav1_api_patch && \
+  build_ffmpeg_configure_flags ./configure "$FFMPEG_VERSION" "$DECODE_ONLY" && \
+  PKG_CONFIG_PATH="/usr/lib/pkgconfig/:${PKG_CONFIG_PATH}" && \
+  ./configure \
     --pkg-config-flags="--static" \
     --extra-cflags="$CFLAGS" \
     --extra-cxxflags="$CXXFLAGS" \
@@ -506,21 +482,8 @@ RUN cd ffmpeg && \
     --disable-ffplay \
     --enable-static \
     --enable-gpl \
-    --enable-libvpl \
     --enable-version3 \
-    --enable-libzimg \
-    --enable-fontconfig \
-    --enable-gray \
-    --enable-iconv \
-    --enable-lcms2 \
-    --enable-libxml2 \
-    --enable-libdav1d \
-    --enable-libass \
-    --enable-libfreetype \
-    --enable-libfribidi \
-    --enable-libharfbuzz \
-    --enable-libsoxr \
-    --enable-libsnappy \
+    $BASE_FLAGS \
     $FEATURES \
   || (cat ffbuild/config.log ; false) && \
   make -j$(nproc) install

@@ -22,42 +22,10 @@ COPY scripts/version-gates.sh scripts/verify-native-webp.sh /tmp/
 COPY [ "src/ffmpeg*", "./ffmpeg" ]
 RUN cd ffmpeg && \
   . /tmp/version-gates.sh && \
-  sed -i 's/svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc, &svt_enc->enc_params)/svt_av1_enc_init_handle(\&svt_enc->svt_handle, \&svt_enc->enc_params)/g' libavcodec/libsvtav1.c && \
-  FEATURES="" && \
-  if needs_libvpx "$FFMPEG_VERSION" "$DECODE_ONLY" && [ "$(uname -m)" != "armv7l" ]; then \
-    FEATURES="$FEATURES --enable-libvpx"; \
-  fi && \
-  if needs_libaom "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
-    FEATURES="$FEATURES --enable-libaom"; \
-  fi && \
-  if needs_openjpeg "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
-    FEATURES="$FEATURES --enable-libopenjpeg"; \
-  fi && \
-  if needs_libvorbis "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
-    FEATURES="$FEATURES --enable-libvorbis"; \
-  fi && \
-  if needs_libwebp "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
-    FEATURES="$FEATURES --enable-libwebp"; \
-  fi && \
-  if [ "$DECODE_ONLY" != "true" ]; then \
-    FEATURES="$FEATURES --enable-nonfree"; \
-    FEATURES="$FEATURES --enable-libx264"; \
-    FEATURES="$FEATURES --enable-librav1e"; \
-    FEATURES="$FEATURES --enable-libsvtav1"; \
-    FEATURES="$FEATURES --enable-libx265"; \
-    FEATURES="$FEATURES --enable-libxeve"; \
-    FEATURES="$FEATURES --enable-libxevd"; \
-    FEATURES="$FEATURES --enable-libvvenc"; \
-    FEATURES="$FEATURES --enable-libdavs2"; \
-    FEATURES="$FEATURES --enable-libmysofa"; \
-    FEATURES="$FEATURES --enable-libuavs3d"; \
-    FEATURES="$FEATURES --enable-libvidstab"; \
-    FEATURES="$FEATURES --enable-libvmaf"; \
-    FEATURES="$FEATURES --enable-libvo-amrwbenc"; \
-    FEATURES="$FEATURES --enable-libmp3lame"; \
-  fi && \
-    PKG_CONFIG_PATH="/usr/lib/pkgconfig/:${PKG_CONFIG_PATH}" && \
-    ./configure \
+  apply_svtav1_api_patch && \
+  build_ffmpeg_configure_flags ./configure "$FFMPEG_VERSION" "$DECODE_ONLY" && \
+  PKG_CONFIG_PATH="/usr/lib/pkgconfig/:${PKG_CONFIG_PATH}" && \
+  ./configure \
     --pkg-config-flags="--static" \
     --extra-cflags="$CFLAGS" \
     --extra-cxxflags="$CXXFLAGS" \
@@ -69,21 +37,8 @@ RUN cd ffmpeg && \
     --disable-ffplay \
     --enable-static \
     --enable-gpl \
-    --enable-libvpl \
     --enable-version3 \
-    --enable-libzimg \
-    --enable-fontconfig \
-    --enable-gray \
-    --enable-iconv \
-    --enable-lcms2 \
-    --enable-libxml2 \
-    --enable-libdav1d \
-    --enable-libass \
-    --enable-libfreetype \
-    --enable-libfribidi \
-    --enable-libharfbuzz \
-    --enable-libsoxr \
-    --enable-libsnappy \
+    $BASE_FLAGS \
     $FEATURES \
   || (cat ffbuild/config.log ; false) && \
   make -j$(nproc) install

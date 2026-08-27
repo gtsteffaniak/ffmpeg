@@ -12,6 +12,18 @@ ffmpeg_version_ge() {
   [ "$ver_key" -ge "$min_key" ]
 }
 
+configure_supports_flag() {
+  local configure=$1 flag=$2
+  "$configure" --help 2>/dev/null | grep -Fq -- "$flag"
+}
+
+append_if_supported() {
+  local configure=$1 var_name=$2 flag=$3
+  if configure_supports_flag "$configure" "$flag"; then
+    eval "$var_name=\"\${$var_name} $flag\""
+  fi
+}
+
 # libwebp is encode-only; skip on decode-only FFmpeg 9.0+ (native animated WebP decode).
 needs_libwebp() {
   local ver=$1 decode_only=$2
@@ -46,4 +58,115 @@ needs_libaom() {
 needs_libvorbis() {
   local _ver=$1 decode_only=$2
   [ "$decode_only" != "true" ]
+}
+
+# libvpl (oneVPL) is only used by FFmpeg 6.0+.
+needs_libvpl_build() {
+  ffmpeg_version_ge "$1" "6.0.0"
+}
+
+# xeve/xevd/vvenc wrappers require FFmpeg 7.0+.
+needs_modern_codecs_build() {
+  local ver=$1 decode_only=$2
+  [ "$decode_only" != "true" ] && ffmpeg_version_ge "$ver" "7.0.0"
+}
+
+needs_svtav1_api_patch() {
+  [ -f libavcodec/libsvtav1.c ] && \
+    grep -q 'svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc,' libavcodec/libsvtav1.c
+}
+
+apply_svtav1_api_patch() {
+  if needs_svtav1_api_patch; then
+    sed -i 's/svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc, &svt_enc->enc_params)/svt_av1_enc_init_handle(\&svt_enc->svt_handle, \&svt_enc->enc_params)/g' libavcodec/libsvtav1.c
+  fi
+}
+
+# Populate BASE_FLAGS and FEATURES for Linux static FFmpeg configure.
+# Must be called from the ffmpeg source directory (or pass configure path).
+build_ffmpeg_configure_flags() {
+  local configure=${1:-./configure}
+  local ffmpeg_version=$2
+  local decode_only=$3
+
+  BASE_FLAGS=""
+  FEATURES=""
+
+  local base_flag
+  for base_flag in \
+    --enable-libvpl \
+    --enable-libzimg \
+    --enable-fontconfig \
+    --enable-gray \
+    --enable-iconv \
+    --enable-lcms2 \
+    --enable-libxml2 \
+    --enable-libdav1d \
+    --enable-libass \
+    --enable-libfreetype \
+    --enable-libfribidi \
+    --enable-libharfbuzz \
+    --enable-libsoxr \
+    --enable-libsnappy; do
+    append_if_supported "$configure" BASE_FLAGS "$base_flag"
+  done
+
+  if needs_libvpx "$ffmpeg_version" "$decode_only" && [ "$(uname -m)" != "armv7l" ]; then
+    append_if_supported "$configure" FEATURES "--enable-libvpx"
+  fi
+  if needs_libaom "$ffmpeg_version" "$decode_only"; then
+    append_if_supported "$configure" FEATURES "--enable-libaom"
+  fi
+  if needs_openjpeg "$ffmpeg_version" "$decode_only"; then
+    append_if_supported "$configure" FEATURES "--enable-libopenjpeg"
+  fi
+  if needs_libvorbis "$ffmpeg_version" "$decode_only"; then
+    append_if_supported "$configure" FEATURES "--enable-libvorbis"
+  fi
+  if needs_libwebp "$ffmpeg_version" "$decode_only"; then
+    append_if_supported "$configure" FEATURES "--enable-libwebp"
+  fi
+
+  if [ "$decode_only" != "true" ]; then
+    local encode_flag
+    for encode_flag in \
+      --enable-nonfree \
+      --enable-libx264 \
+      --enable-librav1e \
+      --enable-libsvtav1 \
+      --enable-libx265 \
+      --enable-libxeve \
+      --enable-libxevd \
+      --enable-libvvenc \
+      --enable-libdavs2 \
+      --enable-libmysofa \
+      --enable-libuavs3d \
+      --enable-libvidstab \
+      --enable-libvmaf \
+      --enable-libvo-amrwbenc \
+      --enable-libmp3lame; do
+      append_if_supported "$configure" FEATURES "$encode_flag"
+    done
+  fi
+}
+
+# Populate BASE_FLAGS and FEATURES for Windows cross-compile configure.
+build_windows_configure_flags() {
+  local configure=${1:-./configure}
+  local decode_only=$2
+
+  BASE_FLAGS=""
+  FEATURES=""
+
+  local base_flag
+  for base_flag in --enable-libdav1d --enable-libaom --enable-libvpx; do
+    append_if_supported "$configure" BASE_FLAGS "$base_flag"
+  done
+
+  if [ "$decode_only" != "true" ]; then
+    local encode_flag
+    for encode_flag in --enable-nonfree --enable-libx264 --enable-libx265 --enable-libmp3lame; do
+      append_if_supported "$configure" FEATURES "$encode_flag"
+    done
+  fi
 }
