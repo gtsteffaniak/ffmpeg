@@ -1,11 +1,19 @@
 FROM ffmpeg-base:latest AS vaapi
 
+ARG FFMPEG_VERSION=9.0.1
+
+COPY scripts/version-gates.sh /tmp/version-gates.sh
+
 # libva (Video Acceleration API - use Alpine package for simplicity)
 RUN apk add $APK_OPTS libva-dev
 
 # libvpl (Intel Video Processing Library - oneAPI Video Processing Library)
 COPY [ "src/libvpl-*", "./libvpl" ]
-RUN cd libvpl && \
+RUN . /tmp/version-gates.sh && \
+  if ! needs_libvpl_build "$FFMPEG_VERSION"; then \
+    echo "Skipping libvpl build (FFmpeg ${FFMPEG_VERSION} < 6.0)"; \
+  else \
+    cd libvpl && \
     cmake -B build \
       -G"Unix Makefiles" \
       -DCMAKE_BUILD_TYPE=Release \
@@ -16,4 +24,5 @@ RUN cd libvpl && \
       -DBUILD_TESTS=OFF \
       -DENABLE_WARNING_AS_ERROR=OFF && \
     cmake --build build -j$(nproc) && \
-    cmake --install build
+    cmake --install build; \
+  fi
