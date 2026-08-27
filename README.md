@@ -431,6 +431,20 @@ make build-final
 
 ## Maintenance & Development
 
+### Version-aware dependencies
+
+Build behavior is controlled by `FFMPEG_VERSION` (from [`fetch-sources.sh`](fetch-sources.sh)) and `DECODE_ONLY`. Gating logic lives in [`scripts/version-gates.sh`](scripts/version-gates.sh).
+
+| Dependency | Full build | Decode-only |
+|---|---|---|
+| libwebp | Required (WebP encode) | Skipped on FFmpeg 9.0+ (native animated WebP decode) |
+| libopenjpeg | Required (J2K encode) | Skipped (native J2K decode) |
+| libvpx | Required (VP8/9 encode) | Skipped (native VP8/9 decode) |
+| libaom | Required (AV1 encode/decode wrapper) | Skipped (dav1d kept) |
+| libvorbis | Required | Skipped (native Vorbis decode) |
+
+Pass overrides when building: `DECODE_ONLY=true FFMPEG_VERSION=9.0.1 ./build.sh`
+
 ### Update Sources
 
 ```bash

@@ -1,6 +1,6 @@
 .PHONY: help build build-local build-push-all build-decode build-decode-push \
         build-multiplatform build-multiplatform-decode update fetch-sources \
-        clean test test-encoders test-version \
+        clean test test-encoders test-version test-version-gates \
         ci-push-platform ci-push-platform-decode ci-merge-manifest ci-merge-manifest-decode \
         ci-package-release ci-package-release-decode ci-build-component \
         ci-build-windows ci-package-windows-release ci-package-windows-release-decode
@@ -11,6 +11,8 @@ IMAGE_NAME ?= ffmpeg
 TAG ?= latest
 DECODE_TAG ?= decode
 ALPINE_VERSION ?= alpine:3.22
+FFMPEG_VERSION ?= $(shell grep 'FFMPEG_VERSION:=' fetch-sources.sh | head -1 | sed -E 's/.*FFMPEG_VERSION:=([0-9.]+).*/\1/')
+export FFMPEG_VERSION
 PLATFORMS ?= linux/amd64,linux/arm64
 
 # Construct full image names
@@ -51,6 +53,7 @@ help: ## Show this help message
 	@echo "  REGISTRY          - Docker registry (default: $(REGISTRY))"
 	@echo "  IMAGE_NAME        - Image name without registry (default: $(IMAGE_NAME))"
 	@echo "  TAG               - Image tag (default: $(TAG))"
+	@echo "  FFMPEG_VERSION    - From fetch-sources.sh (default: $(FFMPEG_VERSION))"
 	@echo "  PLATFORMS         - Target platforms (default: $(PLATFORMS))"
 	@echo ""
 	@echo "$(YELLOW)Supported Platforms:$(NC) linux/amd64, linux/arm64"
@@ -128,12 +131,8 @@ update: ## Update source versions using helper program
 	fi
 
 fetch-sources: ## Fetch/download all source packages
-	@echo "$(CYAN)Fetching source packages...$(NC)"
-	@if [ -f fetch-sources.sh ]; then \
-		./fetch-sources.sh; \
-	else \
-		echo "$(YELLOW)fetch-sources.sh not found$(NC)"; \
-	fi
+	@echo "$(CYAN)Fetching sources (FFMPEG_VERSION=$(FFMPEG_VERSION))...$(NC)"
+	DECODE_ONLY=$(DECODE_ONLY) FFMPEG_VERSION=$(FFMPEG_VERSION) ./fetch-sources.sh
 
 update-and-build: update fetch-sources build ## Update sources and build locally
 
@@ -158,6 +157,10 @@ test: test-version ## Run basic tests on local final image
 test-version: ## Show FFmpeg version and build configuration
 	@echo "$(CYAN)Testing FFmpeg version...$(NC)"
 	docker run --rm ffmpeg-final:latest -version
+
+test-version-gates: ## Run version-gates.sh unit checks
+	@echo "$(CYAN)Testing version gates...$(NC)"
+	./scripts/test-version-gates.sh
 
 test-buildconf: ## Show FFmpeg build configuration
 	@echo "$(CYAN)Testing FFmpeg build configuration...$(NC)"
@@ -308,6 +311,7 @@ info: ## Show current configuration
 	@echo "  Tag:           $(TAG)"
 	@echo "  Decode Tag:    $(DECODE_TAG)"
 	@echo "  Alpine:        $(ALPINE_VERSION)"
+	@echo "  FFmpeg:        $(FFMPEG_VERSION)"
 	@echo "  Platforms:     $(PLATFORMS)"
 	@echo ""
 	@echo "$(CYAN)Local Images:$(NC)"

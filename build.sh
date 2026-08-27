@@ -15,6 +15,12 @@ NC='\033[0m' # No Color
 IMAGE=${IMAGE:-""}  # Full image name (e.g., docker.io/user/ffmpeg:8.0)
 DECODE_ONLY=${DECODE_ONLY:-"false"}
 ALPINE_VERSION=${ALPINE_VERSION:-"alpine:3.22"}
+read_ffmpeg_version() {
+    grep 'FFMPEG_VERSION:=' "$(dirname "$0")/fetch-sources.sh" | head -1 | sed -E 's/.*FFMPEG_VERSION:=([0-9.]+).*/\1/'
+}
+FFMPEG_VERSION=${FFMPEG_VERSION:-$(read_ffmpeg_version)}
+export FFMPEG_VERSION
+GATED_BUILD_ARGS="--build-arg DECODE_ONLY=${DECODE_ONLY} --build-arg FFMPEG_VERSION=${FFMPEG_VERSION}"
 BUILD_MODE=${BUILD_MODE:-"sequential"}  # sequential, parallel, or max-parallel
 NO_CACHE=${NO_CACHE:-"false"}
 COMPONENT=${COMPONENT:-"all"}
@@ -73,6 +79,7 @@ else
     echo -e "  ${YELLOW}Build:${NC}         Local only"
 fi
 echo -e "  ${YELLOW}Decode Only:${NC}   ${DECODE_ONLY}"
+echo -e "  ${YELLOW}FFmpeg:${NC}        ${FFMPEG_VERSION}"
 echo -e "  ${YELLOW}Alpine:${NC}        ${ALPINE_VERSION}"
 echo -e "  ${YELLOW}Build Mode:${NC}    ${BUILD_MODE}"
 echo -e "  ${YELLOW}No Cache:${NC}      ${NO_CACHE}"
@@ -227,18 +234,18 @@ build_parallel() {
 BASE_IMAGE="dockerfile.base|base||Base build environment with Alpine + tools + glib"
 
 TIER2_IMAGES=(
-    "dockerfile.graphics|graphics|--build-arg DECODE_ONLY=${DECODE_ONLY}|Graphics libraries (cairo, pango, harfbuzz)"
-    "dockerfile.av1|av1|--build-arg DECODE_ONLY=${DECODE_ONLY}|AV1 codecs (aom, dav1d, SVT-AV1, rav1e)"
-    "dockerfile.x264-x265|x264-x265|--build-arg DECODE_ONLY=${DECODE_ONLY}|H.264/265 encoders (x264, x265)"
-    "dockerfile.modern-codecs|modern-codecs|--build-arg DECODE_ONLY=${DECODE_ONLY}|Modern codecs (xeve, xevd, vvenc)"
-    "dockerfile.vpx-avs|vpx-avs|--build-arg DECODE_ONLY=${DECODE_ONLY}|VP8/9 + AVS codecs (libvpx, davs2, uavs3d)"
-    "dockerfile.image-formats|image-formats||Image formats (webp, openjpeg, zimg, libjxl)"
-    "dockerfile.audio|audio|--build-arg DECODE_ONLY=${DECODE_ONLY}|Audio codecs (lame, vorbis, rubberband)"
-    "dockerfile.vaapi|vaapi||Hardware acceleration (libva, libvpl)"
-    "dockerfile.processing|processing|--build-arg DECODE_ONLY=${DECODE_ONLY}|Processing tools (vid.stab, vmaf, libass)"
+    "dockerfile.graphics|graphics|${GATED_BUILD_ARGS}|Graphics libraries (cairo, pango, harfbuzz)"
+    "dockerfile.av1|av1|${GATED_BUILD_ARGS}|AV1 codecs (aom, dav1d, SVT-AV1, rav1e)"
+    "dockerfile.x264-x265|x264-x265|${GATED_BUILD_ARGS}|H.264/265 encoders (x264, x265)"
+    "dockerfile.modern-codecs|modern-codecs|${GATED_BUILD_ARGS}|Modern codecs (xeve, xevd, vvenc)"
+    "dockerfile.vpx-avs|vpx-avs|${GATED_BUILD_ARGS}|VP8/9 + AVS codecs (libvpx, davs2, uavs3d)"
+    "dockerfile.image-formats|image-formats|${GATED_BUILD_ARGS}|Image formats (webp, openjpeg, zimg, libjxl)"
+    "dockerfile.audio|audio|${GATED_BUILD_ARGS}|Audio codecs (lame, vorbis, rubberband)"
+    "dockerfile.vaapi|vaapi|${GATED_BUILD_ARGS}|Hardware acceleration (libva, libvpl)"
+    "dockerfile.processing|processing|${GATED_BUILD_ARGS}|Processing tools (vid.stab, vmaf, libass)"
 )
 
-FINAL_IMAGE="dockerfile.final|final|--build-arg DECODE_ONLY=${DECODE_ONLY} --build-arg ALPINE_VERSION=${ALPINE_VERSION}|FFmpeg compilation + testing + final package"
+FINAL_IMAGE="dockerfile.final|final|${GATED_BUILD_ARGS} --build-arg ALPINE_VERSION=${ALPINE_VERSION}|FFmpeg compilation + testing + final package"
 
 # Build based on component selection
 if [ "$COMPONENT" != "all" ]; then
