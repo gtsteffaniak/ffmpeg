@@ -45,7 +45,8 @@ make help
 
 ```
 ffmpeg/
-├── build.sh                       (main build script - parallel + multi-platform support)
+├── sources.json                   (dependency catalog)
+├── tools/catalog/                 (Go CLI for sources.json)
 ├── docker/
 │   ├── dockerfile.base            (Alpine + build tools + glib)
 │   ├── dockerfile.graphics        (Cairo, Pango, HarfBuzz)
@@ -57,18 +58,20 @@ ffmpeg/
 │   ├── dockerfile.audio           (Audio codecs: lame, vorbis, ogg, rubberband)
 │   ├── dockerfile.vaapi           (Hardware acceleration: libva, libvpl)
 │   ├── dockerfile.processing      (Processing: vmaf, vidstab, libass, libmysofa)
+│   ├── dockerfile.monolithic      (original monolithic build - kept for reference)
 │   ├── dockerfile.final           (Linux FFmpeg link + ELF validation + scratch image)
 │   ├── dockerfile.alpine          (Wraps scratch image for CI binary extraction)
 │   ├── dockerfile.windows-components  (mingw-w64 codec/library deps for Windows)
 │   ├── dockerfile.windows         (Windows FFmpeg link + scratch .exe image)
 │   └── cross-mingw.ini            (Meson cross-file for Windows targets)
 ├── scripts/
+│   ├── build.sh                   (main build script - parallel + multi-platform support)
+│   ├── fetch-sources.sh           (download src/ from sources.json)
+│   ├── checkelf.sh                (binary validation - used by final stage)
 │   ├── build-windows.sh           (Build windows-components + windows)
 │   ├── package-windows-release.sh (Extract .exe binaries into release zip)
 │   ├── package-release.sh         (Extract Linux binaries into release tar.gz)
 │   └── merge-manifest.sh          (Merge per-arch Docker manifests)
-├── Dockerfile                     (original monolithic - kept for reference)
-├── checkelf.sh                    (binary validation - used by final stage)
 └── src/                           (library source code)
 ```
 
@@ -264,7 +267,7 @@ IMAGE=docker.io/gtstef/ffmpeg:8.0-decode \
   DECODE_ONLY=true \
   PLATFORMS=linux/amd64,linux/arm64 \
   PUSH=true \
-  ./build.sh
+  ./scripts/build.sh
 
 # Note: All component and final images are built for specified platforms
 # Components remain local, only the final image gets pushed
@@ -318,11 +321,11 @@ make build-x264-x265
 make build-final
 
 # Windows components (cross-compile)
-COMPONENT=windows-components ./build.sh
-COMPONENT=windows ./build.sh
+COMPONENT=windows-components ./scripts/build.sh
+COMPONENT=windows ./scripts/build.sh
 
 # Using script directly for more control
-COMPONENT=av1 NO_CACHE=true ./build.sh
+COMPONENT=av1 NO_CACHE=true ./scripts/build.sh
 ```
 
 ### Maintenance
@@ -365,7 +368,7 @@ make build-final
 # 1. Edit docker/dockerfile.final (change FFmpeg ./configure flags)
 
 # 2. Rebuild only final (all components cached)
-COMPONENT=final NO_CACHE=true ./build.sh
+COMPONENT=final NO_CACHE=true ./scripts/build.sh
 
 # Total time: ~10-15 minutes
 ```
@@ -427,7 +430,7 @@ make build-parallel
 make test-av1
 
 # Rebuild specific component after changes
-COMPONENT=av1 NO_CACHE=true ./build.sh
+COMPONENT=av1 NO_CACHE=true ./scripts/build.sh
 make build-final
 ```
 
@@ -437,15 +440,29 @@ make build-final
 
 Build behavior is controlled by `FFMPEG_VERSION` and `DECODE_ONLY`. Gating logic lives in [`scripts/version-gates.sh`](scripts/version-gates.sh).
 
+**Dependency catalog:** all versions, bump remotes, fetch methods, and the GitHub release matrix live in [`sources.json`](sources.json). The catalog CLI lives in [`tools/catalog/`](tools/catalog/):
+
+```bash
+go run -C tools/catalog . validate
+go run -C tools/catalog . read release.ffmpeg_version
+go run -C tools/catalog . update                 # weekly bumps (also: make update)
+go run -C tools/catalog . fetch-script           # used by scripts/fetch-sources.sh
+go run -C tools/catalog . release-body out.md    # GitHub release notes (no fetch-sources needed)
+```
+
+Release notes are generated from `sources.json` only. Alpine packages (`rav1e`, `opus`, `vo-amrwbenc`) resolve their APK version from the Alpine release matching `build.alpine_image` (main + community, plus optional `build.apk_repository`). The decode column uses ✅/❌.
+
 **Version resolution** (same everywhere):
 
 | Context | How `FFMPEG_VERSION` is chosen |
 |---|---|
-| Default | [`fetch-sources.sh`](fetch-sources.sh) `FFMPEG_VERSION:=…` line |
+| Default | [`sources.json`](sources.json) `release.ffmpeg_version` |
 | Override | `FFMPEG_VERSION=9.0.1` env (local builds, release CI) |
-| Reader | [`scripts/read-ffmpeg-version.sh`](scripts/read-ffmpeg-version.sh) — env first, else `fetch-sources.sh` |
+| Reader | `go run -C tools/catalog . read release.ffmpeg_version` — env first, else catalog |
 
-Release CI ([`.github/workflows/release.yml`](.github/workflows/release.yml)) resolves the version once in `resolve-version`, then exports it as job `FFMPEG_VERSION` for `make fetch-sources`, `make ci-build-component`, Docker tags, and the GitHub release tag.
+Release CI ([`.github/workflows/release.yml`](.github/workflows/release.yml)) resolves the version once in `resolve-version`, then exports it as job `FFMPEG_VERSION` for build jobs (`fetch-sources`, Docker tags). Release notes are generated from `sources.json` only — no source fetch in the publish job.
+
+Push-to-main releases read `release.mark_github_latest` from [`sources.json`](sources.json) to set GitHub’s release **Latest** badge. Manual **workflow_dispatch** runs use the **update_latest** checkbox instead. This does not change Docker Hub `:latest` tags.
 
 | Dependency | Full build | Decode-only |
 |---|---|---|
@@ -457,9 +474,9 @@ Release CI ([`.github/workflows/release.yml`](.github/workflows/release.yml)) re
 
 Optional library configure flags (`--enable-libvpl`, `--enable-libxeve`, `--enable-libharfbuzz`, etc.) are not hardcoded for the repo default version. At build time, [`scripts/version-gates.sh`](scripts/version-gates.sh) probes the checked-out FFmpeg tree’s `./configure --help` and only passes flags that exist for that release. Component stages also skip building libvpl when `FFMPEG_VERSION < 6.0` and xeve/xevd/vvenc when `FFMPEG_VERSION < 7.0`.
 
-Docker builds pass `--disable-doc` when supported and install with `install-progs` so legacy FFmpeg releases do not run Texinfo HTML generation on Alpine 3.22. [`fetch-sources.sh`](fetch-sources.sh) validates downloaded archives (rejecting HTML error pages) and fetches dav1d via GitHub git tags instead of GitLab tarball URLs.
+Docker builds pass `--disable-doc` when supported and install with `install-progs` so legacy FFmpeg releases do not run Texinfo HTML generation on Alpine 3.22. [`scripts/fetch-sources.sh`](scripts/fetch-sources.sh) validates downloaded archives (rejecting HTML error pages) and fetches dav1d via GitHub git tags instead of GitLab tarball URLs.
 
-Pass overrides when building: `DECODE_ONLY=true FFMPEG_VERSION=9.0.1 ./build.sh`
+Pass overrides when building: `DECODE_ONLY=true FFMPEG_VERSION=9.0.1 ./scripts/build.sh`
 
 ### Update Sources
 
@@ -556,7 +573,7 @@ make ci-package-windows-release TAG=8.0
 
 # Direct script usage
 IMAGE=docker.io/user/ffmpeg:8.0-decode DECODE_ONLY=true \
-  PLATFORMS=linux/amd64,linux/arm64 PUSH=true ./build.sh
+  PLATFORMS=linux/amd64,linux/arm64 PUSH=true ./scripts/build.sh
 
 # Components
 make build-av1                # Build specific component

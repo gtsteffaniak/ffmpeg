@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release version (default from FFMPEG_VERSION in fetch-sources.sh)
+        description: Release version (default from sources.json release.ffmpeg_version)
         required: false
       update_latest:
-        description: Mark this release as latest on GitHub
+        description: Mark this release as latest on GitHub (manual runs only; push uses release.mark_github_latest in sources.json)
         required: false
         type: boolean
         default: false
@@ -36,13 +36,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/catalog/go.mod
+
       - name: Determine version
         id: version
         run: |
+          CATALOG_VERSION="$(go run -C tools/catalog . read release.ffmpeg_version)"
           if [ -n "${{ github.event.inputs.version }}" ]; then
             VERSION="${{ github.event.inputs.version }}"
+            if [ "$VERSION" != "$CATALOG_VERSION" ]; then
+              echo "Manual version ${VERSION} does not match catalog ${CATALOG_VERSION}" >&2
+              echo "Update sources.json or release the catalog version." >&2
+              exit 1
+            fi
           else
-            VERSION="$(./scripts/read-ffmpeg-version.sh)"
+            VERSION="$CATALOG_VERSION"
           fi
 
           if [ -z "$VERSION" ]; then
@@ -51,13 +62,19 @@ jobs:
           fi
 
           MAKE_LATEST=false
-          if [ "${{ github.event.inputs.update_latest }}" = "true" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.update_latest }}" = "true" ]; then
+              MAKE_LATEST=true
+            fi
+          elif [ "$(go run -C tools/catalog . read release.mark_github_latest)" = "true" ]; then
             MAKE_LATEST=true
           fi
 
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "make_latest=${MAKE_LATEST}" >> "$GITHUB_OUTPUT"
           echo "Building version ${VERSION} from ${{ github.ref_name }} (make_latest=${MAKE_LATEST})"
+
+          go run -C tools/catalog . validate
 
   build-amd64:
     name: Build amd64 (Linux + Windows)
@@ -75,10 +92,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/catalog/go.mod
+
       - name: Verify release version
         run: |
           echo "FFMPEG_VERSION=${FFMPEG_VERSION}"
-          test "$(./scripts/read-ffmpeg-version.sh)" = "${FFMPEG_VERSION}"
+          test -n "${FFMPEG_VERSION}"
 
       - name: Fetch sources
         run: make fetch-sources DECODE_ONLY=false
@@ -203,10 +225,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/catalog/go.mod
+
       - name: Verify release version
         run: |
           echo "FFMPEG_VERSION=${FFMPEG_VERSION}"
-          test "$(./scripts/read-ffmpeg-version.sh)" = "${FFMPEG_VERSION}"
+          test -n "${FFMPEG_VERSION}"
 
       - name: Fetch sources
         run: make fetch-sources DECODE_ONLY=false
@@ -304,6 +331,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/catalog/go.mod
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -330,11 +362,8 @@ jobs:
           name: windows-release-artifacts
           path: release-artifacts
 
-      - name: Fetch sources for release notes
-        run: make fetch-sources DECODE_ONLY=false
-
       - name: Generate release notes
-        run: ./scripts/generate-release-body.sh release-notes.md
+        run: make generate-release-body RELEASE_BODY=release-notes.md
 
       - name: Create or update GitHub release
         uses: softprops/action-gh-release@v2

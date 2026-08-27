@@ -15,8 +15,10 @@ NC='\033[0m' # No Color
 IMAGE=${IMAGE:-""}  # Full image name (e.g., docker.io/user/ffmpeg:8.0)
 DECODE_ONLY=${DECODE_ONLY:-"false"}
 ALPINE_VERSION=${ALPINE_VERSION:-"alpine:3.22"}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 read_ffmpeg_version() {
-    "$(dirname "$0")/scripts/read-ffmpeg-version.sh"
+    (cd "$REPO_ROOT" && go run -C tools/catalog . read release.ffmpeg_version)
 }
 FFMPEG_VERSION="${FFMPEG_VERSION:-$(read_ffmpeg_version)}"
 export FFMPEG_VERSION
@@ -44,7 +46,7 @@ else
 fi
 
 # Build from project root
-cd "$(dirname "$0")"
+cd "$REPO_ROOT"
 
 # Detect if buildx is available
 BUILDX_AVAILABLE=false
@@ -388,27 +390,27 @@ fi
 
 echo -e "${CYAN}Build examples:${NC}"
 echo "  # Full sequential build:"
-echo "  ./build.sh"
+echo "  ./scripts/build.sh"
 echo ""
 echo "  # Parallel build (faster):"
-echo "  BUILD_MODE=parallel ./build.sh"
+echo "  BUILD_MODE=parallel ./scripts/build.sh"
 echo ""
 echo "  # Multi-platform build (amd64 + arm64):"
-echo "  PLATFORMS=linux/amd64,linux/arm64 REGISTRY=ghcr.io/user PUSH=true ./build.sh"
+echo "  PLATFORMS=linux/amd64,linux/arm64 REGISTRY=ghcr.io/user PUSH=true ./scripts/build.sh"
 echo ""
 echo "  # Single platform with buildx (amd64 only):"
-echo "  PLATFORMS=linux/amd64 ./build.sh"
+echo "  PLATFORMS=linux/amd64 ./scripts/build.sh"
 echo ""
 echo "  # Rebuild single component:"
-echo "  COMPONENT=av1 ./build.sh"
+echo "  COMPONENT=av1 ./scripts/build.sh"
 echo ""
 echo "  # Rebuild with no cache:"
-echo "  NO_CACHE=true COMPONENT=x264-x265 ./build.sh"
+echo "  NO_CACHE=true COMPONENT=x264-x265 ./scripts/build.sh"
 echo ""
 echo "  # Decode-only build:"
-echo "  DECODE_ONLY=true ./build.sh"
+echo "  DECODE_ONLY=true ./scripts/build.sh"
 echo ""
 echo "  # Multi-platform decode-only:"
-echo "  PLATFORMS=linux/amd64,linux/arm64 DECODE_ONLY=true REGISTRY=myregistry PUSH=true ./build.sh"
+echo "  PLATFORMS=linux/amd64,linux/arm64 DECODE_ONLY=true REGISTRY=myregistry PUSH=true ./scripts/build.sh"
 echo ""
 

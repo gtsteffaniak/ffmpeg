@@ -21,26 +21,32 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: tools/catalog/go.mod
+
+      - name: Validate sources.json
+        run: go run -C tools/catalog . validate
 
       - name: Update source versions
         env:
           GITHUB_TOKEN: ${{ secrets.PAT }}
         run: make update
 
+      - name: Validate after update
+        run: go run -C tools/catalog . validate
+
       - name: Remove backup file
-        run: rm -f fetch-sources.sh.bak
+        run: rm -f sources.json.bak
 
       - name: Check for changes
         id: changes
         run: |
-          if git diff --quiet fetch-sources.sh; then
+          if git diff --quiet sources.json docker/; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No dependency updates found."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "Dependency updates found:"
-            git diff fetch-sources.sh
+            git diff sources.json docker/
           fi
 
       - name: Prepare pull request metadata
@@ -56,13 +62,18 @@ jobs:
 
           TITLE="chore(deps): update library versions (${DATE})"
 
-          OLD_FFMPEG=$(git show HEAD:fetch-sources.sh | grep 'FFMPEG_VERSION:=' | head -1 | sed -E 's/.*FFMPEG_VERSION:=([0-9.]+).*/\1/')
-          NEW_FFMPEG=$(./scripts/read-ffmpeg-version.sh)
+          OLD_FFMPEG=$(git show HEAD:sources.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["release"]["ffmpeg_version"])')
+          NEW_FFMPEG=$(go run -C tools/catalog . read release.ffmpeg_version)
           if [ -n "$OLD_FFMPEG" ] && [ -n "$NEW_FFMPEG" ] && [ "$OLD_FFMPEG" != "$NEW_FFMPEG" ]; then
             TITLE="chore(deps): update library versions - ffmpeg ${NEW_FFMPEG} (${DATE})"
           fi
 
-          echo "title=${TITLE}" >> "$GITHUB_OUTPUT"
+          {
+            echo "title=${TITLE}"
+            echo "summary<<EOF"
+            go run -C tools/catalog . bump-summary
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create pull request
         if: steps.changes.outputs.changed == 'true'
@@ -72,8 +83,10 @@ jobs:
           commit-message: ${{ steps.pr.outputs.title }}
           title: ${{ steps.pr.outputs.title }}
           body: |
-            Automated dependency version updates from `helper.go` (${{ steps.pr.outputs.date }}).
+            Automated dependency version updates from `sources.json` (${{ steps.pr.outputs.date }}).
 
-            Review version bumps in `fetch-sources.sh` before merging.
+            ${{ steps.pr.outputs.summary }}
+
+            Review version bumps in `sources.json` and synced `docker/` ARG defaults before merging.
           branch: ${{ steps.pr.outputs.branch }}
           delete-branch: true

@@ -1,0 +1,350 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+
+	"github.com/alecthomas/kong"
+)
+
+var cli struct {
+	Validate     ValidateCmd     `cmd:"" help:"Validate sources.json (schema, consistency, Dockerfile ARG drift)."`
+	Read         ReadCmd         `cmd:"" help:"Read a dotted path from sources.json (e.g. release.ffmpeg_version)."`
+	Update       UpdateCmd       `cmd:"" help:"Check for new dependency versions and update sources.json."`
+	FetchScript  FetchScriptCmd  `cmd:"" help:"Emit bash fetch commands for sources.json."`
+	ReleaseBody  ReleaseBodyCmd  `cmd:"" help:"Write GitHub release notes (dependency matrix)."`
+	BumpSummary  BumpSummaryCmd  `cmd:"" help:"Summarize sources.json changes vs HEAD for bump PRs."`
+}
+
+type ValidateCmd struct{}
+
+type ReadCmd struct {
+	Path string `arg:"" name:"path" help:"Dotted path (release.ffmpeg_version, release.mark_github_latest, build.alpine_image)."`
+}
+
+type UpdateCmd struct {
+	DryRun bool `help:"Show what would be updated without writing."`
+}
+
+type FetchScriptCmd struct{}
+
+type ReleaseBodyCmd struct {
+	Output string `arg:"" optional:"" name:"file" help:"Output file (default stdout)."`
+}
+
+type BumpSummaryCmd struct{}
+
+func main() {
+	ctx := kong.Parse(&cli,
+		kong.Name("helper"),
+		kong.Description("FFmpeg sources.json catalog tool"),
+	)
+	err := ctx.Run()
+	ctx.FatalIfErrorf(err)
+}
+
+func (c *ValidateCmd) Run() error {
+	path := sourcesPath()
+	cat, err := loadCatalog(path)
+	if err != nil {
+		return err
+	}
+	var errs []string
+	if cat.Release.FFmpegVersion == "" {
+		errs = append(errs, "release.ffmpeg_version is empty")
+	} else if !validFFmpegVersion(cat.Release.FFmpegVersion) {
+		errs = append(errs, fmt.Sprintf("release.ffmpeg_version %q is not a valid semver (expected N.N or N.N.N)", cat.Release.FFmpegVersion))
+	}
+	if envVer := os.Getenv("FFMPEG_VERSION"); envVer != "" && !validFFmpegVersion(envVer) {
+		errs = append(errs, fmt.Sprintf("FFMPEG_VERSION env %q is not a valid semver", envVer))
+	}
+	if cat.Build.AlpineImage == "" {
+		errs = append(errs, "build.alpine_image is empty")
+	}
+	ffmpeg := findSource(cat, "ffmpeg")
+	if ffmpeg == nil {
+		errs = append(errs, "sources missing id=ffmpeg")
+	} else if ffmpeg.Version != "" && ffmpeg.Version != cat.Release.FFmpegVersion {
+		errs = append(errs, fmt.Sprintf("release.ffmpeg_version (%s) != sources[ffmpeg].version (%s)",
+			cat.Release.FFmpegVersion, ffmpeg.Version))
+	}
+	seen := map[string]bool{}
+	for i, s := range cat.Sources {
+		if s.ID == "" {
+			errs = append(errs, fmt.Sprintf("sources[%d]: missing id", i))
+			continue
+		}
+		if seen[s.ID] {
+			errs = append(errs, fmt.Sprintf("duplicate source id: %s", s.ID))
+		}
+		seen[s.ID] = true
+		if !s.Enabled {
+			continue
+		}
+		if s.Fetch == nil {
+			errs = append(errs, fmt.Sprintf("%s: enabled but missing fetch", s.ID))
+			continue
+		}
+		switch s.Fetch.Method {
+		case "archive", "git_tag", "git_commit", "custom":
+			if s.Fetch.URL == "" {
+				errs = append(errs, fmt.Sprintf("%s: fetch.url required for method %s", s.ID, s.Fetch.Method))
+			}
+			if s.Fetch.Method != "custom" && s.Version == "" && s.Commit == "" {
+				errs = append(errs, fmt.Sprintf("%s: version or commit required", s.ID))
+			}
+		case "alpine":
+			if s.Fetch.Package == "" {
+				errs = append(errs, fmt.Sprintf("%s: fetch.package required for alpine fetch", s.ID))
+			}
+		default:
+			errs = append(errs, fmt.Sprintf("%s: unknown fetch.method %q", s.ID, s.Fetch.Method))
+		}
+		if s.Fetch.Gate != "" && !isKnownFetchGate(s.Fetch.Gate) {
+			errs = append(errs, fmt.Sprintf("%s: unknown fetch.gate %q", s.ID, s.Fetch.Gate))
+		}
+		if s.Release != nil && s.Release.Gate == "" {
+			errs = append(errs, fmt.Sprintf("%s: release.gate required when release is set", s.ID))
+		} else if s.Release != nil && !isKnownReleaseGate(s.Release.Gate) {
+			errs = append(errs, fmt.Sprintf("%s: unknown release.gate %q", s.ID, s.Release.Gate))
+		}
+	}
+	argRe := regexp.MustCompile(`(?m)^ARG FFMPEG_VERSION=(.+)$`)
+	for _, df := range dockerfilePaths() {
+		data, err := os.ReadFile(df)
+		if err != nil {
+			continue
+		}
+		m := argRe.FindSubmatch(data)
+		if m == nil {
+			continue
+		}
+		argVer := strings.TrimSpace(string(m[1]))
+		if argVer != cat.Release.FFmpegVersion {
+			rel, _ := filepath.Rel(repoRoot(), df)
+			errs = append(errs, fmt.Sprintf("%s ARG FFMPEG_VERSION=%s drifts from sources.json %s",
+				rel, argVer, cat.Release.FFmpegVersion))
+		}
+	}
+	if len(errs) > 0 {
+		for _, e := range errs {
+			fmt.Fprintln(os.Stderr, "ERROR:", e)
+		}
+		return fmt.Errorf("validate failed with %d error(s)", len(errs))
+	}
+	if _, err := resolveAlpinePackages(cat); err != nil {
+		fmt.Fprintln(os.Stderr, "ERROR:", err)
+		return fmt.Errorf("validate failed: alpine package resolution")
+	}
+	fmt.Println("OK:", path)
+	return nil
+}
+
+func (c *ReadCmd) Run() error {
+	cat, err := loadCatalog(sourcesPath())
+	if err != nil {
+		return err
+	}
+	switch c.Path {
+	case "release.ffmpeg_version":
+		fmt.Print(resolveFFmpegVersion(cat))
+	case "release.mark_github_latest":
+		if cat.Release.MarkGitHubLatest {
+			fmt.Print("true")
+		} else {
+			fmt.Print("false")
+		}
+	case "build.alpine_image":
+		fmt.Print(cat.Build.AlpineImage)
+	default:
+		return fmt.Errorf("unknown path %q (supported: release.ffmpeg_version, release.mark_github_latest, build.alpine_image)", c.Path)
+	}
+	return nil
+}
+
+func (c *FetchScriptCmd) Run() error {
+	cat, err := loadCatalog(sourcesPath())
+	if err != nil {
+		return err
+	}
+	ffmpegVer := resolveFFmpegVersion(cat)
+	var b strings.Builder
+	b.WriteString("# Generated by: go run -C tools/catalog . fetch-script\n")
+	b.WriteString(fmt.Sprintf(": \"${FFMPEG_VERSION:=%s}\"\n", ffmpegVer))
+	b.WriteString(": \"${DECODE_ONLY:=false}\"\n\n")
+
+	for _, s := range cat.Sources {
+		if !s.Enabled || s.Fetch == nil || s.Fetch.Method == "alpine" {
+			continue
+		}
+		version := sourceFetchVersion(s, ffmpegVer)
+		url := expandTemplate(s.Fetch.URL, version, s.Commit)
+		dir := expandTemplate(s.Fetch.Dir, version, s.Commit)
+		b.WriteString(fmt.Sprintf("# --- %s ---\n", s.ID))
+		gated := s.Fetch.Gate != ""
+		indent := ""
+		if gated {
+			b.WriteString(fmt.Sprintf("if eval_fetch_gate %s \"$FFMPEG_VERSION\" \"$DECODE_ONLY\"; then\n", shellQuote(s.Fetch.Gate)))
+			indent = "  "
+		}
+		switch s.Fetch.Method {
+		case "archive":
+			name := archiveName(s, dir, version)
+			b.WriteString(fmt.Sprintf("%sfetch_values_archive %s %s %s\n",
+				indent, shellQuote(name), shellQuote(version), shellQuote(url)))
+		case "git_tag":
+			name := strings.TrimSuffix(dir, "-"+version)
+			if name == dir {
+				name = s.ID
+			}
+			b.WriteString(fmt.Sprintf("%sfetch_values_git_tag %s %s %s\n",
+				indent, shellQuote(name), shellQuote(version), shellQuote(url)))
+		case "git_commit":
+			name := dir
+			if name == "" {
+				name = s.ID
+			}
+			b.WriteString(fmt.Sprintf("%sfetch_values_git_commit %s %s %s\n",
+				indent, shellQuote(name), shellQuote(url), shellQuote(s.Commit)))
+		case "custom":
+			switch s.Fetch.Post {
+			case "aom_verify":
+				b.WriteString(fmt.Sprintf("%sfetch_aom %s %s %s\n",
+					indent, shellQuote(url), shellQuote(version), shellQuote(s.Commit)))
+			case "uavs3d_commit":
+				b.WriteString(fmt.Sprintf("%sfetch_uavs3d %s %s %s\n",
+					indent, shellQuote(url), shellQuote(version), shellQuote(s.Commit)))
+			default:
+				return fmt.Errorf("%s: unsupported custom post %q", s.ID, s.Fetch.Post)
+			}
+		}
+		if s.Fetch.Post == "version_txt" {
+			b.WriteString(fmt.Sprintf("%swrite_version_txt %s %s\n",
+				indent, shellQuote(dir), shellQuote(version)))
+		}
+		if gated {
+			b.WriteString(fmt.Sprintf("else\n  echo \"Skipping %s (gate %s)\"\nfi\n", s.ID, s.Fetch.Gate))
+		}
+		b.WriteString("\n")
+	}
+	fmt.Print(b.String())
+	return nil
+}
+
+func sourceFetchVersion(s Source, ffmpegVer string) string {
+	if s.ID == "ffmpeg" {
+		return ffmpegVer
+	}
+	return s.Version
+}
+
+func archiveName(s Source, dir, version string) string {
+	// fetch_values_archive builds dir as name-version; derive name from dir template.
+	suffix := "-" + version
+	if strings.HasSuffix(dir, suffix) {
+		return strings.TrimSuffix(dir, suffix)
+	}
+	return s.ID
+}
+
+func (c *ReleaseBodyCmd) Run() error {
+	cat, err := loadCatalog(sourcesPath())
+	if err != nil {
+		return err
+	}
+	ffmpegVer := resolveFFmpegVersion(cat)
+	alpine := cat.Build.AlpineImage
+	alpineVers, err := resolveAlpinePackages(cat)
+	if err != nil {
+		return err
+	}
+
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("Static FFmpeg build **%s** — dependency versions.\n\n", ffmpegVer))
+	b.WriteString("| Component | Version | In decode build |\n")
+	b.WriteString("| --- | --- | --- |\n")
+
+	for _, s := range cat.Sources {
+		if s.Release == nil {
+			continue
+		}
+		version := releaseVersionLabel(s, alpine, alpineVers)
+		if s.ID == "ffmpeg" {
+			version = ffmpegVer
+		}
+		inDecode := decodeBuildEmoji(releaseGateInDecode(s.Release.Gate, ffmpegVer))
+		b.WriteString(fmt.Sprintf("| %s | %s | %s |\n", s.Name, version, inDecode))
+	}
+	b.WriteString("\n**In decode build** reflects the decode-only image (`DECODE_ONLY=true`): encode-only libraries and wrappers omitted where FFmpeg provides native decoders.\n")
+
+	out := b.String()
+	if c.Output == "" || c.Output == "-" {
+		fmt.Print(out)
+		return nil
+	}
+	return os.WriteFile(resolveOutputPath(c.Output), []byte(out), 0o644)
+}
+
+func (c *BumpSummaryCmd) Run() error {
+	// Diff current sources.json against git HEAD version.
+	out, err := runGit(repoRoot(), "show", "HEAD:"+defaultSourcesPath)
+	if err != nil {
+		fmt.Println("Unable to read HEAD sources.json (new file?).")
+		return nil
+	}
+	var old Catalog
+	if err := jsonUnmarshal([]byte(out), &old); err != nil {
+		return err
+	}
+	cur, err := loadCatalog(sourcesPath())
+	if err != nil {
+		return err
+	}
+	oldMap := map[string]Source{}
+	for _, s := range old.Sources {
+		oldMap[s.ID] = s
+	}
+	var lines []string
+	if old.Release.FFmpegVersion != cur.Release.FFmpegVersion {
+		lines = append(lines, fmt.Sprintf("- FFmpeg: %s → %s", old.Release.FFmpegVersion, cur.Release.FFmpegVersion))
+	}
+	for _, s := range cur.Sources {
+		o, ok := oldMap[s.ID]
+		if !ok {
+			lines = append(lines, fmt.Sprintf("- %s: added", s.Name))
+			continue
+		}
+		if s.Version != o.Version && s.Version != "" {
+			lines = append(lines, fmt.Sprintf("- %s: %s → %s", s.Name, o.Version, s.Version))
+		}
+		if s.Commit != o.Commit && s.Commit != "" {
+			lines = append(lines, fmt.Sprintf("- %s commit: %s → %s", s.Name, shortCommit(o.Commit), shortCommit(s.Commit)))
+		}
+	}
+	if len(lines) == 0 {
+		fmt.Println("No version changes.")
+		return nil
+	}
+	for _, l := range lines {
+		fmt.Println(l)
+	}
+	return nil
+}
+
+func shortCommit(c string) string {
+	if len(c) > 12 {
+		return c[:12]
+	}
+	if c == "" {
+		return "—"
+	}
+	return c
+}
+
+func jsonUnmarshal(data []byte, v any) error {
+	return json.Unmarshal(data, v)
+}
