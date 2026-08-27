@@ -10,7 +10,7 @@ on:
         description: Release version (default from FFMPEG_VERSION in fetch-sources.sh)
         required: false
       update_latest:
-        description: Mark this release as latest on GitHub (also auto-enabled when run from main)
+        description: Mark this release as latest on GitHub
         required: false
         type: boolean
         default: false
@@ -51,9 +51,6 @@ jobs:
           fi
 
           MAKE_LATEST=false
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            MAKE_LATEST=true
-          fi
           if [ "${{ github.event.inputs.update_latest }}" = "true" ]; then
             MAKE_LATEST=true
           fi

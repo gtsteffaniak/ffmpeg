@@ -1,6 +1,6 @@
 .PHONY: help build build-local build-push-all build-decode build-decode-push \
         build-multiplatform build-multiplatform-decode update fetch-sources \
-        clean test test-encoders test-version test-version-gates \
+        clean test test-encoders test-version test-version-gates test-fetch \
         ci-push-platform ci-push-platform-decode ci-merge-manifest ci-merge-manifest-decode \
         ci-package-release ci-package-release-decode ci-build-component \
         ci-build-windows ci-package-windows-release ci-package-windows-release-decode
@@ -161,6 +161,10 @@ test-version: ## Show FFmpeg version and build configuration
 test-version-gates: ## Run version-gates.sh unit checks
 	@echo "$(CYAN)Testing version gates...$(NC)"
 	./scripts/test-version-gates.sh
+
+test-fetch: ## Run fetch archive validation checks
+	@echo "$(CYAN)Testing fetch archive validation...$(NC)"
+	./scripts/test-fetch-validation.sh
 
 test-buildconf: ## Show FFmpeg build configuration
 	@echo "$(CYAN)Testing FFmpeg build configuration...$(NC)"

@@ -92,6 +92,8 @@ build_ffmpeg_configure_flags() {
   BASE_FLAGS=""
   FEATURES=""
 
+  append_if_supported "$configure" BASE_FLAGS "--disable-doc"
+
   local base_flag
   for base_flag in \
     --enable-libvpl \
@@ -163,10 +165,38 @@ build_windows_configure_flags() {
     append_if_supported "$configure" BASE_FLAGS "$base_flag"
   done
 
+  append_if_supported "$configure" BASE_FLAGS "--disable-doc"
+
   if [ "$decode_only" != "true" ]; then
     local encode_flag
     for encode_flag in --enable-nonfree --enable-libx264 --enable-libx265 --enable-libmp3lame; do
       append_if_supported "$configure" FEATURES "$encode_flag"
     done
+  fi
+}
+
+# Install ffmpeg/ffprobe without building Texinfo HTML docs (legacy FFmpeg + Alpine texinfo).
+install_ffmpeg_progs() {
+  make -j"$(nproc)"
+  if make -n install-progs >/dev/null 2>&1; then
+    make -j"$(nproc)" install-progs
+    if make -n install-data >/dev/null 2>&1; then
+      make -j"$(nproc)" install-data
+    fi
+  else
+    make -j"$(nproc)" install
+  fi
+}
+
+bundle_ffmpeg_doc() {
+  local out=${1:-/doc-bundle}
+  mkdir -p "$out"
+  if [ -d /usr/local/share/doc/ffmpeg ] && [ "$(ls -A /usr/local/share/doc/ffmpeg 2>/dev/null)" ]; then
+    cp -a /usr/local/share/doc/ffmpeg/. "$out/"
+  elif [ -d share/doc/ffmpeg ] && [ "$(ls -A share/doc/ffmpeg 2>/dev/null)" ]; then
+    cp -a share/doc/ffmpeg/. "$out/"
+  fi
+  if [ -z "$(ls -A "$out" 2>/dev/null)" ]; then
+    cp COPYING* "$out/" 2>/dev/null || true
   fi
 }

@@ -6,6 +6,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/version-gates.sh
 source "${SCRIPT_DIR}/scripts/version-gates.sh"
+# shellcheck source=scripts/fetch-utils.sh
+source "${SCRIPT_DIR}/scripts/fetch-utils.sh"
 : "${DECODE_ONLY:=false}"
 # FFMPEG_VERSION: set via env (release CI) or defaulted when fetching ffmpeg below.
 
@@ -17,7 +19,8 @@ ROOT_DIR=$(pwd)
 # Options for wget: retry on specific errors; user-agent avoids bot blocks on some hosts
 WGET_OPTS=(
   --retry-on-host-error
-  --retry-on-http-error=429,500,502,503
+  --retry-on-http-error=403,429,500,502,503,504
+  --waitretry=5
   --timeout=60
   --tries=3
 )
@@ -126,7 +129,9 @@ fetch_and_unpack() {
 
   echo "--- Downloading $name ---"
   local file="${name}.tar"
-  wget "${WGET_OPTS[@]}" --user-agent="$WGET_USER_AGENT" -O "$file" "$url"
+  if ! download_archive "$name" "$url" "$file"; then
+    return 1
+  fi
 
   if [[ -n "$sha256" ]]; then
     echo "$sha256  $file" | sha256sum -c -
@@ -245,8 +250,8 @@ fetch_and_unpack librsvg LIBRSVG_VERSION LIBRSVG_URL
 # bump: dav1d after ./hashupdate Dockerfile DAV1D $LATEST
 # bump: dav1d link "Release notes" https://code.videolan.org/videolan/dav1d/-/tags/$LATEST
 : "${DAV1D_VERSION:=1.5.1}"
-: "${DAV1D_URL:=https://code.videolan.org/videolan/dav1d/-/archive/$DAV1D_VERSION/dav1d-$DAV1D_VERSION.tar.gz}"
-fetch_and_unpack dav1d DAV1D_VERSION DAV1D_URL
+: "${DAV1D_GIT_URL:=https://github.com/videolan/dav1d.git}"
+fetch_and_unpack_git_tag dav1d DAV1D_VERSION DAV1D_GIT_URL
 
 # preferring glib-static glib-dev from apk (2.84.1)
 # own build as alpine glib links with libmount etc
