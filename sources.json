@@ -98,7 +98,7 @@
       "id": "x264",
       "name": "x264",
       "enabled": true,
-      "commit": "31e19f92f00c7003fa115047ce50978bc98c3a0d",
+      "commit": "b35605ace3ddf7c1a5d67a2eb553f034aef41d55",
       "fetch": {
         "method": "git_commit",
         "url": "https://code.videolan.org/videolan/x264.git",
@@ -136,7 +136,7 @@
       "id": "libvpx",
       "name": "libvpx",
       "enabled": true,
-      "version": "1.16.0",
+      "version": "1.17.0",
       "fetch": {
         "method": "archive",
         "url": "https://github.com/webmproject/libvpx/archive/v{version}.tar.gz",
@@ -490,7 +490,7 @@
       "id": "harfbuzz",
       "name": "harfbuzz",
       "enabled": true,
-      "version": "14.3.1",
+      "version": "14.4.0",
       "fetch": {
         "method": "archive",
         "url": "https://github.com/harfbuzz/harfbuzz/releases/download/{version}/harfbuzz-{version}.tar.xz",
@@ -568,30 +568,30 @@
         "url": "https://download.gnome.org/sources/librsvg/{short_version}/librsvg-{version}.tar.xz",
         "dir": "librsvg-{version}"
       },
+      "release": {
+        "gate": "decode_skip"
+      },
       "bump": {
         "repo": "https://gitlab.gnome.org/GNOME/librsvg.git",
         "tag_filter": "^2"
-      },
-      "release": {
-        "gate": "decode_skip"
       }
     },
     {
       "id": "srt",
       "name": "srt",
       "enabled": true,
-      "version": "1.5.6",
+      "version": "1.5.7",
       "fetch": {
         "method": "archive",
         "url": "https://github.com/Haivision/srt/archive/v{version}.tar.gz",
         "dir": "srt-{version}"
       },
+      "release": {
+        "gate": "decode_skip"
+      },
       "bump": {
         "repo": "https://github.com/Haivision/srt.git",
         "tag_filter": "^1"
-      },
-      "release": {
-        "gate": "decode_skip"
       }
     },
     {
@@ -604,12 +604,12 @@
         "url": "https://code.videolan.org/videolan/libbluray/-/archive/{version}/libbluray-{version}.tar.gz",
         "dir": "libbluray-{version}"
       },
+      "release": {
+        "gate": "decode_skip"
+      },
       "bump": {
         "repo": "https://code.videolan.org/videolan/libbluray.git",
         "tag_filter": "*"
-      },
-      "release": {
-        "gate": "decode_skip"
       }
     },
     {
@@ -622,12 +622,12 @@
         "url": "https://github.com/njh/twolame/releases/download/{version}/twolame-{version}.tar.gz",
         "dir": "twolame-{version}"
       },
+      "release": {
+        "gate": "decode_skip"
+      },
       "bump": {
         "repo": "https://github.com/njh/twolame.git",
         "tag_filter": "*"
-      },
-      "release": {
-        "gate": "decode_skip"
       }
     },
     {
@@ -640,12 +640,12 @@
         "url": "https://github.com/toots/shine/releases/download/{version}/shine-{version}.tar.gz",
         "dir": "shine-{version}"
       },
+      "release": {
+        "gate": "decode_skip"
+      },
       "bump": {
         "repo": "https://github.com/toots/shine.git",
         "tag_filter": "*"
-      },
-      "release": {
-        "gate": "decode_skip"
       }
     },
     {
@@ -658,14 +658,14 @@
         "url": "https://github.com/timothytylee/libgsm.git",
         "dir": "libgsm"
       },
+      "release": {
+        "gate": "decode_skip"
+      },
       "bump": {
         "method": "commit",
         "repo": "gitrefs:https://github.com/timothytylee/libgsm.git",
         "branch": "master",
         "tag_filter": "re:#^refs/heads/master$#|@commit"
-      },
-      "release": {
-        "gate": "decode_skip"
       }
     }
   ]
