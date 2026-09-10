@@ -42,3 +42,28 @@ RUN cd zimg && \
     --disable-shared \
     --enable-static && \
   make -j$(nproc) install
+
+# libde265 (HEVC decoder for HEIC/HEIF via libheif)
+COPY [ "src/libde265-*", "./libde265" ]
+RUN cd libde265 && \
+  cmake -B build \
+    -G"Unix Makefiles" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_LIBDIR=lib \
+    -DBUILD_SHARED_LIBS=OFF && \
+  cmake --build build -j$(nproc) && \
+  cmake --install build
+
+# libheif (HEIF/HEIC decode; included in decode-only builds)
+COPY [ "src/libheif-*", "./libheif" ]
+RUN cd libheif && \
+  cmake -B build \
+    -G"Unix Makefiles" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_LIBDIR=lib \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DBUILD_TESTING=OFF \
+    -DWITH_EXAMPLES=OFF \
+    -DENABLE_PLUGIN_LOADING=OFF && \
+  cmake --build build -j$(nproc) && \
+  cmake --install build

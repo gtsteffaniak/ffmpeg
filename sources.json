@@ -667,6 +667,42 @@
         "branch": "master",
         "tag_filter": "re:#^refs/heads/master$#|@commit"
       }
+    },
+    {
+      "id": "libde265",
+      "name": "libde265",
+      "enabled": true,
+      "version": "1.1.2",
+      "fetch": {
+        "method": "archive",
+        "url": "https://github.com/strukturag/libde265/releases/download/v{version}/libde265-{version}.tar.gz",
+        "dir": "libde265-{version}"
+      },
+      "release": {
+        "gate": "always"
+      },
+      "bump": {
+        "repo": "https://github.com/strukturag/libde265.git",
+        "tag_filter": "*"
+      }
+    },
+    {
+      "id": "libheif",
+      "name": "libheif",
+      "enabled": true,
+      "version": "1.9.1",
+      "fetch": {
+        "method": "git_tag",
+        "url": "https://github.com/strukturag/libheif.git",
+        "dir": "libheif-{version}"
+      },
+      "release": {
+        "gate": "always"
+      },
+      "bump": {
+        "repo": "https://github.com/strukturag/libheif.git",
+        "tag_filter": "*"
+      }
     }
   ]
 }

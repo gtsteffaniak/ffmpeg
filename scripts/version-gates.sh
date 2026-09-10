@@ -135,7 +135,8 @@ build_ffmpeg_configure_flags() {
     --enable-libfribidi \
     --enable-libharfbuzz \
     --enable-libsoxr \
-    --enable-libsnappy; do
+    --enable-libsnappy \
+    --enable-libheif; do
     append_if_supported "$configure" BASE_FLAGS "$base_flag"
   done
 
