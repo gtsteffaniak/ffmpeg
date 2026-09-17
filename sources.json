@@ -454,7 +454,7 @@
       "id": "vmaf",
       "name": "vmaf",
       "enabled": true,
-      "version": "3.2.0",
+      "version": "3.2.1",
       "fetch": {
         "method": "archive",
         "url": "https://github.com/Netflix/vmaf/archive/refs/tags/v{version}.tar.gz",
@@ -562,7 +562,7 @@
       "id": "librsvg",
       "name": "librsvg",
       "enabled": true,
-      "version": "2.62.91",
+      "version": "2.63.0",
       "fetch": {
         "method": "archive",
         "url": "https://download.gnome.org/sources/librsvg/{short_version}/librsvg-{version}.tar.xz",
