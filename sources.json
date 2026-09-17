@@ -418,7 +418,7 @@
       "id": "lcms2",
       "name": "lcms2",
       "enabled": true,
-      "version": "19.1",
+      "version": "2.19.1",
       "fetch": {
         "method": "archive",
         "url": "https://github.com/mm2/Little-CMS/releases/download/lcms2.{version_minor}/lcms2-{version}.tar.gz",
