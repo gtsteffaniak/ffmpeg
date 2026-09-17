@@ -146,6 +146,41 @@ func TestTrimVersionTagPrefixesLCMS(t *testing.T) {
 	}
 }
 
+func TestCatalogVersionFromLCMS2Tag(t *testing.T) {
+	cases := map[string]string{
+		"lcms2.19.1": "2.19.1",
+		"lcms2.2.16": "2.16",
+		"lcms2.13.1": "2.13.1",
+		"lcms2.18":   "2.18",
+	}
+	for tag, want := range cases {
+		if got := catalogVersionFromLCMS2Tag(tag); got != want {
+			t.Fatalf("catalogVersionFromLCMS2Tag(%q) = %q, want %q", tag, got, want)
+		}
+	}
+}
+
+func TestGetLatestNumericVersionForLCMS2(t *testing.T) {
+	tags := []string{
+		"lcms2.19.1",
+		"lcms2.19",
+		"lcms2.19rc2",
+		"lcms2.2.16",
+		"lcms2.18",
+		"19.1",
+	}
+	got, err := getLatestNumericVersionForLCMS2(tags)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "2.19.1" {
+		t.Fatalf("got %q, want 2.19.1", got)
+	}
+	if isNewerVersion("2.19.1", got) {
+		t.Fatal("latest should not be newer than current 2.19.1")
+	}
+}
+
 func TestResolveOutputPath(t *testing.T) {
 	root := repoRoot()
 	got := resolveOutputPath("release-notes.md")
