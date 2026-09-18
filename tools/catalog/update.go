@@ -239,14 +239,37 @@ func getLatestNumericVersion(tags []string) (string, error) {
 	return stripPrefixes(numericVersions[0].Tag), nil
 }
 
+// Little CMS tags look like lcms2.19.1 while release tarballs use 2.19.1 (lcms2-2.19.1.tar.gz).
+func catalogVersionFromLCMS2Tag(tag string) string {
+	if !strings.HasPrefix(tag, "lcms2.") {
+		return stripPrefixes(tag)
+	}
+	suffix := strings.TrimPrefix(tag, "lcms2.")
+	if strings.HasPrefix(suffix, "2.") {
+		return suffix
+	}
+	return "2." + suffix
+}
+
+func parseLCMS2SemanticVersion(tag string) (SemanticVersion, error) {
+	return parseSemanticVersion(catalogVersionFromLCMS2Tag(tag))
+}
+
 func getLatestNumericVersionForLCMS2(tags []string) (string, error) {
 	var numericVersions []SemanticVersion
 	for _, tag := range tags {
-		if strings.HasPrefix(tag, "lcms2.") || isNumericVersion(tag) {
-			if semVer, err := parseSemanticVersion(tag); err == nil {
-				numericVersions = append(numericVersions, semVer)
-			}
+		if !strings.HasPrefix(tag, "lcms2.") {
+			continue
 		}
+		if strings.Contains(tag, "rc") {
+			continue
+		}
+		semVer, err := parseLCMS2SemanticVersion(tag)
+		if err != nil {
+			continue
+		}
+		semVer.Tag = tag
+		numericVersions = append(numericVersions, semVer)
 	}
 	if len(numericVersions) == 0 {
 		return "", fmt.Errorf("no numeric version tags found")
@@ -254,7 +277,7 @@ func getLatestNumericVersionForLCMS2(tags []string) (string, error) {
 	sort.Slice(numericVersions, func(i, j int) bool {
 		return compareSemanticVersions(numericVersions[i], numericVersions[j]) > 0
 	})
-	return stripPrefixes(numericVersions[0].Tag), nil
+	return catalogVersionFromLCMS2Tag(numericVersions[0].Tag), nil
 }
 
 func isNewerVersion(currentVersion, newVersion string) bool {
