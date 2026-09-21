@@ -1,6 +1,6 @@
 FROM ffmpeg-base:latest AS vaapi
 
-ARG FFMPEG_VERSION=9.0.1
+ARG FFMPEG_VERSION=9.0.2
 
 COPY scripts/version-gates.sh /tmp/version-gates.sh
 

@@ -65,7 +65,7 @@ ARG CXXFLAGS="-static-libgcc -fno-strict-overflow -fPIC"
 ARG LDFLAGS="-Wl,-z,relro,-z,now"
 # Add a DECODE_ONLY argument
 ARG DECODE_ONLY="false" # Set "true" for decode-only, "false" for full build
-ARG FFMPEG_VERSION=9.0.1
+ARG FFMPEG_VERSION=9.0.2
 
 COPY scripts/version-gates.sh /tmp/version-gates.sh
 

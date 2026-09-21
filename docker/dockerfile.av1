@@ -1,6 +1,6 @@
 FROM ffmpeg-base:latest AS av1
 
-ARG FFMPEG_VERSION=9.0.1
+ARG FFMPEG_VERSION=9.0.2
 ARG DECODE_ONLY="false"
 
 COPY scripts/version-gates.sh /tmp/version-gates.sh

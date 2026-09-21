@@ -1,6 +1,6 @@
 {
   "release": {
-    "ffmpeg_version": "9.0.1",
+    "ffmpeg_version": "9.0.2",
     "mark_github_latest": false
   },
   "build": {
@@ -12,7 +12,7 @@
       "id": "ffmpeg",
       "name": "FFmpeg",
       "enabled": true,
-      "version": "9.0.1",
+      "version": "9.0.2",
       "fetch": {
         "method": "archive",
         "url": "https://ffmpeg.org/releases/ffmpeg-{version}.tar.bz2",
@@ -490,7 +490,7 @@
       "id": "harfbuzz",
       "name": "harfbuzz",
       "enabled": true,
-      "version": "14.4.0",
+      "version": "14.5.0",
       "fetch": {
         "method": "archive",
         "url": "https://github.com/harfbuzz/harfbuzz/releases/download/{version}/harfbuzz-{version}.tar.xz",
@@ -562,7 +562,7 @@
       "id": "librsvg",
       "name": "librsvg",
       "enabled": true,
-      "version": "2.63.0",
+      "version": "2.63.2",
       "fetch": {
         "method": "archive",
         "url": "https://download.gnome.org/sources/librsvg/{short_version}/librsvg-{version}.tar.xz",
