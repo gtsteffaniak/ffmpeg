@@ -1,7 +1,7 @@
 ARG ALPINE_VERSION=alpine:3.22
 FROM ffmpeg-base:latest AS builder
 
-ARG FFMPEG_VERSION=9.0.1
+ARG FFMPEG_VERSION=9.0.2
 ARG DECODE_ONLY="false"
 
 # Copy built libraries from all component stages
