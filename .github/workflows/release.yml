@@ -324,6 +324,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      packages: write
     env:
       FFMPEG_VERSION: ${{ needs.resolve-version.outputs.version }}
       TAG: ${{ needs.resolve-version.outputs.version }}
@@ -345,11 +346,64 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish per-arch images to GHCR
+        run: |
+          # Same tags the build jobs pushed to Docker Hub. Copied before merge,
+          # which tries to delete these staging tags afterward.
+          GHCR_IMAGE="ghcr.io/$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          publish_tag() {
+            tag="$1"
+            platform="$2"
+            src="${REGISTRY}/${IMAGE_NAME}:${tag}"
+            dest="${GHCR_IMAGE}:${tag}"
+            echo "Publishing ${src} -> ${dest}"
+            docker buildx imagetools create -t "${dest}" "${src}"
+            inspect="$(docker buildx imagetools inspect "${dest}")"
+            printf '%s\n' "${inspect}"
+            if ! printf '%s\n' "${inspect}" | grep -q "${platform}"; then
+              echo "Missing platform ${platform} on ${dest}" >&2
+              exit 1
+            fi
+          }
+          publish_tag "${TAG}-amd64" linux/amd64
+          publish_tag "${TAG}-arm64" linux/arm64
+          publish_tag "${TAG}-decode-amd64" linux/amd64
+          publish_tag "${TAG}-decode-arm64" linux/arm64
+
       - name: Merge multi-arch manifests
         run: |
           # Per-arch tags (-amd64 / -arm64) are staging only; merge-manifest removes them after publish.
           make ci-merge-manifest TAG=${{ needs.resolve-version.outputs.version }}
           make ci-merge-manifest-decode TAG=${{ needs.resolve-version.outputs.version }}
+
+      - name: Publish multi-arch images to GHCR
+        run: |
+          # Same multi-arch tags ci-merge-manifest just published to Docker Hub.
+          GHCR_IMAGE="ghcr.io/$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          publish_tag() {
+            tag="$1"
+            src="${REGISTRY}/${IMAGE_NAME}:${tag}"
+            dest="${GHCR_IMAGE}:${tag}"
+            echo "Publishing ${src} -> ${dest}"
+            docker buildx imagetools create -t "${dest}" "${src}"
+            inspect="$(docker buildx imagetools inspect "${dest}")"
+            printf '%s\n' "${inspect}"
+            for platform in linux/amd64 linux/arm64; do
+              if ! printf '%s\n' "${inspect}" | grep -q "${platform}"; then
+                echo "Missing platform ${platform} on ${dest}" >&2
+                exit 1
+              fi
+            done
+          }
+          publish_tag "${TAG}"
+          publish_tag "${TAG}-decode"
 
       - name: Package Linux release binaries
         run: |
