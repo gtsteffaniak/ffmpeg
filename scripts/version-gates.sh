@@ -123,6 +123,7 @@ build_ffmpeg_configure_flags() {
   local base_flag
   for base_flag in \
     --enable-libvpl \
+    --enable-vaapi \
     --enable-libzimg \
     --enable-fontconfig \
     --enable-gray \

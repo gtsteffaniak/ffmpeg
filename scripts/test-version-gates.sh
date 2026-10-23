@@ -78,6 +78,7 @@ chmod +x "${TMPDIR}/configure-51"
 cat >"${TMPDIR}/configure-61" <<'EOF'
 #!/bin/sh
 echo "  --enable-libvpl"
+echo "  --enable-vaapi"
 echo "  --enable-libx264"
 EOF
 chmod +x "${TMPDIR}/configure-61"
@@ -105,8 +106,9 @@ echo "OK: build_ffmpeg_configure_flags for 5.1.6"
 build_ffmpeg_configure_flags "${TMPDIR}/configure-61" "6.1.3" "false"
 case "$BASE_FLAGS $FEATURES" in
   *"--enable-libvpl"*) ;;
+  *"--enable-vaapi"*) ;;
   *"--enable-libxeve"*) echo "FAIL: 6.1 configure should not offer libxeve" >&2; exit 1 ;;
-  *) echo "FAIL: 6.1 configure should enable libvpl" >&2; exit 1 ;;
+  *) echo "FAIL: 6.1 configure should enable libvpl and vaapi" >&2; exit 1 ;;
 esac
 echo "OK: build_ffmpeg_configure_flags for 6.1.3"
 

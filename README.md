@@ -472,7 +472,7 @@ Push-to-main releases read `release.mark_github_latest` from [`sources.json`](so
 | libaom | Required (AV1 encode/decode wrapper) | Skipped (dav1d kept) |
 | libvorbis | Required | Skipped (native Vorbis decode) |
 
-Optional library configure flags (`--enable-libvpl`, `--enable-libxeve`, `--enable-libharfbuzz`, etc.) are not hardcoded for the repo default version. At build time, [`scripts/version-gates.sh`](scripts/version-gates.sh) probes the checked-out FFmpeg tree’s `./configure --help` and only passes flags that exist for that release. Component stages also skip building libvpl when `FFMPEG_VERSION < 6.0` and xeve/xevd/vvenc when `FFMPEG_VERSION < 7.0`.
+Optional library configure flags (`--enable-libvpl`, `--enable-vaapi`, `--enable-libxeve`, `--enable-libharfbuzz`, etc.) are not hardcoded for the repo default version. At build time, [`scripts/version-gates.sh`](scripts/version-gates.sh) probes the checked-out FFmpeg tree’s `./configure --help` and only passes flags that exist for that release. Component stages also skip building libvpl when `FFMPEG_VERSION < 6.0` and xeve/xevd/vvenc when `FFMPEG_VERSION < 7.0`.
 
 Docker builds pass `--disable-doc` when supported and install with `install-progs` so legacy FFmpeg releases do not run Texinfo HTML generation on Alpine 3.22. [`scripts/fetch-sources.sh`](scripts/fetch-sources.sh) validates downloaded archives (rejecting HTML error pages) and fetches dav1d via GitHub git tags instead of GitLab tarball URLs.
 
