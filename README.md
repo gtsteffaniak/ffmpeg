@@ -146,7 +146,7 @@ Note: build times are just approximations. Actual build times vary widely based 
 - **dockerfile.vpx-avs**: VP8/9 + Chinese AVS codecs (libvpx, davs2, uavs3d)
 - **dockerfile.image-formats**: Image codecs (webp, openjpeg, zimg, libjxl)
 - **dockerfile.audio**: Audio codecs (lame, vorbis, ogg, rubberband)
-- **dockerfile.vaapi**: Hardware acceleration (libva, libvpl)
+- **dockerfile.vaapi**: Default hardware acceleration (static libva + libvpl; FFmpeg `--enable-vaapi` / `--enable-libvpl` / `--enable-v4l2-m2m` for Pi V4L2 decode)
 - **dockerfile.processing**: Video processing (vid.stab, vmaf, libass, lcms2, libmysofa)
 
 ### Tier 3: Final Assembly (Linux)

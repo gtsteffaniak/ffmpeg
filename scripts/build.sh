@@ -243,7 +243,7 @@ TIER2_IMAGES=(
     "dockerfile.vpx-avs|vpx-avs|${GATED_BUILD_ARGS}|VP8/9 + AVS codecs (libvpx, davs2, uavs3d)"
     "dockerfile.image-formats|image-formats|${GATED_BUILD_ARGS}|Image formats (webp, openjpeg, zimg, libjxl)"
     "dockerfile.audio|audio|${GATED_BUILD_ARGS}|Audio codecs (lame, vorbis, rubberband)"
-    "dockerfile.vaapi|vaapi|${GATED_BUILD_ARGS}|Hardware acceleration (libva, libvpl)"
+    "dockerfile.vaapi|vaapi|${GATED_BUILD_ARGS}|Hardware acceleration (libva, libvpl, v4l2-m2m)"
     "dockerfile.processing|processing|${GATED_BUILD_ARGS}|Processing tools (vid.stab, vmaf, libass)"
 )
 

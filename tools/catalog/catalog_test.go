@@ -41,6 +41,9 @@ func TestReleaseGateInDecode(t *testing.T) {
 		{"needs_libwebp", "8.1.1", true},
 		{"needs_libvpl_build", "6.1.3", true},
 		{"needs_libvpl_build", "5.1.6", false},
+		{"needs_vaapi_build", "9.0.1", true},
+		{"needs_vaapi_build", "5.1.6", true},
+		{"needs_v4l2_m2m_build", "9.0.1", true},
 		{"needs_modern_codecs_build", "9.0.1", false},
 		{"needs_libaom", "9.0.1", false},
 	}

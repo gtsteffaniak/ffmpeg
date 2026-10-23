@@ -49,6 +49,7 @@ RUN apk add $APK_OPTS \
   xz-dev xz-static \
   python3 py3-packaging \
   libdrm-dev \
+  linux-headers \
   mesa-dev \
   mesa-dri-gallium \
   mesa-va-gallium
