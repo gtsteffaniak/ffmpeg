@@ -36,6 +36,10 @@ assert "full needs openjpeg" 0 needs_openjpeg "9.0.1" "false"
 
 assert "6.0 needs libvpl build" 0 needs_libvpl_build "6.0.0"
 assert "5.1 skips libvpl build" 1 needs_libvpl_build "5.1.6"
+assert "vaapi is default build" 0 needs_vaapi_build
+assert "v4l2-m2m is default build" 0 needs_v4l2_m2m_build
+assert "eval_fetch_gate needs_vaapi_build" 0 eval_fetch_gate needs_vaapi_build "9.0.1" "true"
+assert "eval_fetch_gate needs_v4l2_m2m_build" 0 eval_fetch_gate needs_v4l2_m2m_build "9.0.1" "true"
 
 assert "7.0 full needs modern codecs build" 0 needs_modern_codecs_build "7.0.0" "false"
 assert "6.1 skips modern codecs build" 1 needs_modern_codecs_build "6.1.3" "false"
@@ -78,6 +82,8 @@ chmod +x "${TMPDIR}/configure-51"
 cat >"${TMPDIR}/configure-61" <<'EOF'
 #!/bin/sh
 echo "  --enable-libvpl"
+echo "  --enable-vaapi"
+echo "  --enable-v4l2-m2m"
 echo "  --enable-libx264"
 EOF
 chmod +x "${TMPDIR}/configure-61"
@@ -105,8 +111,10 @@ echo "OK: build_ffmpeg_configure_flags for 5.1.6"
 build_ffmpeg_configure_flags "${TMPDIR}/configure-61" "6.1.3" "false"
 case "$BASE_FLAGS $FEATURES" in
   *"--enable-libvpl"*) ;;
+  *"--enable-vaapi"*) ;;
+  *"--enable-v4l2-m2m"*) ;;
   *"--enable-libxeve"*) echo "FAIL: 6.1 configure should not offer libxeve" >&2; exit 1 ;;
-  *) echo "FAIL: 6.1 configure should enable libvpl" >&2; exit 1 ;;
+  *) echo "FAIL: 6.1 configure should enable libvpl, vaapi, and v4l2-m2m" >&2; exit 1 ;;
 esac
 echo "OK: build_ffmpeg_configure_flags for 6.1.3"
 

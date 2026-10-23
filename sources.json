@@ -551,7 +551,7 @@
         "dir": "libva-{version}"
       },
       "release": {
-        "gate": "always"
+        "gate": "needs_vaapi_build"
       },
       "bump": {
         "repo": "https://github.com/intel/libva.git",

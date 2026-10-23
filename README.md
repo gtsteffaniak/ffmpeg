@@ -146,7 +146,7 @@ Note: build times are just approximations. Actual build times vary widely based 
 - **dockerfile.vpx-avs**: VP8/9 + Chinese AVS codecs (libvpx, davs2, uavs3d)
 - **dockerfile.image-formats**: Image codecs (webp, openjpeg, zimg, libjxl)
 - **dockerfile.audio**: Audio codecs (lame, vorbis, ogg, rubberband)
-- **dockerfile.vaapi**: Hardware acceleration (libva, libvpl)
+- **dockerfile.vaapi**: Default hardware acceleration (static libva + libvpl; FFmpeg `--enable-vaapi` / `--enable-libvpl` / `--enable-v4l2-m2m` for Pi V4L2 decode)
 - **dockerfile.processing**: Video processing (vid.stab, vmaf, libass, lcms2, libmysofa)
 
 ### Tier 3: Final Assembly (Linux)
@@ -472,7 +472,7 @@ Push-to-main releases read `release.mark_github_latest` from [`sources.json`](so
 | libaom | Required (AV1 encode/decode wrapper) | Skipped (dav1d kept) |
 | libvorbis | Required | Skipped (native Vorbis decode) |
 
-Optional library configure flags (`--enable-libvpl`, `--enable-libxeve`, `--enable-libharfbuzz`, etc.) are not hardcoded for the repo default version. At build time, [`scripts/version-gates.sh`](scripts/version-gates.sh) probes the checked-out FFmpeg tree’s `./configure --help` and only passes flags that exist for that release. Component stages also skip building libvpl when `FFMPEG_VERSION < 6.0` and xeve/xevd/vvenc when `FFMPEG_VERSION < 7.0`.
+Optional library configure flags (`--enable-libvpl`, `--enable-vaapi`, `--enable-libxeve`, `--enable-libharfbuzz`, etc.) are not hardcoded for the repo default version. At build time, [`scripts/version-gates.sh`](scripts/version-gates.sh) probes the checked-out FFmpeg tree’s `./configure --help` and only passes flags that exist for that release. Component stages also skip building libvpl when `FFMPEG_VERSION < 6.0` and xeve/xevd/vvenc when `FFMPEG_VERSION < 7.0`.
 
 Docker builds pass `--disable-doc` when supported and install with `install-progs` so legacy FFmpeg releases do not run Texinfo HTML generation on Alpine 3.22. [`scripts/fetch-sources.sh`](scripts/fetch-sources.sh) validates downloaded archives (rejecting HTML error pages) and fetches dav1d via GitHub git tags instead of GitLab tarball URLs.
 

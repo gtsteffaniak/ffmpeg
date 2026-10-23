@@ -12,6 +12,8 @@ var knownFetchGates = map[string]struct{}{
 	"needs_libaom":              {},
 	"needs_libvorbis":           {},
 	"needs_libvpl_build":        {},
+	"needs_vaapi_build":         {},
+	"needs_v4l2_m2m_build":      {},
 	"needs_modern_codecs_build": {},
 }
 
@@ -25,6 +27,8 @@ var knownReleaseGates = map[string]struct{}{
 	"needs_libaom":              {},
 	"needs_libvorbis":           {},
 	"needs_libvpl_build":        {},
+	"needs_vaapi_build":         {},
+	"needs_v4l2_m2m_build":      {},
 	"needs_modern_codecs_build": {},
 }
 
@@ -100,6 +104,10 @@ func releaseGateInDecode(gate, ffmpegVersion string) bool {
 			return false
 		}
 		return ffmpegVersionGE(ffmpegVersion, "6.0.0")
+	case "needs_vaapi_build":
+		return true
+	case "needs_v4l2_m2m_build":
+		return true
 	case "needs_modern_codecs_build":
 		return false
 	default:

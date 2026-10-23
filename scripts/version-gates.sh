@@ -65,6 +65,16 @@ needs_libvpl_build() {
   ffmpeg_version_ge "$1" "6.0.0"
 }
 
+# VA-API is part of the default Linux static build (hw decode + encode when libva is present).
+needs_vaapi_build() {
+  return 0
+}
+
+# V4L2 mem2mem (Raspberry Pi and similar SoC HW decode; needs linux-headers at build time).
+needs_v4l2_m2m_build() {
+  return 0
+}
+
 # xeve/xevd/vvenc wrappers require FFmpeg 7.0+.
 needs_modern_codecs_build() {
   local ver=$1 decode_only=$2
@@ -87,6 +97,8 @@ eval_fetch_gate() {
     needs_openjpeg) needs_openjpeg "$ffmpeg_version" "$decode_only" ;;
     needs_libaom) needs_libaom "$ffmpeg_version" "$decode_only" ;;
     needs_libvpl_build) needs_libvpl_build "$ffmpeg_version" ;;
+    needs_vaapi_build) needs_vaapi_build ;;
+    needs_v4l2_m2m_build) needs_v4l2_m2m_build ;;
     needs_modern_codecs_build) needs_modern_codecs_build "$ffmpeg_version" "$decode_only" ;;
     *)
       echo "Unknown fetch gate: $gate" >&2
@@ -120,9 +132,18 @@ build_ffmpeg_configure_flags() {
 
   append_if_supported "$configure" BASE_FLAGS "--disable-doc"
 
+  # Default hardware acceleration (decode + encode when the host exposes devices).
+  # v4l2-m2m: Pi 4/5 and other V4L2 M2M decode (h264_v4l2m2m, hevc_v4l2m2m, …).
+  local hw_flag
+  for hw_flag in --enable-vaapi --enable-libvpl --enable-v4l2-m2m; do
+    if [ "$hw_flag" = --enable-v4l2-m2m ] && ! needs_v4l2_m2m_build; then
+      continue
+    fi
+    append_if_supported "$configure" BASE_FLAGS "$hw_flag"
+  done
+
   local base_flag
   for base_flag in \
-    --enable-libvpl \
     --enable-libzimg \
     --enable-fontconfig \
     --enable-gray \
