@@ -54,6 +54,7 @@ echo "  --enable-libvpl"
 echo "  --enable-vaapi"
 echo "  --enable-v4l2-m2m"
 echo "  --enable-nvenc"
+echo "  --enable-vulkan"
 echo "  --enable-libx264"
 EOF
 chmod +x "${TMPDIR}/configure-61"

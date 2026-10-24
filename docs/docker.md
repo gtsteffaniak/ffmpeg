@@ -27,7 +27,7 @@ The **full / GPU** Linux image is built and run on **Debian 11 (bullseye)** — 
 
 **WSL exception (bookworm Mesa file only)**
 
-- WSL2 VAAPI uses Mesa’s **`d3d12_drv_video.so`**, which bullseye’s `mesa-va-drivers` does not include. The image installs that driver from **Debian 12 (bookworm)** via [`scripts/install-mesa-d3d12-va.sh`](../scripts/install-mesa-d3d12-va.sh) (full package or single-file extract). **FFmpeg and glibc remain bullseye-built**; only the d3d12 VA driver blob is newer. Caveat: mixing a bookworm Mesa DRI driver with bullseye `libva` is a narrow, tested exception for WSL — not a general upgrade of in-image Mesa for bare-metal `/dev/dri`.
+- WSL2 VAAPI uses Mesa’s **`d3d12_drv_video.so`**, which bullseye’s `mesa-va-drivers` does not include. The image installs bookworm Mesa GPU pieces via [`scripts/install-mesa-bookworm-gpu.sh`](../scripts/install-mesa-bookworm-gpu.sh) (d3d12 VA + Vulkan ICDs). **FFmpeg and glibc remain bullseye-built**; only selected Mesa driver blobs are newer. Caveat: mixing bookworm Mesa userspace with bullseye `libva`/`libvulkan1` is a narrow, tested exception — not a full distro upgrade.
 
 **Unaffected variants**
 
@@ -65,6 +65,30 @@ docker run --rm --device /dev/dri:/dev/dri --group-add video \
 
 AMF (`h264_amf`) needs AMD's proprietary AMF runtime on the host; it is not bundled in the image.
 
+## Vulkan (Vulkan Video + `scale_vulkan`)
+
+**Full image only** (static scratch build has no Vulkan). FFmpeg is configured with **`--enable-vulkan`** against **Khronos Vulkan-Headers ≥ 1.4** (vendored at build time; bullseye `libvulkan-dev` is too old for Vulkan Video). **glslang / shaderc** (`spirv_compiler`) enables **`scale_vulkan`** and other Vulkan filters — no `--enable-nonfree`.
+
+Runtime ships **`libvulkan1`** plus **Mesa Vulkan ICDs** (RADV, ANV, lavapipe). On amd64, [`scripts/install-mesa-bookworm-gpu.sh`](../scripts/install-mesa-bookworm-gpu.sh) installs **bookworm** `mesa-vulkan-drivers` (and WSL `d3d12` VA) while keeping bullseye glibc — same pattern as the WSL VA driver exception.
+
+```bash
+docker run --rm --device /dev/dri:/dev/dri --group-add video \
+  gtstef/ffmpeg:9.0.2 \
+  -hide_banner -init_hw_device vulkan=vk \
+  -f lavfi -i testsrc=d=2:size=1280x720 \
+  -vf 'format=nv12,hwupload' -c:v h264_vulkan -f null -
+```
+
+Verify compiled support (no GPU required):
+
+```bash
+ffmpeg -hide_banner -hwaccels | grep -i vulkan
+ffmpeg -hide_banner -encoders | grep -E 'h264_vulkan|hevc_vulkan|av1_vulkan'
+ffmpeg -hide_banner -filters | grep scale_vulkan
+```
+
+**NVIDIA:** use `--gpus all` with the image’s `NVIDIA_DRIVER_CAPABILITIES` (includes **`graphics`** for Vulkan). **Intel/AMD:** pass `/dev/dri` as for VAAPI.
+
 ## NVIDIA (NVENC / NVDEC)
 
 Requires [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
@@ -73,10 +97,10 @@ The full image sets:
 
 ```dockerfile
 ENV NVIDIA_VISIBLE_DEVICES=all
-ENV NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,video,utility,graphics
 ```
 
-Per the [toolkit driver-capabilities docs](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/docker-specialized.html#driver-capabilities), the runtime default when unset is **`compute,utility` only** — that does **not** mount `libnvidia-encode.so` / `libnvcuvid.so`, so NVENC/NVDEC fail until **`video`** is included. The image ENV above is picked up automatically; you usually only need **`--gpus all`**:
+Per the [toolkit driver-capabilities docs](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/docker-specialized.html#driver-capabilities), the runtime default when unset is **`compute,utility` only** — that does **not** mount `libnvidia-encode.so` / `libnvcuvid.so`, so NVENC/NVDEC fail until **`video`** is included. **`graphics`** is required for the NVIDIA **Vulkan ICD** (Vulkan Video / `h264_vulkan`). The image ENV above is picked up automatically; you usually only need **`--gpus all`**:
 
 ```bash
 docker run --rm --gpus all gtstef/ffmpeg:9.0.2 \
@@ -96,7 +120,7 @@ Compose example:
 ```yaml
 environment:
   NVIDIA_VISIBLE_DEVICES: all
-  NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
+  NVIDIA_DRIVER_CAPABILITIES: compute,video,utility,graphics
 deploy:
   resources:
     reservations:

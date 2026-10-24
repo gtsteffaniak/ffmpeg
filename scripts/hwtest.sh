@@ -59,6 +59,14 @@ if [ -e /dev/dri/renderD128 ]; then
   else
     fail "VAAPI h264_vaapi (/dev/dri)"
   fi
+
+  if run_ffmpeg docker-full -hide_banner -init_hw_device vulkan=vk \
+    -f lavfi -i testsrc=d=1:size=640x360 \
+    -vf 'format=nv12,hwupload' -c:v h264_vulkan -f null - 2>/dev/null; then
+    pass "Vulkan h264_vulkan (/dev/dri + Mesa/NVIDIA ICD)"
+  else
+    fail "Vulkan h264_vulkan (needs Vulkan ICD; NVIDIA also needs graphics capability)"
+  fi
 else
   skip "no /dev/dri/renderD128"
 fi

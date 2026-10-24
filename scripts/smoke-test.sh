@@ -94,6 +94,27 @@ if [ "$VARIANT" = "full" ]; then
     || { echo "FAIL: full image missing compiled decoder h264_cuvid" >&2; exit 1; }
   echo "OK: h264_cuvid present in -decoders list"
 
+  hwaccels_full="$(run_in_image ffmpeg -hide_banner -hwaccels 2>/dev/null || true)"
+  echo "$hwaccels_full" | grep -qi vulkan \
+    || { echo "FAIL: full image missing vulkan hwaccel" >&2; exit 1; }
+  echo "OK: vulkan hwaccel listed"
+
+  for enc in h264_vulkan hevc_vulkan; do
+    echo "$encoders" | grep -qE "(^|[[:space:]])${enc}[[:space:]]" \
+      || { echo "FAIL: full image missing compiled encoder ${enc}" >&2; exit 1; }
+  done
+  if echo "$encoders" | grep -qE '(^|[[:space:]])av1_vulkan[[:space:]]'; then
+    echo "OK: av1_vulkan encoder present"
+  else
+    echo "WARN: av1_vulkan not compiled (Vulkan 1.4.317+ headers required)"
+  fi
+  echo "OK: Vulkan video encoders present"
+
+  filters="$(run_in_image ffmpeg -hide_banner -filters 2>/dev/null)"
+  echo "$filters" | grep -q scale_vulkan \
+    || { echo "FAIL: full image missing scale_vulkan filter" >&2; exit 1; }
+  echo "OK: scale_vulkan filter present"
+
   for enc in h264_vaapi hevc_vaapi h264_qsv; do
     if ! echo "$encoders" | grep -q "$enc"; then
       echo "WARN: full image missing encoder $enc (configure/arch dependent)"

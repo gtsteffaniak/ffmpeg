@@ -28,7 +28,8 @@ The **full** Linux image stays on **Debian 11 (bullseye)** for both build and ru
 | **Extracted tarball** | `ffmpeg` / `ffprobe` in `ffmpeg-<version>-linux-<arch>.tar.gz` need **host glibc ≥ 2.31** (bullseye). Typical hosts: Ubuntu 20.04+, Debian 11+, RHEL 9+. |
 | **Docker on any distro** | Host OS version is irrelevant; you need kernel + GPU devices. NVIDIA toolkit injects host driver libs compatible with recent glibc. |
 | **Trade-off** | In-image Mesa / Intel VA packages are **bullseye-era**; newest GPUs may need newer drivers than the image bundles. |
-| **WSL d3d12** | `d3d12_drv_video.so` is pulled from **bookworm** Mesa only (see `scripts/install-mesa-d3d12-va.sh`); FFmpeg itself remains bullseye / glibc 2.31. |
+| **WSL d3d12 / Vulkan ICDs** | Bookworm Mesa extras via `scripts/install-mesa-bookworm-gpu.sh`; FFmpeg remains bullseye / glibc 2.31. |
+| **Vulkan Video** | Full image: `h264_vulkan` / `hevc_vulkan` (+ `av1_vulkan` when headers ≥ 1.4.317), `scale_vulkan`; see [docs/docker.md](docs/docker.md#vulkan-vulkan-video--scale_vulkan). |
 | **Not on bullseye** | **Windows** mingw builds and **static** Alpine → `scratch` images are separate pipelines. |
 
 Full narrative: [docs/docker.md — Base image and glibc compatibility](docs/docker.md#base-image-and-glibc-compatibility).

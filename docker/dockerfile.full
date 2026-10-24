@@ -5,15 +5,16 @@
 # In Docker, the host distro only needs a compatible kernel and device nodes; NVIDIA Container
 # Toolkit injects host driver libs. Trade-off: older in-image Mesa/Intel VA stacks (very new GPUs
 # may need newer drivers). WSL d3d12 VAAPI uses a bookworm Mesa driver file only — see
-# scripts/install-mesa-d3d12-va.sh. Windows (mingw) and Alpine static scratch builds are separate.
+# scripts/install-mesa-bookworm-gpu.sh. Windows (mingw) and Alpine static scratch builds are separate.
 ARG DEBIAN_VERSION=bullseye
 FROM ffmpeg-debian-base:latest AS builder
 
 ARG FFMPEG_VERSION=9.0.2
 ARG TARGETARCH
 
-COPY scripts/version-gates.sh scripts/variant.sh scripts/debian-full-build.sh scripts/checkldd.sh /tmp/
-RUN chmod +x /tmp/debian-full-build.sh && cp /tmp/checkldd.sh /checkldd.sh
+COPY scripts/version-gates.sh scripts/variant.sh scripts/debian-full-build.sh \
+  scripts/debian-vulkan-build-deps.sh scripts/checkldd.sh /tmp/
+RUN chmod +x /tmp/debian-full-build.sh /tmp/debian-vulkan-build-deps.sh && cp /tmp/checkldd.sh /checkldd.sh
 
 COPY [ "src/x264*", "./x264" ]
 COPY [ "src/x265*", "./x265" ]
@@ -56,8 +57,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/* \
   && (dpkg --print-architecture | grep -q amd64 && apt-get update && apt-get install -y --no-install-recommends intel-media-va-driver-non-free libmfx1 && rm -rf /var/lib/apt/lists/* || true)
 
-COPY scripts/install-mesa-d3d12-va.sh scripts/check-full-wsl-va.sh /tmp/
-RUN chmod +x /tmp/install-mesa-d3d12-va.sh /tmp/check-full-wsl-va.sh && /tmp/install-mesa-d3d12-va.sh
+COPY scripts/install-mesa-bookworm-gpu.sh scripts/check-full-wsl-va.sh /tmp/
+RUN chmod +x /tmp/install-mesa-bookworm-gpu.sh /tmp/check-full-wsl-va.sh && /tmp/install-mesa-bookworm-gpu.sh
 RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then /tmp/check-full-wsl-va.sh /; fi
 
 COPY --from=builder /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /usr/local/bin/
@@ -72,6 +73,10 @@ RUN ffmpeg -version 2>&1 | grep -qi configuration && \
   ! ffmpeg -version 2>&1 | grep -q -- '--enable-nonfree'
 RUN ffmpeg -hide_banner -encoders 2>/dev/null | grep -q h264_nvenc
 RUN ffmpeg -hide_banner -decoders 2>/dev/null | grep -q h264_cuvid
+RUN ffmpeg -hide_banner -hwaccels 2>/dev/null | grep -qi vulkan
+RUN ffmpeg -hide_banner -encoders 2>/dev/null | grep -q h264_vulkan
+RUN ffmpeg -hide_banner -encoders 2>/dev/null | grep -q hevc_vulkan
+RUN ffmpeg -hide_banner -filters 2>/dev/null | grep -q scale_vulkan
 RUN ffmpeg -hide_banner -f lavfi -i testsrc=duration=1:size=320x240:rate=1 \
   -c:v libx264 -preset ultrafast -frames:v 2 -an -f null -
 RUN /usr/local/bin/checkldd.sh /usr/local/bin/ffmpeg
@@ -79,6 +84,6 @@ RUN /usr/local/bin/checkldd.sh /usr/local/bin/ffmpeg
 # NVIDIA Container Toolkit defaults to compute,utility (no libnvidia-encode/libnvcuvid).
 # See https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/docker-specialized.html
 ENV NVIDIA_VISIBLE_DEVICES=all
-ENV NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,video,utility,graphics
 
 ENTRYPOINT ["/usr/local/bin/ffmpeg"]

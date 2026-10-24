@@ -6,6 +6,9 @@ FFMPEG_VERSION="${FFMPEG_VERSION:?FFMPEG_VERSION required}"
 
 cd /build
 . /tmp/version-gates.sh
+# shellcheck source=scripts/debian-vulkan-build-deps.sh
+. /tmp/debian-vulkan-build-deps.sh
+install_debian_full_vulkan_build_deps
 
 first_dir() {
   ls -d "$1" 2>/dev/null | head -n1
@@ -69,7 +72,7 @@ PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/lib/pkgconfig:${PKG_CONFIG_PATH:-
   --pkg-config-flags="--static" \
   --extra-cflags="${CFLAGS:-} -I/usr/local/include" \
   --extra-cxxflags="${CXXFLAGS:-} -I/usr/local/include" \
-  --extra-ldflags="${LDFLAGS:-} -L/usr/local/lib -Wl,-Bstatic -lx264 -lx265 -lmp3lame -Wl,-Bdynamic -lva -lva-drm -lvpl -ldl -lpthread" \
+  --extra-ldflags="${LDFLAGS:-} -L/usr/local/lib -Wl,-Bstatic -lx264 -lx265 -lmp3lame -Wl,-Bdynamic -lva -lva-drm -lvpl -lvulkan -ldl -lpthread" \
   --extra-libs="-lm -fopenmp -lstdc++" \
   --enable-small \
   --enable-gnutls \
