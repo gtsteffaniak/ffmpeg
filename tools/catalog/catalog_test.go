@@ -37,12 +37,12 @@ func TestReleaseGateInStatic(t *testing.T) {
 	}{
 		{"always", "9.0.1", true},
 		{"static_skip", "9.0.1", false},
-		{"needs_libwebp", "9.0.1", true},
+		{"needs_libwebp", "9.0.1", false},
 		{"needs_libvpl_build", "6.1.3", false},
 		{"needs_vaapi_build", "9.0.1", false},
 		{"needs_v4l2_m2m_build", "9.0.1", true},
-		{"needs_modern_codecs_build", "9.0.1", true},
-		{"needs_libaom", "9.0.1", true},
+		{"needs_modern_codecs_build", "9.0.1", false},
+		{"needs_libaom", "9.0.1", false},
 	}
 	for _, tc := range cases {
 		if got := releaseGateInStatic(tc.gate, tc.ver); got != tc.want {

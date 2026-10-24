@@ -1,5 +1,6 @@
 FROM ffmpeg-base:latest AS processing
 
+ARG BUILD_VARIANT=full
 ARG DECODE_ONLY="false"
 
 # Install harfbuzz (libass dependency)
@@ -24,7 +25,10 @@ RUN cd lcms2 && \
 
 # libmysofa (3D audio support - SOFA file format)
 COPY [ "src/libmysofa-*", "./libmysofa" ]
-RUN cd libmysofa/build && \
+RUN if [ "$BUILD_VARIANT" = "static" ] || [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping libmysofa build"; \
+  else \
+  cd libmysofa/build && \
   cmake \
     -G"Unix Makefiles" \
     -DCMAKE_VERBOSE_MAKEFILE=ON \
@@ -33,11 +37,15 @@ RUN cd libmysofa/build && \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_TESTS=OFF \
     .. && \
-  make -j$(nproc) install
+  make -j$(nproc) install; \
+  fi
 
 # vmaf (video quality assessment)
 COPY [ "src/vmaf-*", "./vmaf" ]
-RUN cd vmaf/libvmaf && \
+RUN if [ "$BUILD_VARIANT" = "static" ] || [ "$DECODE_ONLY" = "true" ]; then \
+    echo "Skipping vmaf build"; \
+  else \
+  cd vmaf/libvmaf && \
     meson setup build \
       -Dbuildtype=release \
       -Ddefault_library=static \
@@ -47,11 +55,12 @@ RUN cd vmaf/libvmaf && \
       -Denable_avx512=true \
       -Denable_float=true && \
     ninja -j$(nproc) -vC build install; \
-    sed -i 's/-lvmaf /-lvmaf -lstdc++ /' /usr/local/lib/pkgconfig/libvmaf.pc
+    sed -i 's/-lvmaf /-lvmaf -lstdc++ /' /usr/local/lib/pkgconfig/libvmaf.pc; \
+  fi
 
 # vid.stab (video stabilization)
 COPY [ "src/vid.stab-*", "./vid.stab" ]
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
+RUN if [ "$BUILD_VARIANT" = "static" ] || [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping vid.stab build"; \
   else \
     cd vid.stab && \

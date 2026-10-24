@@ -79,9 +79,12 @@ fi
 if [ "$VARIANT" = "static" ]; then
   id=$(docker create ${PLATFORM:+--platform "$PLATFORM"} "$IMAGE")
   docker cp "$id:/ffmpeg" /tmp/ffmpeg-smoke-$$
+  docker cp "$id:/ffprobe" /tmp/ffprobe-smoke-$$ 2>/dev/null || true
   docker rm -f "$id" >/dev/null
   "${SCRIPT_DIR}/checkelf.sh" "/tmp/ffmpeg-smoke-$$"
-  rm -f "/tmp/ffmpeg-smoke-$$"
+  "${SCRIPT_DIR}/check-filebrowser-static.sh" "/tmp/ffmpeg-smoke-$$" "/tmp/ffprobe-smoke-$$"
+  rm -f "/tmp/ffmpeg-smoke-$$" "/tmp/ffprobe-smoke-$$"
+  "${SCRIPT_DIR}/smoke-test-filebrowser.sh" "$IMAGE" "$ARCH"
 else
   id=$(docker create ${PLATFORM:+--platform "$PLATFORM"} "$IMAGE")
   docker cp "$id:/usr/local/bin/ffmpeg" /tmp/ffmpeg-smoke-$$

@@ -1,12 +1,13 @@
 FROM ffmpeg-base:latest AS image-formats
 
 ARG FFMPEG_VERSION=9.0.2
+ARG BUILD_VARIANT=full
 ARG DECODE_ONLY="false"
 
-COPY scripts/version-gates.sh /tmp/version-gates.sh
+COPY scripts/version-gates.sh scripts/variant.sh /tmp/
 
 # libwebp (encode only via --enable-libwebp)
-RUN . /tmp/version-gates.sh && \
+RUN . /tmp/version-gates.sh && export BUILD_VARIANT="${BUILD_VARIANT}" && \
   if needs_libwebp "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
     apk add $APK_OPTS libwebp-dev libwebp-static; \
   else \
@@ -15,7 +16,7 @@ RUN . /tmp/version-gates.sh && \
 
 # openjpeg (JPEG 2000 encoding via OpenJPEG; decode is native)
 COPY [ "src/openjpeg-*", "./openjpeg" ]
-RUN . /tmp/version-gates.sh && \
+RUN . /tmp/version-gates.sh && export BUILD_VARIANT="${BUILD_VARIANT}" && \
   if needs_openjpeg "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
     cd openjpeg && \
     mkdir build && cd build && \

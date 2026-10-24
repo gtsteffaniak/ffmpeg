@@ -1,13 +1,14 @@
 FROM ffmpeg-base:latest AS modern-codecs
 
 ARG FFMPEG_VERSION=9.0.2
+ARG BUILD_VARIANT=full
 ARG DECODE_ONLY="false"
 
-COPY scripts/version-gates.sh /tmp/version-gates.sh
+COPY scripts/version-gates.sh scripts/variant.sh /tmp/
 
 # xeve (MPEG-5 EVC encoder)
 COPY [ "src/xeve-*", "./xeve" ]
-RUN . /tmp/version-gates.sh && \
+RUN . /tmp/version-gates.sh && export BUILD_VARIANT="${BUILD_VARIANT}" && \
   if [ "$(uname -m)" = "armv7l" ] || ! needs_modern_codecs_build "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
     echo "Skipping xeve build"; \
   else \
@@ -25,7 +26,7 @@ RUN . /tmp/version-gates.sh && \
 
 # xevd (MPEG-5 EVC decoder)
 COPY [ "src/xevd-*", "./xevd" ]
-RUN . /tmp/version-gates.sh && \
+RUN . /tmp/version-gates.sh && export BUILD_VARIANT="${BUILD_VARIANT}" && \
   if [ "$(uname -m)" = "armv7l" ] || ! needs_modern_codecs_build "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
     echo "Skipping xevd build"; \
   else \
@@ -43,7 +44,7 @@ RUN . /tmp/version-gates.sh && \
 
 # vvenc (VVC/H.266 encoder)
 COPY [ "src/vvenc-*", "./vvenc" ]
-RUN . /tmp/version-gates.sh && \
+RUN . /tmp/version-gates.sh && export BUILD_VARIANT="${BUILD_VARIANT}" && \
   if [ "$(uname -m)" = "armv7l" ] || ! needs_modern_codecs_build "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
     echo "Skipping vvenc build"; \
   else \

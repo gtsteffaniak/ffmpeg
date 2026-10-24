@@ -33,6 +33,8 @@ BUILD_VARIANT=static
 export BUILD_VARIANT
 assert "static skips vaapi" 1 needs_vaapi_build
 assert "static skips libvpl build" 1 needs_libvpl_build "9.0.1"
+assert "static skips libwebp" 1 needs_libwebp "9.0.1" "static"
+assert "static skips x265 build" 1 needs_x265_build
 assert "eval_fetch_gate needs_vaapi_build static" 1 eval_fetch_gate needs_vaapi_build "9.0.1" "static"
 
 BUILD_VARIANT=full

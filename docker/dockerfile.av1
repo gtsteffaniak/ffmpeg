@@ -1,12 +1,13 @@
 FROM ffmpeg-base:latest AS av1
 
 ARG FFMPEG_VERSION=9.0.2
+ARG BUILD_VARIANT=full
 ARG DECODE_ONLY="false"
 
-COPY scripts/version-gates.sh /tmp/version-gates.sh
+COPY scripts/version-gates.sh scripts/variant.sh /tmp/
 
 # aom (AV1 reference encoder/decoder via libaom)
-RUN . /tmp/version-gates.sh && \
+RUN . /tmp/version-gates.sh && export BUILD_VARIANT="${BUILD_VARIANT}" && \
   if needs_libaom "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
     apk add $APK_OPTS aom-dev aom-static; \
   else \
@@ -22,15 +23,17 @@ RUN cd dav1d && \
   ninja -j$(nproc) -vC build install
 
 # rav1e (Rust AV1 encoder)
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
-    echo "Skipping rav1e build"; \
-  else \
+RUN . /tmp/version-gates.sh && export BUILD_VARIANT="${BUILD_VARIANT}" && \
+  if needs_rav1e_build; then \
     apk add $APK_OPTS rav1e-static rav1e-dev; \
+  else \
+    echo "Skipping rav1e build (BUILD_VARIANT=${BUILD_VARIANT})"; \
   fi
 
 # SVT-AV1 (production AV1 encoder)
 COPY [ "src/SVT-AV1-*", "./SVT-AV1" ]
-RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+RUN . /tmp/version-gates.sh && export BUILD_VARIANT="${BUILD_VARIANT}" && \
+  if [ "$(uname -m)" = "armv7l" ] || ! needs_svtav1_build; then \
     echo "Skipping SVT-AV1 build"; \
   else \
     cd SVT-AV1 && \

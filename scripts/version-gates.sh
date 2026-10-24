@@ -28,27 +28,54 @@ append_if_supported() {
   fi
 }
 
-# libwebp is encode-only; native animated WebP decode exists on FFmpeg 9.0+ but we still
-# ship libwebp for static/full software transcoding images.
 needs_libwebp() {
-  return 0
+  local _ver=$1 _variant=${2:-}
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ]
 }
 
 needs_openjpeg() {
-  return 0
+  local _ver=$1 _variant=${2:-}
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ]
 }
 
 needs_libvpx() {
-  local _ver=$1 _variant=$2
-  [ "$(uname -m)" != "armv7l" ]
+  local _ver=$1 _variant=${2:-}
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ] && [ "$(uname -m)" != "armv7l" ]
 }
 
 needs_libaom() {
-  return 0
+  local _ver=$1 _variant=${2:-}
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ]
 }
 
 needs_libvorbis() {
-  return 0
+  local _ver=$1 _variant=${2:-}
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ]
+}
+
+needs_x265_build() {
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ] && [ "$(uname -m)" != "armv7l" ]
+}
+
+needs_lame_build() {
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ]
+}
+
+needs_rav1e_build() {
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ]
+}
+
+needs_svtav1_build() {
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ]
 }
 
 needs_libvpl_build() {
@@ -73,8 +100,9 @@ needs_v4l2_m2m_build() {
 }
 
 needs_modern_codecs_build() {
-  local ver=$1 _variant=$2
-  ffmpeg_version_ge "$ver" "7.0.0"
+  local ver=$1 _variant=${2:-}
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ] && ffmpeg_version_ge "$ver" "7.0.0"
 }
 
 eval_fetch_gate() {
@@ -177,43 +205,46 @@ build_ffmpeg_configure_flags() {
     append_if_supported "$configure" BASE_FLAGS "$base_flag"
   done
 
-  if needs_libvpx "$ffmpeg_version" "$build_variant"; then
-    append_if_supported "$configure" FEATURES "--enable-libvpx"
-  fi
-  if needs_libaom "$ffmpeg_version" "$build_variant"; then
-    append_if_supported "$configure" FEATURES "--enable-libaom"
-  fi
-  if needs_openjpeg "$ffmpeg_version" "$build_variant"; then
-    append_if_supported "$configure" FEATURES "--enable-libopenjpeg"
-  fi
-  if needs_libvorbis "$ffmpeg_version" "$build_variant"; then
-    append_if_supported "$configure" FEATURES "--enable-libvorbis"
-  fi
-  if needs_libwebp "$ffmpeg_version" "$build_variant"; then
-    append_if_supported "$configure" FEATURES "--enable-libwebp"
+  if [ "$build_variant" != "static" ]; then
+    if needs_libvpx "$ffmpeg_version" "$build_variant"; then
+      append_if_supported "$configure" FEATURES "--enable-libvpx"
+    fi
+    if needs_libaom "$ffmpeg_version" "$build_variant"; then
+      append_if_supported "$configure" FEATURES "--enable-libaom"
+    fi
+    if needs_openjpeg "$ffmpeg_version" "$build_variant"; then
+      append_if_supported "$configure" FEATURES "--enable-libopenjpeg"
+    fi
+    if needs_libvorbis "$ffmpeg_version" "$build_variant"; then
+      append_if_supported "$configure" FEATURES "--enable-libvorbis"
+    fi
+    if needs_libwebp "$ffmpeg_version" "$build_variant"; then
+      append_if_supported "$configure" FEATURES "--enable-libwebp"
+    fi
   fi
 
-  local encode_flag
-  for encode_flag in \
-    --enable-libx264 \
-    --enable-librav1e \
-    --enable-libsvtav1 \
-    --enable-libx265 \
-    --enable-libxeve \
-    --enable-libxevd \
-    --enable-libvvenc \
-    --enable-libdavs2 \
-    --enable-libmysofa \
-    --enable-libuavs3d \
-    --enable-libvidstab \
-    --enable-libvmaf \
-    --enable-libvo-amrwbenc \
-    --enable-libmp3lame; do
-    append_if_supported "$configure" FEATURES "$encode_flag"
-  done
-
-  # NVENC/AMF/cuvid require FFmpeg's nonfree flag; document in README/licensing.
-  if [ "$build_variant" = "full" ]; then
+  if [ "$build_variant" = "static" ]; then
+    # Software transcode: H.264 + built-in AAC (HLS); broad decoders via BASE_FLAGS.
+    append_if_supported "$configure" FEATURES "--enable-libx264"
+  else
+    local encode_flag
+    for encode_flag in \
+      --enable-libx264 \
+      --enable-librav1e \
+      --enable-libsvtav1 \
+      --enable-libx265 \
+      --enable-libxeve \
+      --enable-libxevd \
+      --enable-libvvenc \
+      --enable-libdavs2 \
+      --enable-libmysofa \
+      --enable-libuavs3d \
+      --enable-libvidstab \
+      --enable-libvmaf \
+      --enable-libvo-amrwbenc \
+      --enable-libmp3lame; do
+      append_if_supported "$configure" FEATURES "$encode_flag"
+    done
     append_if_supported "$configure" FEATURES "--enable-nonfree"
   fi
 }

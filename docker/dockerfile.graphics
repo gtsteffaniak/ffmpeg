@@ -1,9 +1,10 @@
 FROM ffmpeg-base:latest AS graphics
 
+ARG BUILD_VARIANT=full
 ARG DECODE_ONLY="false"
 
-# Skip cairo, librsvg, pango if DECODE_ONLY is true (for smaller text rendering footprint)
-RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+# Skip cairo, librsvg, pango on static / decode-only (libass still uses harfbuzz)
+RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ] || [ "$BUILD_VARIANT" = "static" ]; then \
     echo "Skipping cairo build"; \
   else \
     apk add $APK_OPTS cairo-dev cairo-static; \
@@ -14,7 +15,7 @@ RUN apk add $APK_OPTS harfbuzz-dev harfbuzz-static
 
 # Build pango (text layout engine)
 COPY [ "src/pango-*", "./pango" ]
-RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ]; then \
+RUN if [ "$(uname -m)" = "armv7l" ] || [ "$DECODE_ONLY" = "true" ] || [ "$BUILD_VARIANT" = "static" ]; then \
     echo "Skipping pango build"; \
   else \
     apk add $APK_OPTS pango-dev pango; \

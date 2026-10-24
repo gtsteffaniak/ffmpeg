@@ -95,16 +95,13 @@ func releaseGateInStatic(gate, ffmpegVersion string) bool {
 	case "never", "decode_skip", "static_skip":
 		return false
 	case "needs_libwebp", "needs_openjpeg", "needs_libvpx", "needs_libaom", "needs_libvorbis":
-		return true
+		return false
 	case "needs_libvpl_build", "needs_vaapi_build":
 		return false
 	case "needs_v4l2_m2m_build":
 		return true
 	case "needs_modern_codecs_build":
-		if !validFFmpegVersion(ffmpegVersion) {
-			return false
-		}
-		return ffmpegVersionGE(ffmpegVersion, "7.0.0")
+		return false
 	default:
 		return false
 	}
