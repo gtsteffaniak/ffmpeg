@@ -48,18 +48,84 @@ docker run --rm --gpus all \
 
 Driver libraries are injected by the toolkit; the image ships nv-codec-headers at build time only.
 
-## WSL2
+## WSL2 (Docker on Windows / Docker Desktop)
 
-Mount GPU paravirtualization:
+WSL2 exposes the Windows GPU through **`/dev/dxg`** and ships user-mode drivers under **`/usr/lib/wsl/lib`** (CUDA/NVENC, D3D12 interop). The full image bundles **Mesa’s `d3d12_drv_video.so`** VAAPI driver (bookworm Mesa on amd64 when bullseye’s Mesa is too old) so VAAPI works inside the container when you set `LIBVA_DRIVER_NAME=d3d12`.
+
+There is typically **no usable `/dev/dri/renderD128`** in WSL2 for host GPU video — use **`/dev/dxg`** and the d3d12 VA driver instead.
+
+### Host requirements
+
+- **Windows 11**, or **Windows 10 21H2+** with an up-to-date WSL2 kernel (`wsl --update`)
+- Current **GPU driver** from the vendor (NVIDIA / AMD / Intel)
+- WSL2 distro (Ubuntu/Debian recommended) with `/dev/dxg` present: `ls -l /dev/dxg`
+- For **NVENC inside Docker Desktop**: enable GPU in Docker Desktop settings and pass **`--gpus all`**
+
+### Run (VAAPI via D3D12)
 
 ```bash
 docker run --rm -it \
-  -v /usr/lib/wsl:/usr/lib/wsl:ro \
   --device /dev/dxg \
-  gtstef/ffmpeg:9.0.2 -hwaccels
+  -v /usr/lib/wsl:/usr/lib/wsl:ro \
+  -e LIBVA_DRIVER_NAME=d3d12 \
+  -e LIBVA_DRIVERS_PATH=/usr/lib/wsl/lib:/usr/lib/x86_64-linux-gnu/dri \
+  -e LD_LIBRARY_PATH=/usr/lib/wsl/lib \
+  gtstef/ffmpeg:9.0.2 \
+  -hide_banner -init_hw_device vaapi=va:/dev/dxg \
+  -f lavfi -i testsrc=d=2:size=1280x720 \
+  -vf 'format=nv12,hwupload' -c:v h264_vaapi -f null -
 ```
 
-Use D3D12/Vulkan paths when available on your Windows build.
+### Run (NVENC / CUDA on WSL)
+
+NVIDIA’s WSL libraries live on the host under `/usr/lib/wsl/lib`. Mount them read-only and add **`--gpus all`** when using Docker Desktop’s NVIDIA integration:
+
+```bash
+docker run --rm -it \
+  --gpus all \
+  --device /dev/dxg \
+  -v /usr/lib/wsl:/usr/lib/wsl:ro \
+  -e LD_LIBRARY_PATH=/usr/lib/wsl/lib \
+  -e NVIDIA_DRIVER_CAPABILITIES=compute,video,utility \
+  gtstef/ffmpeg:9.0.2 \
+  -hide_banner -f lavfi -i testsrc=d=2:size=1280x720 \
+  -c:v h264_nvenc -f null -
+```
+
+### Extracted binary (`.tar.gz` from releases)
+
+The glibc **full** tarball is dynamically linked; on WSL2 use the same environment when invoking `ffmpeg`/`ffprobe` from the host or a minimal container:
+
+```bash
+export LIBVA_DRIVER_NAME=d3d12
+export LIBVA_DRIVERS_PATH=/usr/lib/wsl/lib:/usr/lib/x86_64-linux-gnu/dri
+export LD_LIBRARY_PATH=/usr/lib/wsl/lib
+./ffmpeg -init_hw_device vaapi=va:/dev/dxg ...
+```
+
+Install matching Debian **libva** / **mesa-va-drivers** on the host, or run inside the full Docker image above.
+
+### Verification
+
+```bash
+ls -l /dev/dxg /usr/lib/wsl/lib
+docker run --rm --entrypoint sh gtstef/ffmpeg:9.0.2 \
+  -c 'find /usr/lib -name d3d12_drv_video.so'
+ffmpeg -hide_banner -hwaccels
+ffmpeg -hide_banner -encoders | grep -E 'vaapi|nvenc'
+```
+
+Local checks: `make hwtest` (auto-detects `/dev/dxg` and exercises WSL VAAPI + NVENC when libraries are present).
+
+### Caveats
+
+| Topic | Notes |
+|--------|--------|
+| No `/dev/dri` | Normal on WSL2; do not assume `renderD128` exists |
+| d3d12 encode | Depends on Windows + GPU vendor support for D3D12 video encode |
+| Intel iHD in WSL | Often fails against `/dev/dxg`; use **`LIBVA_DRIVER_NAME=d3d12`** |
+| ARM WSL | d3d12 VA driver is an **amd64** image concern; use software/static on arm64 |
+| Patents / nonfree | NVENC and some VA paths require FFmpeg nonfree encoders |
 
 ## Raspberry Pi (V4L2 M2M)
 

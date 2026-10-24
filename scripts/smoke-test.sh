@@ -23,15 +23,32 @@ if [ -n "$ARCH" ]; then
   PLATFORM="linux/${ARCH}"
 fi
 
-run_in_image() {
+docker_run_extra() {
   local extra=()
   if [ -n "$PLATFORM" ]; then
     extra+=(--platform "$PLATFORM")
   fi
-  docker run --rm "${extra[@]}" "$IMAGE" "$@"
+  printf '%s\n' "${extra[@]}"
+}
+
+run_in_image() {
+  # shellcheck disable=SC2046
+  docker run --rm $(docker_run_extra) "$IMAGE" "$@"
+}
+
+run_in_image_sh() {
+  # shellcheck disable=SC2046
+  docker run --rm $(docker_run_extra) --entrypoint sh "$IMAGE" "$@"
 }
 
 echo "=== smoke-test variant=${VARIANT} image=${IMAGE} arch=${ARCH:-any} ==="
+
+if command -v docker >/dev/null 2>&1; then
+  img_bytes="$(docker image inspect "$IMAGE" --format '{{.Size}}' 2>/dev/null || echo 0)"
+  if [ -n "$img_bytes" ] && [ "$img_bytes" != "0" ]; then
+    echo "image_size_bytes:${img_bytes} (~$((img_bytes / 1024 / 1024)) MiB)"
+  fi
+fi
 
 run_in_image ffmpeg -version
 run_in_image ffprobe -version
@@ -86,6 +103,14 @@ if [ "$VARIANT" = "static" ]; then
   rm -f "/tmp/ffmpeg-smoke-$$" "/tmp/ffprobe-smoke-$$"
   "${SCRIPT_DIR}/smoke-test-filebrowser.sh" "$IMAGE" "$ARCH"
 else
+  if [ "$ARCH" != "arm64" ]; then
+    d3d12_drv="$(run_in_image_sh -c 'find /usr/lib -name d3d12_drv_video.so 2>/dev/null | head -1')"
+    if [ -z "$d3d12_drv" ]; then
+      echo "FAIL: full image missing d3d12_drv_video.so (WSL VAAPI)" >&2
+      exit 1
+    fi
+    echo "OK: WSL VAAPI driver ${d3d12_drv}"
+  fi
   id=$(docker create ${PLATFORM:+--platform "$PLATFORM"} "$IMAGE")
   docker cp "$id:/usr/local/bin/ffmpeg" /tmp/ffmpeg-smoke-$$
   docker rm -f "$id" >/dev/null

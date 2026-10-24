@@ -49,6 +49,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/* \
   && (dpkg --print-architecture | grep -q amd64 && apt-get update && apt-get install -y --no-install-recommends intel-media-va-driver-non-free libmfx1 && rm -rf /var/lib/apt/lists/* || true)
 
+COPY scripts/install-mesa-d3d12-va.sh scripts/check-full-wsl-va.sh /tmp/
+RUN chmod +x /tmp/install-mesa-d3d12-va.sh /tmp/check-full-wsl-va.sh && /tmp/install-mesa-d3d12-va.sh
+RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then /tmp/check-full-wsl-va.sh /; fi
+
 COPY --from=builder /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /usr/local/bin/
 COPY --from=builder /doc-bundle/ /usr/share/doc/ffmpeg/
 
