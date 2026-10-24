@@ -151,7 +151,7 @@ fetch_uavs3d() {
   echo "--- Finished ${dir} at ${commit} ---"
 }
 
-echo "Fetching sources from sources.json (FFMPEG_VERSION=${FFMPEG_VERSION}, DECODE_ONLY=${DECODE_ONLY})"
+echo "Fetching sources from sources.json (FFMPEG_VERSION=${FFMPEG_VERSION}, BUILD_VARIANT=${BUILD_VARIANT})"
 # shellcheck disable=SC1090
 eval "$(cd "$REPO_ROOT" && go run -C tools/catalog . fetch-script)"
 
