@@ -4,6 +4,36 @@ The **full** image (`gtstef/ffmpeg:<version>`) is built on **Debian 11 (bullseye
 
 The **static** image (`gtstef/ffmpeg:<version>-static`) is a musl binary on `scratch` with **no GPU** support (V4L2 M2M on arm64 only). Use it for portable software transcoding.
 
+## Base image and glibc compatibility
+
+The **full / GPU** Linux image is built and run on **Debian 11 (bullseye)** — not bookworm or Ubuntu — by design.
+
+**Why Debian 11**
+
+- **glibc 2.31** is the compatibility floor for the **extracted** `ffmpeg` / `ffprobe` tarballs (`ffmpeg-<version>-linux-<arch>.tar.gz`). A dynamically linked glibc binary needs **host glibc ≥ build glibc**. Bullseye targets a wide set of still-supported hosts, for example:
+  - Ubuntu **20.04** and newer
+  - Debian **11** and newer
+  - RHEL / Rocky / Alma **9** and newer
+- Bullseye is the oldest still-supported Debian release with a practical **libva / libvpl / non-free Intel VA** stack for the full image.
+
+**Running inside Docker**
+
+- The **host Linux distribution does not need to match** Debian 11. Containers use the image’s userspace; the host only supplies the **kernel**, **device nodes** (`/dev/dri`, `/dev/dxg`, …), and optional **GPU injection**.
+- **NVIDIA NVENC/CUDA**: the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) mounts **host** driver libraries into the container. Those libraries are built for recent distros and work with FFmpeg in this image as long as the toolkit and driver are current.
+
+**Trade-off: older in-image GPU userspace**
+
+- Runtime packages in the image (Mesa VA, `intel-media-va-driver-non-free`, libvpl, etc.) come from **bullseye**. That keeps glibc compatibility predictable but means **very new GPUs** (recent Intel Arc generations, newest AMD VA paths) may need **newer VA/Mesa drivers** than bullseye ships. If VAAPI fails on bleeding-edge hardware, try a newer host driver stack, a newer distro runtime, or software encode via the **static** image.
+
+**WSL exception (bookworm Mesa file only)**
+
+- WSL2 VAAPI uses Mesa’s **`d3d12_drv_video.so`**, which bullseye’s `mesa-va-drivers` does not include. The image installs that driver from **Debian 12 (bookworm)** via [`scripts/install-mesa-d3d12-va.sh`](../scripts/install-mesa-d3d12-va.sh) (full package or single-file extract). **FFmpeg and glibc remain bullseye-built**; only the d3d12 VA driver blob is newer. Caveat: mixing a bookworm Mesa DRI driver with bullseye `libva` is a narrow, tested exception for WSL — not a general upgrade of in-image Mesa for bare-metal `/dev/dri`.
+
+**Unaffected variants**
+
+- **Windows** releases (mingw-w64 cross-compile) do not use this Debian runtime.
+- The **static** Alpine → `scratch` image is musl-based and does not share bullseye glibc or these VA packages.
+
 ## Intel (VAAPI / QSV)
 
 **Host:** iGPU or Intel discrete GPU with kernel `i915` / `xe`, `/dev/dri/renderD128`.

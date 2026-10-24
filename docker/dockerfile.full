@@ -1,4 +1,11 @@
-# Full-feature glibc FFmpeg (dynamic VA/VPL/NVENC/Vulkan/OpenCL), runtime on Debian slim.
+# Full-feature glibc FFmpeg (dynamic VA/VPL/NVENC/Vulkan/OpenCL).
+#
+# Debian 11 (bullseye) is intentional for builder + runtime: glibc 2.31 sets the floor for
+# extracted standalone linux/amd64|arm64 binaries (Ubuntu 20.04+, Debian 11+, RHEL 9+, etc.).
+# In Docker, the host distro only needs a compatible kernel and device nodes; NVIDIA Container
+# Toolkit injects host driver libs. Trade-off: older in-image Mesa/Intel VA stacks (very new GPUs
+# may need newer drivers). WSL d3d12 VAAPI uses a bookworm Mesa driver file only — see
+# scripts/install-mesa-d3d12-va.sh. Windows (mingw) and Alpine static scratch builds are separate.
 ARG DEBIAN_VERSION=bullseye
 FROM ffmpeg-debian-base:latest AS builder
 
