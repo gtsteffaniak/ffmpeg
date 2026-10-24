@@ -14,15 +14,25 @@ NC='\033[0m' # No Color
 # Configuration
 IMAGE=${IMAGE:-""}  # Full image name (e.g., docker.io/user/ffmpeg:8.0)
 DECODE_ONLY=${DECODE_ONLY:-"false"}
+BUILD_VARIANT=${BUILD_VARIANT:-""}
 ALPINE_VERSION=${ALPINE_VERSION:-"alpine:3.22"}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# shellcheck source=variant.sh
+source "${SCRIPT_DIR}/variant.sh"
+normalize_build_variant
+export BUILD_VARIANT
+# Static image always includes software encoders (legacy DECODE_ONLY skipped them).
+if [ "$BUILD_VARIANT" = "static" ]; then
+    DECODE_ONLY=false
+fi
+export DECODE_ONLY
 read_ffmpeg_version() {
     (cd "$REPO_ROOT" && go run -C tools/catalog . read release.ffmpeg_version)
 }
 FFMPEG_VERSION="${FFMPEG_VERSION:-$(read_ffmpeg_version)}"
 export FFMPEG_VERSION
-GATED_BUILD_ARGS="--build-arg DECODE_ONLY=${DECODE_ONLY} --build-arg FFMPEG_VERSION=${FFMPEG_VERSION}"
+GATED_BUILD_ARGS="--build-arg BUILD_VARIANT=${BUILD_VARIANT} --build-arg DECODE_ONLY=${DECODE_ONLY} --build-arg FFMPEG_VERSION=${FFMPEG_VERSION}"
 BUILD_MODE=${BUILD_MODE:-"sequential"}  # sequential, parallel, or max-parallel
 NO_CACHE=${NO_CACHE:-"false"}
 COMPONENT=${COMPONENT:-"all"}
@@ -80,7 +90,7 @@ if [ -n "$IMAGE" ]; then
 else
     echo -e "  ${YELLOW}Build:${NC}         Local only"
 fi
-echo -e "  ${YELLOW}Decode Only:${NC}   ${DECODE_ONLY}"
+echo -e "  ${YELLOW}Variant:${NC}       ${BUILD_VARIANT}"
 echo -e "  ${YELLOW}FFmpeg:${NC}        ${FFMPEG_VERSION}"
 echo -e "  ${YELLOW}Alpine:${NC}        ${ALPINE_VERSION}"
 echo -e "  ${YELLOW}Build Mode:${NC}    ${BUILD_MODE}"
@@ -110,7 +120,7 @@ build_image() {
 
     # Only final image can be pushed, but all images use multi-platform if specified
     local should_push="false"
-    if [ "$image_name" = "final" ] && [ "$PUSH" = "true" ]; then
+    if { [ "$image_name" = "final" ] || [ "$image_name" = "full" ]; } && [ "$PUSH" = "true" ]; then
         should_push="true"
     fi
 
@@ -234,6 +244,7 @@ build_parallel() {
 
 # Build definitions: dockerfile|image_name|build_args|description
 BASE_IMAGE="dockerfile.base|base||Base build environment with Alpine + tools + glib"
+DEBIAN_BASE_IMAGE="dockerfile.debian-base|debian-base||Debian bullseye glibc build environment (full image)"
 
 TIER2_IMAGES=(
     "dockerfile.graphics|graphics|${GATED_BUILD_ARGS}|Graphics libraries (cairo, pango, harfbuzz)"
@@ -243,11 +254,11 @@ TIER2_IMAGES=(
     "dockerfile.vpx-avs|vpx-avs|${GATED_BUILD_ARGS}|VP8/9 + AVS codecs (libvpx, davs2, uavs3d)"
     "dockerfile.image-formats|image-formats|${GATED_BUILD_ARGS}|Image formats (webp, openjpeg, zimg, libjxl)"
     "dockerfile.audio|audio|${GATED_BUILD_ARGS}|Audio codecs (lame, vorbis, rubberband)"
-    "dockerfile.vaapi|vaapi|${GATED_BUILD_ARGS}|Hardware acceleration (libva, libvpl, v4l2-m2m)"
     "dockerfile.processing|processing|${GATED_BUILD_ARGS}|Processing tools (vid.stab, vmaf, libass)"
 )
 
-FINAL_IMAGE="dockerfile.final|final|${GATED_BUILD_ARGS} --build-arg ALPINE_VERSION=${ALPINE_VERSION}|FFmpeg compilation + testing + final package"
+FINAL_STATIC_IMAGE="dockerfile.final|final|${GATED_BUILD_ARGS} --build-arg ALPINE_VERSION=${ALPINE_VERSION}|Alpine static scratch image (software + v4l2m2m)"
+FULL_GLIBC_IMAGE="dockerfile.full|full|${GATED_BUILD_ARGS} --build-arg DEBIAN_VERSION=bullseye|Debian glibc GPU-capable runtime image"
 
 # Build based on component selection
 if [ "$COMPONENT" != "all" ]; then
@@ -257,6 +268,14 @@ if [ "$COMPONENT" != "all" ]; then
     case $COMPONENT in
         base)
             IFS='|' read -r dockerfile name args desc <<< "$BASE_IMAGE"
+            build_image "$dockerfile" "$name" "$args" "$desc"
+            ;;
+        debian-base)
+            IFS='|' read -r dockerfile name args desc <<< "$DEBIAN_BASE_IMAGE"
+            build_image "$dockerfile" "$name" "$args" "$desc"
+            ;;
+        full)
+            IFS='|' read -r dockerfile name args desc <<< "$FULL_GLIBC_IMAGE"
             build_image "$dockerfile" "$name" "$args" "$desc"
             ;;
         graphics|av1|x264-x265|modern-codecs|vpx-avs|image-formats|audio|vaapi|processing)
@@ -270,17 +289,17 @@ if [ "$COMPONENT" != "all" ]; then
             done
             ;;
         final)
-            IFS='|' read -r dockerfile name args desc <<< "$FINAL_IMAGE"
+            BUILD_VARIANT=static export BUILD_VARIANT
+            GATED_BUILD_ARGS="--build-arg BUILD_VARIANT=static --build-arg DECODE_ONLY=false --build-arg FFMPEG_VERSION=${FFMPEG_VERSION}"
+            FINAL_STATIC_IMAGE="dockerfile.final|final|${GATED_BUILD_ARGS} --build-arg ALPINE_VERSION=${ALPINE_VERSION}|Alpine static scratch image"
+            IFS='|' read -r dockerfile name args desc <<< "$FINAL_STATIC_IMAGE"
             build_image "$dockerfile" "$name" "$args" "$desc"
             ;;
         windows-components)
             components_tag="ffmpeg-windows-components:latest"
-            if [ "$DECODE_ONLY" = "true" ]; then
-                components_tag="ffmpeg-windows-components-decode:latest"
-            fi
             echo -e "${BLUE}Building Windows components -> ${components_tag}${NC}"
             docker build -f docker/dockerfile.windows-components $CACHE_FLAG \
-                --build-arg DECODE_ONLY="${DECODE_ONLY}" \
+                --build-arg BUILD_VARIANT=static \
                 -t "${components_tag}" .
             echo -e "${GREEN}✅ windows-components built successfully${NC}"
             echo ""
@@ -288,13 +307,9 @@ if [ "$COMPONENT" != "all" ]; then
         windows)
             components_tag="ffmpeg-windows-components:latest"
             windows_tag="ffmpeg-windows:latest"
-            if [ "$DECODE_ONLY" = "true" ]; then
-                components_tag="ffmpeg-windows-components-decode:latest"
-                windows_tag="ffmpeg-windows-decode:latest"
-            fi
             echo -e "${BLUE}Building Windows final -> ${windows_tag}${NC}"
             docker build -f docker/dockerfile.windows $CACHE_FLAG \
-                --build-arg DECODE_ONLY="${DECODE_ONLY}" \
+                --build-arg BUILD_VARIANT=static \
                 --build-arg COMPONENTS_IMAGE="${components_tag}" \
                 -t "${windows_tag}" .
             echo -e "${GREEN}✅ windows built successfully${NC}"
@@ -302,44 +317,51 @@ if [ "$COMPONENT" != "all" ]; then
             ;;
         *)
             echo -e "${RED}❌ Unknown component: ${COMPONENT}${NC}"
-            echo -e "${YELLOW}Available components:${NC} base, graphics, av1, x264-x265, modern-codecs, vpx-avs, image-formats, audio, vaapi, processing, final, windows-components, windows"
+            echo -e "${YELLOW}Available components:${NC} base, debian-base, graphics, av1, x264-x265, modern-codecs, vpx-avs, image-formats, audio, vaapi, processing, final, full, windows-components, windows"
             exit 1
             ;;
     esac
 else
-    # Full build based on mode
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}TIER 1: Base Build Environment${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
-    echo ""
-
-    IFS='|' read -r dockerfile name args desc <<< "$BASE_IMAGE"
-    build_image "$dockerfile" "$name" "$args" "$desc"
-
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}TIER 2: Component Libraries${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
-    echo ""
-
-    if [ "$BUILD_MODE" = "parallel" ] || [ "$BUILD_MODE" = "max-parallel" ]; then
-        echo -e "${YELLOW}Building components in parallel...${NC}"
+    if [ "$BUILD_VARIANT" = "full" ]; then
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
+        echo -e "${CYAN}Debian glibc full image (GPU-capable runtime)${NC}"
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
         echo ""
-        build_parallel TIER2_IMAGES
+        IFS='|' read -r dockerfile name args desc <<< "$DEBIAN_BASE_IMAGE"
+        build_image "$dockerfile" "$name" "$args" "$desc"
+        IFS='|' read -r dockerfile name args desc <<< "$FULL_GLIBC_IMAGE"
+        build_image "$dockerfile" "$name" "$args" "$desc"
     else
-        # Sequential build
-        for item in "${TIER2_IMAGES[@]}"; do
-            IFS='|' read -r dockerfile name args desc <<< "$item"
-            build_image "$dockerfile" "$name" "$args" "$desc"
-        done
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
+        echo -e "${CYAN}TIER 1: Alpine static base${NC}"
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
+        echo ""
+        IFS='|' read -r dockerfile name args desc <<< "$BASE_IMAGE"
+        build_image "$dockerfile" "$name" "$args" "$desc"
+
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
+        echo -e "${CYAN}TIER 2: Component Libraries (no GPU userspace)${NC}"
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
+        echo ""
+
+        if [ "$BUILD_MODE" = "parallel" ] || [ "$BUILD_MODE" = "max-parallel" ]; then
+            build_parallel TIER2_IMAGES
+        else
+            for item in "${TIER2_IMAGES[@]}"; do
+                IFS='|' read -r dockerfile name args desc <<< "$item"
+                build_image "$dockerfile" "$name" "$args" "$desc"
+            done
+        fi
+
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
+        echo -e "${CYAN}TIER 3: Static scratch image${NC}"
+        echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
+        echo ""
+        BUILD_VARIANT=static export BUILD_VARIANT
+        FINAL_STATIC_IMAGE="dockerfile.final|final|${GATED_BUILD_ARGS} --build-arg ALPINE_VERSION=${ALPINE_VERSION}|Alpine static scratch image"
+        IFS='|' read -r dockerfile name args desc <<< "$FINAL_STATIC_IMAGE"
+        build_image "$dockerfile" "$name" "$args" "$desc"
     fi
-
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}TIER 3: Final FFmpeg Build${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
-    echo ""
-
-    IFS='|' read -r dockerfile name args desc <<< "$FINAL_IMAGE"
-    build_image "$dockerfile" "$name" "$args" "$desc"
 fi
 
 # Summary
@@ -407,10 +429,10 @@ echo ""
 echo "  # Rebuild with no cache:"
 echo "  NO_CACHE=true COMPONENT=x264-x265 ./scripts/build.sh"
 echo ""
-echo "  # Decode-only build:"
-echo "  DECODE_ONLY=true ./scripts/build.sh"
+echo "  # Static scratch build:"
+echo "  BUILD_VARIANT=static ./scripts/build.sh"
 echo ""
-echo "  # Multi-platform decode-only:"
-echo "  PLATFORMS=linux/amd64,linux/arm64 DECODE_ONLY=true REGISTRY=myregistry PUSH=true ./scripts/build.sh"
+echo "  # Multi-platform static:"
+echo "  PLATFORMS=linux/amd64,linux/arm64 BUILD_VARIANT=static REGISTRY=myregistry PUSH=true ./scripts/build.sh"
 echo ""
 

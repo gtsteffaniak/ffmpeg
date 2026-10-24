@@ -10,11 +10,14 @@ source "${SCRIPT_DIR}/version-gates.sh"
 # shellcheck source=fetch-utils.sh
 source "${SCRIPT_DIR}/fetch-utils.sh"
 
-: "${DECODE_ONLY:=false}"
+: "${BUILD_VARIANT:=full}"
+# shellcheck source=variant.sh
+source "${SCRIPT_DIR}/variant.sh"
+normalize_build_variant
 if [ -z "${FFMPEG_VERSION:-}" ]; then
   FFMPEG_VERSION="$(cd "$REPO_ROOT" && go run -C tools/catalog . read release.ffmpeg_version)"
 fi
-export FFMPEG_VERSION DECODE_ONLY
+export FFMPEG_VERSION BUILD_VARIANT
 
 mkdir -p "${REPO_ROOT}/src"
 cd "${REPO_ROOT}/src"

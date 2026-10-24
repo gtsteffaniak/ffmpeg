@@ -1,0 +1,64 @@
+# Full-feature glibc FFmpeg (dynamic VA/VPL/NVENC/Vulkan/OpenCL), runtime on Debian slim.
+ARG DEBIAN_VERSION=bullseye
+FROM ffmpeg-debian-base:latest AS builder
+
+ARG FFMPEG_VERSION=9.0.2
+ARG TARGETARCH
+
+COPY scripts/version-gates.sh scripts/variant.sh scripts/debian-full-build.sh scripts/checkldd.sh /tmp/
+RUN chmod +x /tmp/debian-full-build.sh && cp /tmp/checkldd.sh /checkldd.sh
+
+COPY [ "src/x264*", "./x264" ]
+COPY [ "src/x265*", "./x265" ]
+COPY [ "src/lame*", "./lame" ]
+COPY [ "src/SVT-AV1*", "./SVT-AV1" ]
+COPY [ "src/ffmpeg*", "./ffmpeg" ]
+
+# nv-codec-headers (git shallow in sources.json or vendored)
+RUN FFMPEG_VERSION="$FFMPEG_VERSION" TARGETARCH="$TARGETARCH" /tmp/debian-full-build.sh
+
+FROM debian:${DEBIAN_VERSION}-slim AS runtime
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  ca-certificates \
+  fontconfig \
+  fonts-dejavu-core \
+  libgnutls30 \
+  libass9 \
+  libdav1d4 \
+  libvpx6 \
+  libmp3lame0 \
+  libopus0 \
+  libvorbis0a \
+  libvorbisenc2 \
+  libsoxr0 \
+  libsnappy1v5 \
+  libzimg2 \
+  liblcms2-2 \
+  libopenjp2-7 \
+  libva2 \
+  libva-drm2 \
+  libvpl2 \
+  libdrm2 \
+  libvulkan1 \
+  mesa-va-drivers \
+  mesa-vulkan-drivers \
+  ocl-icd-libopencl1 \
+  && rm -rf /var/lib/apt/lists/* \
+  && (dpkg --print-architecture | grep -q amd64 && apt-get update && apt-get install -y --no-install-recommends intel-media-va-driver-non-free libmfx1 && rm -rf /var/lib/apt/lists/* || true)
+
+COPY --from=builder /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /usr/local/bin/
+COPY --from=builder /doc-bundle/ /usr/share/doc/ffmpeg/
+
+COPY scripts/smoke-test.sh scripts/checkldd.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/smoke-test.sh /usr/local/bin/checkldd.sh
+
+# In-image smoke (no GPU in build environment)
+RUN ffmpeg -version && ffprobe -version
+RUN ffmpeg -hide_banner -f lavfi -i testsrc=duration=1:size=320x240:rate=1 \
+  -c:v libx264 -preset ultrafast -frames:v 2 -an -f null -
+RUN /usr/local/bin/checkldd.sh /usr/local/bin/ffmpeg
+
+ENTRYPOINT ["/usr/local/bin/ffmpeg"]

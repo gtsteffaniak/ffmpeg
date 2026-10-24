@@ -1,6 +1,9 @@
 # Modular FFmpeg Docker Build System
 
-A modular, cacheable Docker build system for creating statically-linked FFmpeg binaries with comprehensive codec support.
+A modular, cacheable Docker build system for FFmpeg on Linux and Windows.
+
+- **Full image** (`BUILD_VARIANT=full`): Debian 11 (bullseye) glibc runtime with GPU acceleration (VAAPI, QSV, NVENC, Vulkan, OpenCL) via dynamically loaded drivers. See [docs/docker.md](docs/docker.md).
+- **Static image** (`BUILD_VARIANT=static`): musl/Alpine-built fully static binary on `scratch` for portable **software** transcoding (no GPU dlopen); V4L2 M2M on arm64 for Raspberry Pi.
 
 > **Build Architecture:** Component images (base, av1, x264-x265, etc.) are always built and stored **locally only**. Only the final image can be pushed to a registry. This keeps your registry clean and speeds up builds by reusing local component caches.
 
@@ -10,11 +13,11 @@ A modular, cacheable Docker build system for creating statically-linked FFmpeg b
 # Build locally (single platform)
 make build
 
-# Build decode-only version
-make build-decode
+# Build static scratch image (software transcode, no GPU)
+make build-static
 
-# Build and push to Docker Hub (single platform)
-make build-decode-push IMAGE=docker.io/gtstef/ffmpeg:8.0-decode
+# Build and push static image
+make build-static-push IMAGE=docker.io/gtstef/ffmpeg:8.0-static
 
 # Build and push to Docker Hub (single platform)
 make build-push IMAGE=docker.io/gtstef/ffmpeg:8.0

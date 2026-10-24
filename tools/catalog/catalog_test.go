@@ -30,26 +30,23 @@ func TestExpandTemplate(t *testing.T) {
 	}
 }
 
-func TestReleaseGateInDecode(t *testing.T) {
+func TestReleaseGateInStatic(t *testing.T) {
 	cases := []struct {
 		gate, ver string
 		want      bool
 	}{
 		{"always", "9.0.1", true},
-		{"decode_skip", "9.0.1", false},
-		{"needs_libwebp", "9.0.1", false},
-		{"needs_libwebp", "8.1.1", true},
-		{"needs_libvpl_build", "6.1.3", true},
-		{"needs_libvpl_build", "5.1.6", false},
-		{"needs_vaapi_build", "9.0.1", true},
-		{"needs_vaapi_build", "5.1.6", true},
+		{"static_skip", "9.0.1", false},
+		{"needs_libwebp", "9.0.1", true},
+		{"needs_libvpl_build", "6.1.3", false},
+		{"needs_vaapi_build", "9.0.1", false},
 		{"needs_v4l2_m2m_build", "9.0.1", true},
-		{"needs_modern_codecs_build", "9.0.1", false},
-		{"needs_libaom", "9.0.1", false},
+		{"needs_modern_codecs_build", "9.0.1", true},
+		{"needs_libaom", "9.0.1", true},
 	}
 	for _, tc := range cases {
-		if got := releaseGateInDecode(tc.gate, tc.ver); got != tc.want {
-			t.Errorf("releaseGateInDecode(%q, %q) = %v, want %v", tc.gate, tc.ver, got, tc.want)
+		if got := releaseGateInStatic(tc.gate, tc.ver); got != tc.want {
+			t.Errorf("releaseGateInStatic(%q, %q) = %v, want %v", tc.gate, tc.ver, got, tc.want)
 		}
 	}
 }
@@ -131,8 +128,8 @@ func TestValidFFmpegVersion(t *testing.T) {
 	if validFFmpegVersion("v9.0.1") || validFFmpegVersion("9") || validFFmpegVersion("9.0.1.2") {
 		t.Fatal("expected invalid versions")
 	}
-	if releaseGateInDecode("needs_libwebp", "v9.0.1") {
-		t.Fatal("malformed version must not enable libwebp gate")
+	if releaseGateInStatic("needs_modern_codecs_build", "v9.0.1") {
+		t.Fatal("malformed version must not enable modern codecs gate")
 	}
 }
 
@@ -317,14 +314,14 @@ func TestReleaseBodyFormat(t *testing.T) {
 	}
 	ffmpegVer := cat.Release.FFmpegVersion
 	var b strings.Builder
-	b.WriteString("| Component | Version | In decode build |\n")
+	b.WriteString("| Component | Version | In static build |\n")
 	for _, s := range cat.Sources {
 		if s.Release == nil {
 			continue
 		}
 		version := releaseVersionLabel(s, cat.Build.AlpineImage, alpineVers)
-		inDecode := decodeBuildEmoji(releaseGateInDecode(s.Release.Gate, ffmpegVer))
-		b.WriteString(fmt.Sprintf("| %s | %s | %s |\n", s.Name, version, inDecode))
+		inStatic := decodeBuildEmoji(releaseGateInStatic(s.Release.Gate, ffmpegVer))
+		b.WriteString(fmt.Sprintf("| %s | %s | %s |\n", s.Name, version, inStatic))
 	}
 	out := b.String()
 	if strings.Contains(out, "Commit") {
