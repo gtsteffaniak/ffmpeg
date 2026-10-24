@@ -67,16 +67,48 @@ AMF (`h264_amf`) needs AMD's proprietary AMF runtime on the host; it is not bund
 
 ## NVIDIA (NVENC / NVDEC)
 
-Requires [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html):
+Requires [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
+
+The full image sets:
+
+```dockerfile
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+```
+
+Per the [toolkit driver-capabilities docs](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/docker-specialized.html#driver-capabilities), the runtime default when unset is **`compute,utility` only** — that does **not** mount `libnvidia-encode.so` / `libnvcuvid.so`, so NVENC/NVDEC fail until **`video`** is included. The image ENV above is picked up automatically; you usually only need **`--gpus all`**:
 
 ```bash
-docker run --rm --gpus all \
-  -e NVIDIA_DRIVER_CAPABILITIES=compute,video,utility \
-  gtstef/ffmpeg:9.0.2 \
+docker run --rm --gpus all gtstef/ffmpeg:9.0.2 \
   -hide_banner -c:v h264_nvenc -f lavfi -i testsrc=d=2:size=1280x720 -f null -
 ```
 
-Driver libraries are injected by the toolkit; the image ships nv-codec-headers at build time only.
+**Override** (replaces defaults entirely — list every capability you need):
+
+```bash
+docker run --rm --gpus all \
+  -e NVIDIA_DRIVER_CAPABILITIES=compute,video,utility,graphics \
+  gtstef/ffmpeg:9.0.2 ...
+```
+
+Compose example:
+
+```yaml
+environment:
+  NVIDIA_VISIBLE_DEVICES: all
+  NVIDIA_DRIVER_CAPABILITIES: compute,video,utility
+deploy:
+  resources:
+    reservations:
+      devices:
+        - driver: nvidia
+          count: all
+          capabilities: [gpu]
+```
+
+**Docker Desktop on WSL2:** enable GPU support in Docker Desktop, use `--gpus all`; mount `/usr/lib/wsl` and `/dev/dxg` as in the WSL section when using the Windows GPU stack. The image `ENV` still applies unless you override `-e NVIDIA_DRIVER_CAPABILITIES=...` on `docker run`.
+
+FFmpeg is built with **`--enable-ffnvcodec`** and nv-codec-headers (MIT) for NVENC/NVDEC/cuvid; driver libraries are injected at runtime by the toolkit. **CUDA filters** such as `scale_cuda` are **not** included (`--enable-cuda-nvcc` / `--enable-libnpp` need `--enable-nonfree` and are omitted). Use CPU `scale` / `zscale` or **`scale_vulkan`** where appropriate.
 
 ## WSL2 (Docker on Windows / Docker Desktop)
 
@@ -108,7 +140,7 @@ docker run --rm -it \
 
 ### Run (NVENC / CUDA on WSL)
 
-NVIDIA’s WSL libraries live on the host under `/usr/lib/wsl/lib`. Mount them read-only and add **`--gpus all`** when using Docker Desktop’s NVIDIA integration:
+NVIDIA’s WSL libraries live on the host under `/usr/lib/wsl/lib`. Mount them read-only. The image already sets **`NVIDIA_DRIVER_CAPABILITIES=compute,video,utility`** (required because toolkit defaults omit `video`); with Docker Desktop GPU enabled, **`--gpus all`** is usually enough:
 
 ```bash
 docker run --rm -it \
@@ -116,11 +148,12 @@ docker run --rm -it \
   --device /dev/dxg \
   -v /usr/lib/wsl:/usr/lib/wsl:ro \
   -e LD_LIBRARY_PATH=/usr/lib/wsl/lib \
-  -e NVIDIA_DRIVER_CAPABILITIES=compute,video,utility \
   gtstef/ffmpeg:9.0.2 \
   -hide_banner -f lavfi -i testsrc=d=2:size=1280x720 \
   -c:v h264_nvenc -f null -
 ```
+
+If you override `NVIDIA_DRIVER_CAPABILITIES` on `docker run` or in Compose, you must include **`video`** again (the variable replaces the image default, it does not merge).
 
 ### Extracted binary (`.tar.gz` from releases)
 
@@ -155,7 +188,8 @@ Local checks: `make hwtest` (auto-detects `/dev/dxg` and exercises WSL VAAPI + N
 | d3d12 encode | Depends on Windows + GPU vendor support for D3D12 video encode |
 | Intel iHD in WSL | Often fails against `/dev/dxg`; use **`LIBVA_DRIVER_NAME=d3d12`** |
 | ARM WSL | d3d12 VA driver is an **amd64** image concern; use software/static on arm64 |
-| Patents / nonfree | NVENC and some VA paths require FFmpeg nonfree encoders |
+| NVENC/NVDEC missing in container | Default toolkit caps omit `video` — image sets `compute,video,utility`; override if you replaced `ENV` |
+| Patents | H.264/H.265 output may be patent-sensitive in some regions (separate from FFmpeg license) |
 
 ## Raspberry Pi (V4L2 M2M)
 
@@ -202,4 +236,8 @@ ffmpeg -v verbose -init_hw_device vaapi=va:/dev/dri/renderD128
 
 ## Licensing
 
-Linux builds use **GnuTLS** instead of OpenSSL for HTTPS. **GPL v3** codecs (x264, x265, etc.) are enabled. **NVENC/AMF/cuvid** require FFmpeg's `--enable-nonfree` flag; binaries are redistributable under FFmpeg's license terms but some encoder outputs may be patent-restricted in your jurisdiction.
+Linux **full** builds use **GnuTLS** (not OpenSSL) for HTTPS and **`--enable-gpl` / `--enable-version3`** for x264, x265, lame, etc. **NVENC, NVDEC, cuvid** (`--enable-ffnvcodec`, `--enable-nvenc`, `--enable-nvdec`, `--enable-cuvid` with MIT [nv-codec-headers](https://github.com/FFmpeg/nv-codec-headers)) and **AMF** (`--enable-amf`) do **not** require `--enable-nonfree` on FFmpeg 9.x. This image is built **without** `--enable-nonfree`, so it stays **GPL-redistributable**.
+
+Not included (would need `--enable-nonfree`): **libfdk-aac**, **`--enable-cuda-nvcc`** (e.g. `scale_cuda`), **`--enable-libnpp`**. Use native AAC, CPU/`zscale`/`scale_vulkan` scaling instead.
+
+Encoder output may still be patent-restricted in your jurisdiction regardless of license.

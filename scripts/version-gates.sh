@@ -245,7 +245,8 @@ build_ffmpeg_configure_flags() {
       --enable-libmp3lame; do
       append_if_supported "$configure" FEATURES "$encode_flag"
     done
-    append_if_supported "$configure" FEATURES "--enable-nonfree"
+    # NVENC/NVDEC/cuvid (ffnvcodec + nv-codec-headers) and AMF do not require --enable-nonfree
+    # on FFmpeg 9.x. Nonfree is only needed for libfdk-aac, cuda-nvcc (scale_cuda), libnpp, etc.
   fi
 }
 

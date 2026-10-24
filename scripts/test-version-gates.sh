@@ -63,7 +63,13 @@ case "$BASE_FLAGS $FEATURES" in
   *"--enable-libvpl"*) ;;
   *"--enable-vaapi"*) ;;
   *"--enable-libx264"*) ;;
+  *"--enable-nonfree"*) echo "FAIL: full build must not enable nonfree" >&2; exit 1 ;;
   *) echo "FAIL: full 6.1 configure flags" >&2; exit 1 ;;
+esac
+case "$BASE_FLAGS" in
+  *"--enable-ffnvcodec"*) ;;
+  *"--enable-nvenc"*) ;;
+  *) echo "FAIL: full build should enable ffnvcodec/nvenc in BASE_FLAGS" >&2; exit 1 ;;
 esac
 echo "OK: build_ffmpeg_configure_flags for full 6.1.3"
 

@@ -68,8 +68,17 @@ RUN chmod +x /usr/local/bin/smoke-test.sh /usr/local/bin/checkldd.sh
 
 # In-image smoke (no GPU in build environment)
 RUN ffmpeg -version && ffprobe -version
+RUN ffmpeg -version 2>&1 | grep -qi configuration && \
+  ! ffmpeg -version 2>&1 | grep -q -- '--enable-nonfree'
+RUN ffmpeg -hide_banner -encoders 2>/dev/null | grep -q h264_nvenc
+RUN ffmpeg -hide_banner -decoders 2>/dev/null | grep -q h264_cuvid
 RUN ffmpeg -hide_banner -f lavfi -i testsrc=duration=1:size=320x240:rate=1 \
   -c:v libx264 -preset ultrafast -frames:v 2 -an -f null -
 RUN /usr/local/bin/checkldd.sh /usr/local/bin/ffmpeg
+
+# NVIDIA Container Toolkit defaults to compute,utility (no libnvidia-encode/libnvcuvid).
+# See https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/docker-specialized.html
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
 
 ENTRYPOINT ["/usr/local/bin/ffmpeg"]

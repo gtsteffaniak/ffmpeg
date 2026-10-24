@@ -31,12 +31,12 @@ run_ffmpeg() {
   shift
   if [ "$variant" = "docker-full" ]; then
     docker run --rm --device /dev/dri:/dev/dri --group-add video \
-      ${NVIDIA:+--gpus all} ${NVIDIA:+ -e NVIDIA_DRIVER_CAPABILITIES=video,compute,utility} \
+      ${NVIDIA:+--gpus all} \
       "$IMAGE_FULL" "$@"
   elif [ "$variant" = "docker-full-wsl" ]; then
     docker run --rm \
       "${wsl_devices[@]}" "${wsl_mount[@]}" "${wsl_env[@]}" \
-      ${NVIDIA:+--gpus all} ${NVIDIA:+ -e NVIDIA_DRIVER_CAPABILITIES=video,compute,utility} \
+      ${NVIDIA:+--gpus all} \
       "$IMAGE_FULL" "$@"
   elif [ "$variant" = "docker-static" ]; then
     docker run --rm --device /dev/video11:/dev/video11 "$IMAGE_STATIC" "$@"

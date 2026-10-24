@@ -76,9 +76,27 @@ encoders="$(run_in_image ffmpeg -hide_banner -encoders 2>/dev/null)"
 echo "$encoders" | grep -q libx264 || { echo "FAIL: missing libx264 encoder" >&2; exit 1; }
 
 if [ "$VARIANT" = "full" ]; then
-  for enc in h264_vaapi hevc_vaapi h264_nvenc h264_qsv h264_amf; do
+  config_line="$(run_in_image ffmpeg -version 2>/dev/null | grep -i '^configuration:' || true)"
+  if echo "$config_line" | grep -q -- '--enable-nonfree'; then
+    echo "FAIL: full image must not be configured with --enable-nonfree (redistributable GPL build)" >&2
+    exit 1
+  fi
+  echo "OK: configuration without --enable-nonfree"
+
+  for enc in h264_nvenc hevc_nvenc h264_amf; do
+    echo "$encoders" | grep -qE "(^|[[:space:]])${enc}[[:space:]]" \
+      || { echo "FAIL: full image missing compiled encoder ${enc}" >&2; exit 1; }
+  done
+  echo "OK: NVIDIA/AMF encoders present in -encoders list"
+
+  decoders="$(run_in_image ffmpeg -hide_banner -decoders 2>/dev/null)"
+  echo "$decoders" | grep -qE "(^|[[:space:]])h264_cuvid[[:space:]]" \
+    || { echo "FAIL: full image missing compiled decoder h264_cuvid" >&2; exit 1; }
+  echo "OK: h264_cuvid present in -decoders list"
+
+  for enc in h264_vaapi hevc_vaapi h264_qsv; do
     if ! echo "$encoders" | grep -q "$enc"; then
-      echo "WARN: full image missing encoder $enc (may be arch/nonfree gated)"
+      echo "WARN: full image missing encoder $enc (configure/arch dependent)"
     fi
   done
 fi

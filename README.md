@@ -33,6 +33,8 @@ The **full** Linux image stays on **Debian 11 (bullseye)** for both build and ru
 
 Full narrative: [docs/docker.md — Base image and glibc compatibility](docs/docker.md#base-image-and-glibc-compatibility).
 
+**Licensing (full image):** Built with GPL/version3 and **without** `--enable-nonfree`. NVENC/NVDEC/cuvid use MIT nv-codec-headers (`--enable-ffnvcodec`); AMF uses `--enable-amf`. Not included: `scale_cuda` / libnpp / libfdk-aac (nonfree). See [docs/docker.md — Licensing](docs/docker.md#licensing).
+
 > **Build Architecture:** Component images (base, av1, x264-x265, etc.) are always built and stored **locally only**. Only the final image can be pushed to a registry. This keeps your registry clean and speeds up builds by reusing local component caches.
 
 ## Quick Start
