@@ -2,6 +2,8 @@ ARG ALPINE_VERSION=alpine:3.22
 FROM ffmpeg-base:latest AS builder
 
 ARG FFMPEG_VERSION=9.0.2
+ARG BUILD_VARIANT=static
+# Legacy alias (maps to static in scripts/variant.sh)
 ARG DECODE_ONLY="false"
 
 # Copy built libraries from all component stages
@@ -13,17 +15,19 @@ COPY --from=ffmpeg-modern-codecs:latest /usr/ /usr/
 COPY --from=ffmpeg-vpx-avs:latest /usr/ /usr/
 COPY --from=ffmpeg-image-formats:latest /usr/ /usr/
 COPY --from=ffmpeg-audio:latest /usr/ /usr/
-COPY --from=ffmpeg-vaapi:latest /usr/ /usr/
+# GPU userspace (libva/libvpl) is not bundled in the static scratch image.
 COPY --from=ffmpeg-processing:latest /usr/ /usr/
 
-COPY scripts/version-gates.sh scripts/verify-native-webp.sh /tmp/
+COPY scripts/version-gates.sh scripts/variant.sh scripts/verify-native-webp.sh /tmp/
 
 # Build FFmpeg
 COPY [ "src/ffmpeg*", "./ffmpeg" ]
 RUN cd ffmpeg && \
   . /tmp/version-gates.sh && \
+  export BUILD_VARIANT="${BUILD_VARIANT}" && \
   apply_svtav1_api_patch && \
-  build_ffmpeg_configure_flags ./configure "$FFMPEG_VERSION" "$DECODE_ONLY" && \
+  normalize_build_variant && \
+  build_ffmpeg_configure_flags ./configure "$FFMPEG_VERSION" "$BUILD_VARIANT" && \
   PKG_CONFIG_PATH="/usr/lib/pkgconfig/:${PKG_CONFIG_PATH}" && \
   ./configure \
     --pkg-config-flags="--static" \
@@ -32,7 +36,7 @@ RUN cd ffmpeg && \
     --extra-ldexeflags="-fPIE -static-pie" \
     --extra-libs="-lm -fopenmp -lstdc++" \
     --enable-small \
-    --enable-openssl \
+    --enable-gnutls \
     --disable-shared \
     --disable-ffplay \
     --enable-static \

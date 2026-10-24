@@ -1,6 +1,40 @@
 # Modular FFmpeg Docker Build System
 
-A modular, cacheable Docker build system for creating statically-linked FFmpeg binaries with comprehensive codec support.
+A modular, cacheable Docker build system for FFmpeg on Linux and Windows.
+
+- **Full image** (`BUILD_VARIANT=full`): Debian 11 (bullseye) glibc runtime with GPU acceleration (VAAPI, QSV, NVENC, Vulkan, OpenCL) via dynamically loaded drivers. See [docs/docker.md](docs/docker.md).
+- **Static image** (`BUILD_VARIANT=static`): musl/Alpine-built fully static binary on `scratch` for portable **software** transcoding (no GPU dlopen); V4L2 M2M on arm64 for Raspberry Pi.
+
+## Linux image variants (which to choose)
+
+| | **Full (GPU)** | **Static (software)** |
+|---|----------------|------------------------|
+| **Docker tag** | `gtstef/ffmpeg:<version>` or `:<version>-amd64` / `-arm64` | `gtstef/ffmpeg:<version>-static` (per-arch tags `…-static-amd64`, etc.) |
+| **Release artifact** | `ffmpeg-<version>-linux-<arch>.tar.gz` (glibc, dynamic VA/NV) | `ffmpeg-<version>-static-linux-<arch>.tar.gz` |
+| **Base** | Debian bullseye slim | Alpine build → `scratch` |
+| **GPU** | VAAPI/QSV/NVENC/Vulkan/OpenCL; **WSL2** via `/dev/dxg` + Mesa **d3d12** VA + `/usr/lib/wsl/lib` | None (software only; Pi **v4l2m2m** on arm64 static) |
+| **Encoders** | Full stack (x264, x265, AV1, VP9, lame, …) + hardware encoders | Filebrowser-aligned software set: **libx264**, native **aac** / **mjpeg** — see [docs/filebrowser-static-capabilities.md](docs/filebrowser-static-capabilities.md) |
+| **Use when** | Docker on Linux with `/dev/dri`, NVIDIA toolkit, or **WSL2**; you need HW transcode or the full encoder set | Minimal portable image (e.g. Filebrowser, edge devices); no GPU drivers in the image |
+
+**Runbooks:** GPU/WSL2/Docker flags → [docs/docker.md](docs/docker.md).  
+**Local HW smoke:** `make hwtest` after building or pulling the full image.
+
+### Base image and glibc compatibility (full / GPU only)
+
+The **full** Linux image stays on **Debian 11 (bullseye)** for both build and runtime (`docker/dockerfile.full`, `docker/dockerfile.debian-base`).
+
+| Topic | Detail |
+|--------|--------|
+| **Extracted tarball** | `ffmpeg` / `ffprobe` in `ffmpeg-<version>-linux-<arch>.tar.gz` need **host glibc ≥ 2.31** (bullseye). Typical hosts: Ubuntu 20.04+, Debian 11+, RHEL 9+. |
+| **Docker on any distro** | Host OS version is irrelevant; you need kernel + GPU devices. NVIDIA toolkit injects host driver libs compatible with recent glibc. |
+| **Trade-off** | In-image Mesa / Intel VA packages are **bullseye-era**; newest GPUs may need newer drivers than the image bundles. |
+| **WSL d3d12 / Vulkan ICDs** | Bookworm Mesa extras via `scripts/install-mesa-bookworm-gpu.sh`; FFmpeg remains bullseye / glibc 2.31. |
+| **Vulkan Video** | Full image: `h264_vulkan` / `hevc_vulkan` (+ `av1_vulkan` when headers ≥ 1.4.317), `scale_vulkan`; see [docs/docker.md](docs/docker.md#vulkan-vulkan-video--scale_vulkan). |
+| **Not on bullseye** | **Windows** mingw builds and **static** Alpine → `scratch` images are separate pipelines. |
+
+Full narrative: [docs/docker.md — Base image and glibc compatibility](docs/docker.md#base-image-and-glibc-compatibility).
+
+**Licensing (full image):** Built with GPL/version3 and **without** `--enable-nonfree`. NVENC/NVDEC/cuvid use MIT nv-codec-headers (`--enable-ffnvcodec`); AMF uses `--enable-amf`. Not included: `scale_cuda` / libnpp / libfdk-aac (nonfree). See [docs/docker.md — Licensing](docs/docker.md#licensing).
 
 > **Build Architecture:** Component images (base, av1, x264-x265, etc.) are always built and stored **locally only**. Only the final image can be pushed to a registry. This keeps your registry clean and speeds up builds by reusing local component caches.
 
@@ -10,11 +44,11 @@ A modular, cacheable Docker build system for creating statically-linked FFmpeg b
 # Build locally (single platform)
 make build
 
-# Build decode-only version
-make build-decode
+# Build static scratch image (software transcode, no GPU)
+make build-static
 
-# Build and push to Docker Hub (single platform)
-make build-decode-push IMAGE=docker.io/gtstef/ffmpeg:8.0-decode
+# Build and push static image
+make build-static-push IMAGE=docker.io/gtstef/ffmpeg:8.0-static
 
 # Build and push to Docker Hub (single platform)
 make build-push IMAGE=docker.io/gtstef/ffmpeg:8.0

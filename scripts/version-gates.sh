@@ -2,6 +2,10 @@
 # Version-aware dependency and configure gating for FFmpeg Docker builds.
 # Shell conventions: needs_* returns 0 when the dependency IS required, 1 when it can be skipped.
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=variant.sh
+source "${SCRIPT_DIR}/variant.sh"
+
 ffmpeg_version_ge() {
   local ver=$1 min=$2
   local ver_key min_key
@@ -24,90 +28,107 @@ append_if_supported() {
   fi
 }
 
-# libwebp is encode-only; skip on decode-only FFmpeg 9.0+ (native animated WebP decode).
 needs_libwebp() {
-  local ver=$1 decode_only=$2
-  if [ "$decode_only" != "true" ]; then
-    return 0
-  fi
-  if ffmpeg_version_ge "$ver" "9.0.0"; then
-    return 1
-  fi
-  return 0
+  local _ver=$1 _variant=${2:-}
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ]
 }
 
-# OpenJPEG is encode-only in FFmpeg; native J2K decode is built-in.
 needs_openjpeg() {
-  local _ver=$1 decode_only=$2
-  [ "$decode_only" != "true" ]
+  local _ver=$1 _variant=${2:-}
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ]
 }
 
-# libvpx wrappers are not needed for decode-only (native VP8/VP9 decoders).
 needs_libvpx() {
-  local _ver=$1 decode_only=$2
-  [ "$decode_only" != "true" ]
+  local _ver=$1 _variant=${2:-}
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ] && [ "$(uname -m)" != "armv7l" ]
 }
 
-# libaom decode wrapper optional when dav1d is present.
 needs_libaom() {
-  local _ver=$1 decode_only=$2
-  [ "$decode_only" != "true" ]
+  local _ver=$1 _variant=${2:-}
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ]
 }
 
-# libvorbis wrapper not needed for decode-only (native Vorbis decoder).
 needs_libvorbis() {
-  local _ver=$1 decode_only=$2
-  [ "$decode_only" != "true" ]
+  local _ver=$1 _variant=${2:-}
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ]
 }
 
-# libvpl (oneVPL) is only used by FFmpeg 6.0+.
+needs_x265_build() {
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ] && [ "$(uname -m)" != "armv7l" ]
+}
+
+needs_lame_build() {
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ]
+}
+
+needs_rav1e_build() {
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ]
+}
+
+needs_svtav1_build() {
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ]
+}
+
 needs_libvpl_build() {
-  ffmpeg_version_ge "$1" "6.0.0"
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ] && ffmpeg_version_ge "$1" "6.0.0"
 }
 
-# VA-API is part of the default Linux static build (hw decode + encode when libva is present).
 needs_vaapi_build() {
-  return 0
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ]
 }
 
-# V4L2 mem2mem (Raspberry Pi and similar SoC HW decode; needs linux-headers at build time).
 needs_v4l2_m2m_build() {
+  normalize_build_variant
+  if [ "$BUILD_VARIANT" = "static" ]; then
+    case "$(uname -m)" in
+      aarch64|arm64) return 0 ;;
+      *) return 1 ;;
+    esac
+  fi
   return 0
 }
 
-# xeve/xevd/vvenc wrappers require FFmpeg 7.0+.
 needs_modern_codecs_build() {
-  local ver=$1 decode_only=$2
-  [ "$decode_only" != "true" ] && ffmpeg_version_ge "$ver" "7.0.0"
+  local ver=$1 _variant=${2:-}
+  normalize_build_variant
+  [ "$BUILD_VARIANT" = "full" ] && ffmpeg_version_ge "$ver" "7.0.0"
 }
 
-# Evaluate a named fetch/release gate from sources.json.
-# Returns 0 when the dependency should be included.
 eval_fetch_gate() {
   local gate=$1
   local ffmpeg_version=$2
-  local decode_only=$3
+  local build_variant=$3
+  export BUILD_VARIANT="${build_variant}"
   case "$gate" in
     always) return 0 ;;
     never) return 1 ;;
-    decode_skip) [ "$decode_only" != "true" ] ;;
-    needs_libwebp) needs_libwebp "$ffmpeg_version" "$decode_only" ;;
-    needs_libvorbis) needs_libvorbis "$ffmpeg_version" "$decode_only" ;;
-    needs_libvpx) needs_libvpx "$ffmpeg_version" "$decode_only" ;;
-    needs_openjpeg) needs_openjpeg "$ffmpeg_version" "$decode_only" ;;
-    needs_libaom) needs_libaom "$ffmpeg_version" "$decode_only" ;;
+    decode_skip|static_skip) return 1 ;;
+    needs_libwebp) needs_libwebp "$ffmpeg_version" "$build_variant" ;;
+    needs_libvorbis) needs_libvorbis "$ffmpeg_version" "$build_variant" ;;
+    needs_libvpx) needs_libvpx "$ffmpeg_version" "$build_variant" ;;
+    needs_openjpeg) needs_openjpeg "$ffmpeg_version" "$build_variant" ;;
+    needs_libaom) needs_libaom "$ffmpeg_version" "$build_variant" ;;
     needs_libvpl_build) needs_libvpl_build "$ffmpeg_version" ;;
     needs_vaapi_build) needs_vaapi_build ;;
     needs_v4l2_m2m_build) needs_v4l2_m2m_build ;;
-    needs_modern_codecs_build) needs_modern_codecs_build "$ffmpeg_version" "$decode_only" ;;
+    needs_modern_codecs_build) needs_modern_codecs_build "$ffmpeg_version" "$build_variant" ;;
     *)
       echo "Unknown fetch gate: $gate" >&2
       return 1
       ;;
   esac
 }
-
-# Same gate names as releaseGateInDecode() in gates.go (DECODE_ONLY=true).
 
 needs_svtav1_api_patch() {
   [ -f libavcodec/libsvtav1.c ] && \
@@ -120,27 +141,51 @@ apply_svtav1_api_patch() {
   fi
 }
 
-# Populate BASE_FLAGS and FEATURES for Linux static FFmpeg configure.
-# Must be called from the ffmpeg source directory (or pass configure path).
+_hw_flags_for_variant() {
+  local configure=$1
+  local ffmpeg_version=$2
+  local build_variant=$3
+  export BUILD_VARIANT="$build_variant"
+
+  if [ "$build_variant" = "static" ]; then
+    if needs_v4l2_m2m_build; then
+      append_if_supported "$configure" BASE_FLAGS "--enable-v4l2-m2m"
+    fi
+    return
+  fi
+
+  local hw_flag
+  for hw_flag in \
+    --enable-vaapi \
+    --enable-libvpl \
+    --enable-ffnvcodec \
+    --enable-nvenc \
+    --enable-nvdec \
+    --enable-cuvid \
+    --enable-amf \
+    --enable-vulkan \
+    --enable-opencl; do
+    append_if_supported "$configure" BASE_FLAGS "$hw_flag"
+  done
+  if needs_v4l2_m2m_build; then
+    append_if_supported "$configure" BASE_FLAGS "--enable-v4l2-m2m"
+  fi
+}
+
+# Populate BASE_FLAGS and FEATURES for Linux FFmpeg configure.
+# Third argument: build variant (full | static).
 build_ffmpeg_configure_flags() {
   local configure=${1:-./configure}
   local ffmpeg_version=$2
-  local decode_only=$3
+  local build_variant=${3:-full}
+  export BUILD_VARIANT="$build_variant"
 
   BASE_FLAGS=""
   FEATURES=""
 
   append_if_supported "$configure" BASE_FLAGS "--disable-doc"
 
-  # Default hardware acceleration (decode + encode when the host exposes devices).
-  # v4l2-m2m: Pi 4/5 and other V4L2 M2M decode (h264_v4l2m2m, hevc_v4l2m2m, …).
-  local hw_flag
-  for hw_flag in --enable-vaapi --enable-libvpl --enable-v4l2-m2m; do
-    if [ "$hw_flag" = --enable-v4l2-m2m ] && ! needs_v4l2_m2m_build; then
-      continue
-    fi
-    append_if_supported "$configure" BASE_FLAGS "$hw_flag"
-  done
+  _hw_flags_for_variant "$configure" "$ffmpeg_version" "$build_variant"
 
   local base_flag
   for base_flag in \
@@ -160,26 +205,30 @@ build_ffmpeg_configure_flags() {
     append_if_supported "$configure" BASE_FLAGS "$base_flag"
   done
 
-  if needs_libvpx "$ffmpeg_version" "$decode_only" && [ "$(uname -m)" != "armv7l" ]; then
-    append_if_supported "$configure" FEATURES "--enable-libvpx"
-  fi
-  if needs_libaom "$ffmpeg_version" "$decode_only"; then
-    append_if_supported "$configure" FEATURES "--enable-libaom"
-  fi
-  if needs_openjpeg "$ffmpeg_version" "$decode_only"; then
-    append_if_supported "$configure" FEATURES "--enable-libopenjpeg"
-  fi
-  if needs_libvorbis "$ffmpeg_version" "$decode_only"; then
-    append_if_supported "$configure" FEATURES "--enable-libvorbis"
-  fi
-  if needs_libwebp "$ffmpeg_version" "$decode_only"; then
-    append_if_supported "$configure" FEATURES "--enable-libwebp"
+  if [ "$build_variant" != "static" ]; then
+    if needs_libvpx "$ffmpeg_version" "$build_variant"; then
+      append_if_supported "$configure" FEATURES "--enable-libvpx"
+    fi
+    if needs_libaom "$ffmpeg_version" "$build_variant"; then
+      append_if_supported "$configure" FEATURES "--enable-libaom"
+    fi
+    if needs_openjpeg "$ffmpeg_version" "$build_variant"; then
+      append_if_supported "$configure" FEATURES "--enable-libopenjpeg"
+    fi
+    if needs_libvorbis "$ffmpeg_version" "$build_variant"; then
+      append_if_supported "$configure" FEATURES "--enable-libvorbis"
+    fi
+    if needs_libwebp "$ffmpeg_version" "$build_variant"; then
+      append_if_supported "$configure" FEATURES "--enable-libwebp"
+    fi
   fi
 
-  if [ "$decode_only" != "true" ]; then
+  if [ "$build_variant" = "static" ]; then
+    # Software transcode: H.264 + built-in AAC (HLS); broad decoders via BASE_FLAGS.
+    append_if_supported "$configure" FEATURES "--enable-libx264"
+  else
     local encode_flag
     for encode_flag in \
-      --enable-nonfree \
       --enable-libx264 \
       --enable-librav1e \
       --enable-libsvtav1 \
@@ -196,13 +245,14 @@ build_ffmpeg_configure_flags() {
       --enable-libmp3lame; do
       append_if_supported "$configure" FEATURES "$encode_flag"
     done
+    # NVENC/NVDEC/cuvid (ffnvcodec + nv-codec-headers) and AMF do not require --enable-nonfree
+    # on FFmpeg 9.x. Nonfree is only needed for libfdk-aac, cuda-nvcc (scale_cuda), libnpp, etc.
   fi
 }
 
-# Populate BASE_FLAGS and FEATURES for Windows cross-compile configure.
 build_windows_configure_flags() {
   local configure=${1:-./configure}
-  local decode_only=$2
+  local build_variant=${2:-static}
 
   BASE_FLAGS=""
   FEATURES=""
@@ -214,15 +264,12 @@ build_windows_configure_flags() {
 
   append_if_supported "$configure" BASE_FLAGS "--disable-doc"
 
-  if [ "$decode_only" != "true" ]; then
-    local encode_flag
-    for encode_flag in --enable-nonfree --enable-libx264 --enable-libx265 --enable-libmp3lame; do
-      append_if_supported "$configure" FEATURES "$encode_flag"
-    done
-  fi
+  local encode_flag
+  for encode_flag in --enable-libx264 --enable-libx265 --enable-libmp3lame; do
+    append_if_supported "$configure" FEATURES "$encode_flag"
+  done
 }
 
-# Install ffmpeg/ffprobe without building Texinfo HTML docs (legacy FFmpeg + Alpine texinfo).
 install_ffmpeg_progs() {
   make -j"$(nproc)"
   if make -n install-progs >/dev/null 2>&1; then

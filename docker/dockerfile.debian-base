@@ -1,0 +1,62 @@
+# Debian glibc builder for the full (GPU-capable) FFmpeg image.
+# Debian 11 (bullseye): oldest still-supported release with broad glibc compatibility.
+ARG DEBIAN_VERSION=bullseye
+FROM debian:${DEBIAN_VERSION} AS debian-base
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/lib/pkgconfig:/usr/lib/$(uname -m)-linux-gnu/pkgconfig
+ENV CFLAGS="-O2 -fPIC"
+ENV CXXFLAGS="-O2 -fPIC"
+ENV LDFLAGS="-Wl,-z,relro,-z,now"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  ca-certificates \
+  curl git \
+  build-essential \
+  pkg-config \
+  autoconf automake libtool \
+  cmake meson ninja-build \
+  yasm nasm \
+  texinfo \
+  jq \
+  python3 \
+  zlib1g-dev \
+  libbz2-dev \
+  libdrm-dev \
+  libexpat1-dev \
+  libfontconfig1-dev \
+  libfreetype6-dev \
+  libfribidi-dev \
+  libharfbuzz-dev \
+  libpng-dev \
+  libjpeg-dev \
+  libwebp-dev \
+  libxml2-dev \
+  libgnutls28-dev \
+  libgmp-dev \
+  libnettle-dev \
+  libp11-kit-dev \
+  libtasn1-6-dev \
+  libunistring-dev \
+  libidn2-dev \
+  libass-dev \
+  libdav1d-dev \
+  libvpx-dev \
+  libmp3lame-dev \
+  libopus-dev \
+  libvorbis-dev \
+  libsoxr-dev \
+  libsnappy-dev \
+  libzimg-dev \
+  liblcms2-dev \
+  libopenjp2-7-dev \
+  libnuma-dev \
+  libva-dev \
+  libva-drm2 \
+  libvpl-dev \
+  libvulkan-dev \
+  ocl-icd-opencl-dev \
+  linux-libc-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build

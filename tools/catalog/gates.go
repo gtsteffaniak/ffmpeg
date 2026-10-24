@@ -15,12 +15,14 @@ var knownFetchGates = map[string]struct{}{
 	"needs_vaapi_build":         {},
 	"needs_v4l2_m2m_build":      {},
 	"needs_modern_codecs_build": {},
+	"static_skip":               {},
 }
 
 var knownReleaseGates = map[string]struct{}{
 	"always":                    {},
 	"never":                     {},
 	"decode_skip":               {},
+	"static_skip":               {},
 	"needs_libwebp":             {},
 	"needs_openjpeg":            {},
 	"needs_libvpx":              {},
@@ -85,27 +87,17 @@ func versionKey(ver string) (int, bool) {
 	return nums[0]*1_0000_0000 + nums[1]*1_0000 + nums[2], true
 }
 
-// releaseGateInDecode evaluates release.gate for the decode-only image (DECODE_ONLY=true).
-func releaseGateInDecode(gate, ffmpegVersion string) bool {
+// releaseGateInStatic evaluates release.gate for the Alpine static image (BUILD_VARIANT=static).
+func releaseGateInStatic(gate, ffmpegVersion string) bool {
 	switch gate {
 	case "always":
 		return true
-	case "never", "decode_skip":
+	case "never", "decode_skip", "static_skip":
 		return false
-	case "needs_libwebp":
-		if !validFFmpegVersion(ffmpegVersion) {
-			return false
-		}
-		return !ffmpegVersionGE(ffmpegVersion, "9.0.0")
-	case "needs_openjpeg", "needs_libvpx", "needs_libaom", "needs_libvorbis":
+	case "needs_libwebp", "needs_openjpeg", "needs_libvpx", "needs_libaom", "needs_libvorbis":
 		return false
-	case "needs_libvpl_build":
-		if !validFFmpegVersion(ffmpegVersion) {
-			return false
-		}
-		return ffmpegVersionGE(ffmpegVersion, "6.0.0")
-	case "needs_vaapi_build":
-		return true
+	case "needs_libvpl_build", "needs_vaapi_build":
+		return false
 	case "needs_v4l2_m2m_build":
 		return true
 	case "needs_modern_codecs_build":
@@ -113,4 +105,9 @@ func releaseGateInDecode(gate, ffmpegVersion string) bool {
 	default:
 		return false
 	}
+}
+
+// Deprecated alias for release notes migration.
+func releaseGateInDecode(gate, ffmpegVersion string) bool {
+	return releaseGateInStatic(gate, ffmpegVersion)
 }

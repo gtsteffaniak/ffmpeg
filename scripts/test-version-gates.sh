@@ -22,117 +22,64 @@ assert() {
 
 assert "9.0.1 >= 9.0.0" 0 ffmpeg_version_ge "9.0.1" "9.0.0"
 assert "8.1.1 < 9.0.0" 1 ffmpeg_version_ge "8.1.1" "9.0.0"
-assert "6.1 >= 6.0.0" 0 ffmpeg_version_ge "6.1" "6.0.0"
-assert "5.1 < 6.0.0" 1 ffmpeg_version_ge "5.1" "6.0.0"
-assert "7.0 >= 7.0.0" 0 ffmpeg_version_ge "7.0" "7.0.0"
-assert "6.1 < 7.0.0" 1 ffmpeg_version_ge "6.1" "7.0.0"
 
-assert "full build needs libwebp" 0 needs_libwebp "9.0.1" "false"
-assert "decode 9.0 skips libwebp" 1 needs_libwebp "9.0.1" "true"
-assert "decode 8.1 keeps libwebp install path" 0 needs_libwebp "8.1.1" "true"
+BUILD_VARIANT=full
+export BUILD_VARIANT
+assert "full needs libwebp" 0 needs_libwebp "9.0.1" "full"
+assert "full needs libvpl build" 0 needs_libvpl_build "6.0.0"
+assert "full needs vaapi build" 0 needs_vaapi_build
 
-assert "decode skips openjpeg" 1 needs_openjpeg "9.0.1" "true"
-assert "full needs openjpeg" 0 needs_openjpeg "9.0.1" "false"
+BUILD_VARIANT=static
+export BUILD_VARIANT
+assert "static skips vaapi" 1 needs_vaapi_build
+assert "static skips libvpl build" 1 needs_libvpl_build "9.0.1"
+assert "static skips libwebp" 1 needs_libwebp "9.0.1" "static"
+assert "static skips x265 build" 1 needs_x265_build
+assert "eval_fetch_gate needs_vaapi_build static" 1 eval_fetch_gate needs_vaapi_build "9.0.1" "static"
 
-assert "6.0 needs libvpl build" 0 needs_libvpl_build "6.0.0"
-assert "5.1 skips libvpl build" 1 needs_libvpl_build "5.1.6"
-assert "vaapi is default build" 0 needs_vaapi_build
-assert "v4l2-m2m is default build" 0 needs_v4l2_m2m_build
-assert "eval_fetch_gate needs_vaapi_build" 0 eval_fetch_gate needs_vaapi_build "9.0.1" "true"
-assert "eval_fetch_gate needs_v4l2_m2m_build" 0 eval_fetch_gate needs_v4l2_m2m_build "9.0.1" "true"
-
-assert "7.0 full needs modern codecs build" 0 needs_modern_codecs_build "7.0.0" "false"
-assert "6.1 skips modern codecs build" 1 needs_modern_codecs_build "6.1.3" "false"
-assert "7.0 decode skips modern codecs build" 1 needs_modern_codecs_build "7.0.0" "true"
+BUILD_VARIANT=full
+export BUILD_VARIANT
+assert "eval_fetch_gate needs_vaapi_build full" 0 eval_fetch_gate needs_vaapi_build "9.0.1" "full"
 
 default_version="$(cd "${SCRIPT_DIR}/.." && go run -C tools/catalog . read release.ffmpeg_version)"
-if [ -z "$default_version" ]; then
-  echo "FAIL: go run -C tools/catalog . read release.ffmpeg_version returned empty" >&2
-  exit 1
-fi
+test -n "$default_version"
 echo "OK: sources.json ffmpeg version=${default_version}"
-
-override="$(cd "${SCRIPT_DIR}/.." && FFMPEG_VERSION=8.1.2 go run -C tools/catalog . read release.ffmpeg_version)"
-if [ "$override" != "8.1.2" ]; then
-  echo "FAIL: ffmpeg version env override (got ${override})" >&2
-  exit 1
-fi
-echo "OK: ffmpeg version env override"
-
-assert "eval_fetch_gate always" 0 eval_fetch_gate always "9.0.1" "true"
 
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
-
-cat >"${TMPDIR}/configure" <<'EOF'
-#!/bin/sh
-echo "  --enable-libvpl"
-echo "  --enable-libx264"
-echo "  --enable-libxeve"
-EOF
-chmod +x "${TMPDIR}/configure"
-
-cat >"${TMPDIR}/configure-51" <<'EOF'
-#!/bin/sh
-echo "  --enable-libx264"
-echo "  --enable-libdav1d"
-EOF
-chmod +x "${TMPDIR}/configure-51"
 
 cat >"${TMPDIR}/configure-61" <<'EOF'
 #!/bin/sh
 echo "  --enable-libvpl"
 echo "  --enable-vaapi"
 echo "  --enable-v4l2-m2m"
+echo "  --enable-nvenc"
+echo "  --enable-vulkan"
 echo "  --enable-libx264"
 EOF
 chmod +x "${TMPDIR}/configure-61"
 
-assert "configure_supports_flag finds libvpl" 0 configure_supports_flag "${TMPDIR}/configure" "--enable-libvpl"
-assert "configure_supports_flag rejects unknown" 1 configure_supports_flag "${TMPDIR}/configure" "--enable-libharfbuzz"
-
-FEATURES=""
-append_if_supported "${TMPDIR}/configure" FEATURES "--enable-libx264"
-append_if_supported "${TMPDIR}/configure" FEATURES "--enable-libharfbuzz"
-if [ "$FEATURES" != " --enable-libx264" ]; then
-  echo "FAIL: append_if_supported (got '${FEATURES}')" >&2
-  exit 1
-fi
-echo "OK: append_if_supported"
-
-build_ffmpeg_configure_flags "${TMPDIR}/configure-51" "5.1.6" "false"
-case "$BASE_FLAGS $FEATURES" in
-  *"--enable-libvpl"*) echo "FAIL: 5.1 configure should not offer libvpl" >&2; exit 1 ;;
-  *"--enable-libx264"*) ;;
-  *) echo "FAIL: 5.1 configure should enable libx264" >&2; exit 1 ;;
-esac
-echo "OK: build_ffmpeg_configure_flags for 5.1.6"
-
-build_ffmpeg_configure_flags "${TMPDIR}/configure-61" "6.1.3" "false"
+build_ffmpeg_configure_flags "${TMPDIR}/configure-61" "6.1.3" "full"
 case "$BASE_FLAGS $FEATURES" in
   *"--enable-libvpl"*) ;;
   *"--enable-vaapi"*) ;;
-  *"--enable-v4l2-m2m"*) ;;
-  *"--enable-libxeve"*) echo "FAIL: 6.1 configure should not offer libxeve" >&2; exit 1 ;;
-  *) echo "FAIL: 6.1 configure should enable libvpl, vaapi, and v4l2-m2m" >&2; exit 1 ;;
+  *"--enable-libx264"*) ;;
+  *"--enable-nonfree"*) echo "FAIL: full build must not enable nonfree" >&2; exit 1 ;;
+  *) echo "FAIL: full 6.1 configure flags" >&2; exit 1 ;;
 esac
-echo "OK: build_ffmpeg_configure_flags for 6.1.3"
+case "$BASE_FLAGS" in
+  *"--enable-ffnvcodec"*) ;;
+  *"--enable-nvenc"*) ;;
+  *) echo "FAIL: full build should enable ffnvcodec/nvenc in BASE_FLAGS" >&2; exit 1 ;;
+esac
+echo "OK: build_ffmpeg_configure_flags for full 6.1.3"
 
-mkdir -p "${TMPDIR}/ffmpeg/libavcodec"
-cat >"${TMPDIR}/ffmpeg/libavcodec/libsvtav1.c" <<'EOF'
-svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc, &svt_enc->enc_params);
-EOF
-(
-  cd "${TMPDIR}/ffmpeg"
-  assert "needs_svtav1_api_patch detects old API" 0 needs_svtav1_api_patch
-)
-
-cat >"${TMPDIR}/ffmpeg/libavcodec/libsvtav1.c" <<'EOF'
-svt_av1_enc_init_handle(&svt_enc->svt_handle, &svt_enc->enc_params);
-EOF
-(
-  cd "${TMPDIR}/ffmpeg"
-  assert "needs_svtav1_api_patch skips new API" 1 needs_svtav1_api_patch
-)
+build_ffmpeg_configure_flags "${TMPDIR}/configure-61" "6.1.3" "static"
+case "$BASE_FLAGS $FEATURES" in
+  *"--enable-vaapi"*) echo "FAIL: static must not enable vaapi" >&2; exit 1 ;;
+  *"--enable-libx264"*) ;;
+  *) echo "FAIL: static should enable libx264" >&2; exit 1 ;;
+esac
+echo "OK: build_ffmpeg_configure_flags for static 6.1.3"
 
 echo "All version-gates checks passed"

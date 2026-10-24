@@ -1,12 +1,13 @@
 FROM ffmpeg-base:latest AS audio
 
 ARG FFMPEG_VERSION=9.0.2
+ARG BUILD_VARIANT=full
 ARG DECODE_ONLY="false"
 
-COPY scripts/version-gates.sh /tmp/version-gates.sh
+COPY scripts/version-gates.sh scripts/variant.sh /tmp/
 
 # libogg + libvorbis (encode / libvorbis decoder wrapper; native Vorbis decode when omitted)
-RUN . /tmp/version-gates.sh && \
+RUN . /tmp/version-gates.sh && export BUILD_VARIANT="${BUILD_VARIANT}" && \
   if needs_libvorbis "$FFMPEG_VERSION" "$DECODE_ONLY"; then \
     apk add $APK_OPTS libogg-dev libogg-static libvorbis-dev libvorbis-static; \
   else \
@@ -18,9 +19,8 @@ RUN apk add $APK_OPTS opus-dev
 
 # lame (MP3 encoder)
 COPY [ "src/lame-*", "./lame" ]
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
-    echo "Skipping lame build"; \
-  else \
+RUN . /tmp/version-gates.sh && export BUILD_VARIANT="${BUILD_VARIANT}" && \
+  if needs_lame_build; then \
     cd lame && \
     ./configure \
       --disable-shared \
@@ -30,11 +30,13 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
       --disable-cpml \
       --disable-frontend && \
     make -j$(nproc) install; \
+  else \
+    echo "Skipping lame build (BUILD_VARIANT=${BUILD_VARIANT})"; \
   fi
 
 # rubberband (audio pitch shifting and time stretching)
 COPY [ "src/rubberband-*", "./rubberband" ]
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
+RUN if [ "$BUILD_VARIANT" = "static" ] || [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping rubberband build"; \
   else \
     cd rubberband && \
@@ -47,7 +49,7 @@ RUN if [ "$DECODE_ONLY" = "true" ]; then \
   fi
 
 # vo-amrwbenc (AMR-WB encoder for mobile audio)
-RUN if [ "$DECODE_ONLY" = "true" ]; then \
+RUN if [ "$BUILD_VARIANT" = "static" ] || [ "$DECODE_ONLY" = "true" ]; then \
     echo "Skipping vo-amrwbenc"; \
   else \
     apk add $APK_OPTS vo-amrwbenc-dev vo-amrwbenc-static; \

@@ -1,14 +1,15 @@
 FROM ffmpeg-base:latest AS vaapi
 
 ARG FFMPEG_VERSION=9.0.2
+ARG BUILD_VARIANT=full
 
-COPY scripts/version-gates.sh /tmp/version-gates.sh
+COPY scripts/version-gates.sh scripts/variant.sh /tmp/
 
 # V4L2 M2M (Pi HW decode) uses kernel UAPI headers from ffmpeg-base (linux-headers).
 
 # libva — static build from sources.json (default hwaccel for Linux static ffmpeg).
 COPY [ "src/libva-*", "./libva" ]
-RUN . /tmp/version-gates.sh && \
+RUN . /tmp/version-gates.sh && export BUILD_VARIANT="${BUILD_VARIANT}" && \
   if ! needs_vaapi_build; then \
     echo "Skipping libva build"; \
   else \
@@ -28,7 +29,7 @@ RUN . /tmp/version-gates.sh && \
 
 # libvpl (Intel Video Processing Library - oneAPI Video Processing Library)
 COPY [ "src/libvpl-*", "./libvpl" ]
-RUN . /tmp/version-gates.sh && \
+RUN . /tmp/version-gates.sh && export BUILD_VARIANT="${BUILD_VARIANT}" && \
   if ! needs_libvpl_build "$FFMPEG_VERSION"; then \
     echo "Skipping libvpl build (FFmpeg ${FFMPEG_VERSION} < 6.0)"; \
   else \
