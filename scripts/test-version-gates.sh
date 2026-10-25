@@ -82,4 +82,6 @@ case "$BASE_FLAGS $FEATURES" in
 esac
 echo "OK: build_ffmpeg_configure_flags for static 6.1.3"
 
+"${SCRIPT_DIR}/test-resolve-release-version.sh"
+
 echo "All version-gates checks passed"

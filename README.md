@@ -494,9 +494,9 @@ Release notes are generated from `sources.json` only. Alpine packages (`rav1e`, 
 | Override | `FFMPEG_VERSION=9.0.1` env (local builds, release CI) |
 | Reader | `go run -C tools/catalog . read release.ffmpeg_version` — env first, else catalog |
 
-Release CI ([`.github/workflows/release.yml`](.github/workflows/release.yml)) resolves the version once in `resolve-version`, then exports it as job `FFMPEG_VERSION` for build jobs (`fetch-sources`, Docker tags). Release notes are generated from `sources.json` only — no source fetch in the publish job.
+Release CI ([`.github/workflows/release.yml`](.github/workflows/release.yml)) resolves the catalog FFmpeg version once in `resolve-version`, then exports **`FFMPEG_VERSION`** (sources and builds) and **`TAG`** (Docker Hub, GHCR, GitHub release, and tarball/zip names). For normal releases these match; for manual test releases you can set optional **`tag_suffix`** (e.g. `full-gpu`, `rc1`) or pass **`version`** as `<catalog>-<suffix>` so published tags become `9.0.2-full-gpu` while sources still fetch FFmpeg **9.0.2**. Suffixed runs are GitHub **prereleases**, never marked **Latest**, and use a separate workflow concurrency group. Release notes are generated from `sources.json` only — no source fetch in the publish job.
 
-Push-to-main releases read `release.mark_github_latest` from [`sources.json`](sources.json) to set GitHub’s release **Latest** badge. Manual **workflow_dispatch** runs use the **update_latest** checkbox instead. This does not change Docker Hub `:latest` tags.
+Push-to-main releases read `release.mark_github_latest` from [`sources.json`](sources.json) to set GitHub’s release **Latest** badge. Manual **workflow_dispatch** runs use the **update_latest** checkbox instead (ignored when `tag_suffix` is set). This does not change Docker Hub `:latest` tags.
 
 | Dependency | Full build | Decode-only |
 |---|---|---|

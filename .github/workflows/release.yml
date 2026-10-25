@@ -14,9 +14,12 @@ on:
         required: false
         type: boolean
         default: false
+      tag_suffix:
+        description: Optional suffix for test/pre-release tags (e.g. full-gpu, rc1). Docker and GitHub tags become version-suffix; sources still use the catalog FFmpeg version.
+        required: false
 
 concurrency:
-  group: release-${{ github.workflow }}-${{ github.event.inputs.version || github.run_id }}
+  group: release-${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && format('{0}{1}', github.event.inputs.version || github.run_id, github.event.inputs.tag_suffix && format('-{0}', github.event.inputs.tag_suffix) || '') || github.run_id }}
   cancel-in-progress: false
 
 env:
@@ -29,6 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
       make_latest: ${{ steps.version.outputs.make_latest }}
     steps:
       - uses: actions/checkout@v4
@@ -37,25 +42,37 @@ jobs:
           go-version-file: tools/catalog/go.mod
       - name: Determine version
         id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          TAG_SUFFIX: ${{ github.event.inputs.tag_suffix }}
         run: |
           CATALOG_VERSION="$(go run -C tools/catalog . read release.ffmpeg_version)"
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-            if [ "$VERSION" != "$CATALOG_VERSION" ]; then
-              echo "Manual version ${VERSION} does not match catalog ${CATALOG_VERSION}" >&2
-              exit 1
-            fi
-          else
-            VERSION="$CATALOG_VERSION"
-          fi
+          mapfile -t resolved < <(
+            CATALOG_VERSION="$CATALOG_VERSION" \
+            INPUT_VERSION="${INPUT_VERSION}" \
+            TAG_SUFFIX="${TAG_SUFFIX}" \
+            GITHUB_OUTPUT= \
+            ./scripts/resolve-release-version.sh
+          )
+          VERSION="${resolved[0]}"
+          TAG="${resolved[1]}"
+          PRERELEASE="${resolved[2]}"
+          {
+            echo "version=${VERSION}"
+            echo "tag=${TAG}"
+            echo "prerelease=${PRERELEASE}"
+          } >> "$GITHUB_OUTPUT"
+
           MAKE_LATEST=false
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "$PRERELEASE" = true ]; then
+            MAKE_LATEST=false
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             [ "${{ github.event.inputs.update_latest }}" = "true" ] && MAKE_LATEST=true
           elif [ "$(go run -C tools/catalog . read release.mark_github_latest)" = "true" ]; then
             MAKE_LATEST=true
           fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "make_latest=${MAKE_LATEST}" >> "$GITHUB_OUTPUT"
+          echo "Resolved FFmpeg version=${VERSION} publish tag=${TAG} prerelease=${PRERELEASE} make_latest=${MAKE_LATEST}"
           go run -C tools/catalog . validate
 
   build-amd64:
@@ -65,10 +82,10 @@ jobs:
     timeout-minutes: 360
     env:
       FFMPEG_VERSION: ${{ needs.resolve-version.outputs.version }}
-      TAG: ${{ needs.resolve-version.outputs.version }}
+      TAG: ${{ needs.resolve-version.outputs.tag }}
       PLATFORM: linux/amd64
-      FULL_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-amd64
-      STATIC_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-static-amd64
+      FULL_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.tag }}-amd64
+      STATIC_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.tag }}-static-amd64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -110,7 +127,7 @@ jobs:
       - name: Build windows final
         run: make ci-build-component COMPONENT=windows BUILD_VARIANT=static
       - name: Package Windows
-        run: make ci-package-windows-release TAG=${{ needs.resolve-version.outputs.version }}
+        run: make ci-package-windows-release TAG=${{ needs.resolve-version.outputs.tag }}
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -125,10 +142,10 @@ jobs:
     timeout-minutes: 360
     env:
       FFMPEG_VERSION: ${{ needs.resolve-version.outputs.version }}
-      TAG: ${{ needs.resolve-version.outputs.version }}
+      TAG: ${{ needs.resolve-version.outputs.tag }}
       PLATFORM: linux/arm64
-      FULL_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-arm64
-      STATIC_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-static-arm64
+      FULL_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.tag }}-arm64
+      STATIC_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.tag }}-static-arm64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -171,7 +188,7 @@ jobs:
       packages: write
     env:
       FFMPEG_VERSION: ${{ needs.resolve-version.outputs.version }}
-      TAG: ${{ needs.resolve-version.outputs.version }}
+      TAG: ${{ needs.resolve-version.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -197,8 +214,8 @@ jobs:
 
       - name: Merge multi-arch manifests
         run: |
-          make ci-merge-manifest TAG=${{ needs.resolve-version.outputs.version }}
-          make ci-merge-manifest-static TAG=${{ needs.resolve-version.outputs.version }}
+          make ci-merge-manifest TAG=${{ needs.resolve-version.outputs.tag }}
+          make ci-merge-manifest-static TAG=${{ needs.resolve-version.outputs.tag }}
 
       - name: Publish multi-arch images to GHCR
         run: |
@@ -209,8 +226,8 @@ jobs:
 
       - name: Package Linux release binaries
         run: |
-          make ci-package-release TAG=${{ needs.resolve-version.outputs.version }}
-          make ci-package-release-static TAG=${{ needs.resolve-version.outputs.version }}
+          make ci-package-release TAG=${{ needs.resolve-version.outputs.tag }}
+          make ci-package-release-static TAG=${{ needs.resolve-version.outputs.tag }}
 
       - name: Download Windows release artifacts
         uses: actions/download-artifact@v4
@@ -224,10 +241,11 @@ jobs:
       - name: Create or update GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.resolve-version.outputs.version }}
-          name: FFmpeg ${{ needs.resolve-version.outputs.version }}
+          tag_name: v${{ needs.resolve-version.outputs.tag }}
+          name: FFmpeg ${{ needs.resolve-version.outputs.tag }}
           body_path: release-notes.md
           generate_release_notes: false
+          prerelease: ${{ needs.resolve-version.outputs.prerelease == 'true' }}
           make_latest: ${{ needs.resolve-version.outputs.make_latest == 'true' }}
           files: |
             release-artifacts/*-linux-*.tar.gz
