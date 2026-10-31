@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CATALOG="9.0.2"
 
 run_resolve() {
-  CATALOG_VERSION="$CATALOG" INPUT_VERSION="${1:-}" TAG_SUFFIX="${2:-}" \
+  env -u GITHUB_OUTPUT CATALOG_VERSION="$CATALOG" INPUT_VERSION="${1:-}" TAG_SUFFIX="${2:-}" \
     "${SCRIPT_DIR}/resolve-release-version.sh"
 }
 
