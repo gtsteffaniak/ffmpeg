@@ -9,7 +9,7 @@ RUN apk add $APK_OPTS \
   coreutils \
   pkgconfig \
   rust cargo cargo-c \
-  openssl-dev openssl-libs-static \
+  gnutls-dev gnutls-static nettle-dev nettle-static \
   ca-certificates \
   bash \
   git \
