@@ -1,5 +1,7 @@
 #!/bin/bash
-# Build full glibc FFmpeg: codec libs static into the binary, VA/VPL/Vulkan/OpenCL dynamic.
+# Build full glibc FFmpeg: codec libs static into the binary; libva/Vulkan/OpenCL dynamic.
+# libvpl (dispatcher, dlopens the GPU runtime) and zimg are not packaged for bullseye, so they
+# are built static from src/ like x264/x265/lame/SVT-AV1.
 set -euo pipefail
 
 FFMPEG_VERSION="${FFMPEG_VERSION:?FFMPEG_VERSION required}"
@@ -56,9 +58,29 @@ fi
 svt_dir=$(first_dir "SVT-AV1*")
 if [ -n "$svt_dir" ]; then
   cd "$svt_dir/Build"
-  cmake .. -G"Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local
+  cmake .. -G"Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local \
+    -DCMAKE_INSTALL_LIBDIR=lib -DBUILD_SHARED_LIBS=OFF -DBUILD_APPS=OFF
   make -j"$(nproc)" install
   cd /build
+fi
+
+zimg_dir=$(first_dir "zimg*")
+if [ -n "$zimg_dir" ]; then
+  cd "$zimg_dir"
+  ./autogen.sh
+  ./configure --prefix=/usr/local --disable-shared --enable-static --with-pic
+  make -j"$(nproc)" install
+  cd /build
+fi
+
+vpl_dir=$(first_dir "libvpl*")
+if [ -n "$vpl_dir" ] && needs_libvpl_build "$FFMPEG_VERSION"; then
+  cmake -S "$vpl_dir" -B "$vpl_dir/_build" -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_INSTALL_LIBDIR=lib \
+    -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF -DINSTALL_EXAMPLES=OFF \
+    -DBUILD_TOOLS=OFF
+  cmake --build "$vpl_dir/_build" -j"$(nproc)"
+  cmake --install "$vpl_dir/_build"
 fi
 
 ff_dir=$(first_dir "ffmpeg*")
@@ -72,7 +94,7 @@ PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/lib/pkgconfig:${PKG_CONFIG_PATH:-
   --pkg-config-flags="--static" \
   --extra-cflags="${CFLAGS:-} -I/usr/local/include" \
   --extra-cxxflags="${CXXFLAGS:-} -I/usr/local/include" \
-  --extra-ldflags="${LDFLAGS:-} -L/usr/local/lib -Wl,-Bstatic -lx264 -lx265 -lmp3lame -Wl,-Bdynamic -lva -lva-drm -lvpl -lvulkan -ldl -lpthread" \
+  --extra-ldflags="${LDFLAGS:-} -L/usr/local/lib -Wl,-Bstatic -lx264 -lx265 -lmp3lame -Wl,-Bdynamic -lva -lva-drm -ldl -lpthread" \
   --extra-libs="-lm -fopenmp -lstdc++" \
   --enable-small \
   --enable-gnutls \

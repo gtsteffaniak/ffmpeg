@@ -228,19 +228,17 @@ build_ffmpeg_configure_flags() {
     append_if_supported "$configure" FEATURES "--enable-libx264"
   else
     local encode_flag
+    # Only libraries the bullseye full builder provides: x264/x265/lame/SVT-AV1 are built from
+    # src/ (scripts/debian-full-build.sh); mysofa/vidstab/vo-amrwbenc come from bullseye apt.
+    # append_if_supported only checks that configure knows the flag, not that the library is
+    # installed, so listing rav1e/xeve/xevd/vvenc/davs2/uavs3d/vmaf here (none packaged for
+    # bullseye or built by this image) makes configure fail.
     for encode_flag in \
       --enable-libx264 \
-      --enable-librav1e \
       --enable-libsvtav1 \
       --enable-libx265 \
-      --enable-libxeve \
-      --enable-libxevd \
-      --enable-libvvenc \
-      --enable-libdavs2 \
       --enable-libmysofa \
-      --enable-libuavs3d \
       --enable-libvidstab \
-      --enable-libvmaf \
       --enable-libvo-amrwbenc \
       --enable-libmp3lame; do
       append_if_supported "$configure" FEATURES "$encode_flag"

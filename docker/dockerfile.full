@@ -1,4 +1,4 @@
-# Full-feature glibc FFmpeg (dynamic VA/VPL/NVENC/Vulkan/OpenCL).
+# Full-feature glibc FFmpeg (dynamic VA/NVENC/Vulkan/OpenCL; libvpl dispatcher static).
 #
 # Debian 11 (bullseye) is intentional for builder + runtime: glibc 2.31 sets the floor for
 # extracted standalone linux/amd64|arm64 binaries (Ubuntu 20.04+, Debian 11+, RHEL 9+, etc.).
@@ -20,6 +20,8 @@ COPY [ "src/x264*", "./x264" ]
 COPY [ "src/x265*", "./x265" ]
 COPY [ "src/lame*", "./lame" ]
 COPY [ "src/SVT-AV1*", "./SVT-AV1" ]
+COPY [ "src/zimg*", "./zimg" ]
+COPY [ "src/libvpl*", "./libvpl" ]
 COPY [ "src/ffmpeg*", "./ffmpeg" ]
 
 # nv-codec-headers (git shallow in sources.json or vendored)
@@ -43,19 +45,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libvorbisenc2 \
   libsoxr0 \
   libsnappy1v5 \
-  libzimg2 \
   liblcms2-2 \
   libopenjp2-7 \
+  libaom0 \
+  libmysofa1 \
+  libvidstab1.1 \
+  libvo-amrwbenc0 \
+  libwebp6 \
+  libwebpmux3 \
+  libxml2 \
+  libfreetype6 \
+  libfribidi0 \
+  libharfbuzz0b \
+  libfontconfig1 \
+  libnuma1 \
+  libgomp1 \
   libva2 \
   libva-drm2 \
-  libvpl2 \
   libdrm2 \
   libvulkan1 \
   mesa-va-drivers \
   mesa-vulkan-drivers \
   ocl-icd-libopencl1 \
   && rm -rf /var/lib/apt/lists/* \
-  && (dpkg --print-architecture | grep -q amd64 && apt-get update && apt-get install -y --no-install-recommends intel-media-va-driver-non-free libmfx1 && rm -rf /var/lib/apt/lists/* || true)
+  && (dpkg --print-architecture | grep -q amd64 && apt-get update && apt-get install -y --no-install-recommends intel-media-va-driver libmfx1 && rm -rf /var/lib/apt/lists/* || true)
 
 COPY scripts/install-mesa-bookworm-gpu.sh scripts/check-full-wsl-va.sh /tmp/
 RUN chmod +x /tmp/install-mesa-bookworm-gpu.sh /tmp/check-full-wsl-va.sh && /tmp/install-mesa-bookworm-gpu.sh

@@ -14,7 +14,7 @@ The **full / GPU** Linux image is built and run on **Debian 11 (bullseye)** — 
   - Ubuntu **20.04** and newer
   - Debian **11** and newer
   - RHEL / Rocky / Alma **9** and newer
-- Bullseye is the oldest still-supported Debian release with a practical **libva / libvpl / non-free Intel VA** stack for the full image.
+- Bullseye is the oldest still-supported Debian release with a practical **libva / Intel VA (iHD)** stack (libvpl and zimg are built from source; they are not packaged for bullseye) for the full image.
 
 **Running inside Docker**
 
@@ -23,7 +23,7 @@ The **full / GPU** Linux image is built and run on **Debian 11 (bullseye)** — 
 
 **Trade-off: older in-image GPU userspace**
 
-- Runtime packages in the image (Mesa VA, `intel-media-va-driver-non-free`, libvpl, etc.) come from **bullseye**. That keeps glibc compatibility predictable but means **very new GPUs** (recent Intel Arc generations, newest AMD VA paths) may need **newer VA/Mesa drivers** than bullseye ships. If VAAPI fails on bleeding-edge hardware, try a newer host driver stack, a newer distro runtime, or software encode via the **static** image.
+- Runtime packages in the image (Mesa VA, `intel-media-va-driver` from bullseye main, etc.; the libvpl dispatcher is linked statically) come from **bullseye**. That keeps glibc compatibility predictable but means **very new GPUs** (recent Intel Arc generations, newest AMD VA paths) may need **newer VA/Mesa drivers** than bullseye ships. If VAAPI fails on bleeding-edge hardware, try a newer host driver stack, a newer distro runtime, or software encode via the **static** image.
 
 **WSL exception (bookworm Mesa file only)**
 
@@ -49,7 +49,7 @@ docker run --rm -it \
   -vf 'format=nv12,hwupload' -c:v h264_vaapi -f null -
 ```
 
-- **iHD** (default on Gen8+): `intel-media-va-driver-non-free` in the image.
+- **iHD** (default on Gen8+): `intel-media-va-driver` (bullseye `main`) in the image. The `-non-free` build lives in Debian's non-free component, which the image does not enable.
 - **i965**: older hardware, set `LIBVA_DRIVER_NAME=i965`.
 - **QSV** uses libvpl (`h264_qsv`); ensure `libmfx-gen` / oneVPL runtime matches the host.
 
@@ -67,7 +67,7 @@ AMF (`h264_amf`) needs AMD's proprietary AMF runtime on the host; it is not bund
 
 ## Vulkan (Vulkan Video + `scale_vulkan`)
 
-**Full image only** (static scratch build has no Vulkan). FFmpeg is configured with **`--enable-vulkan`** against **Khronos Vulkan-Headers ≥ 1.4** (vendored at build time; bullseye `libvulkan-dev` is too old for Vulkan Video). **glslang / shaderc** (`spirv_compiler`) enables **`scale_vulkan`** and other Vulkan filters — no `--enable-nonfree`.
+**Full image only** (static scratch build has no Vulkan). FFmpeg is configured with **`--enable-vulkan`** against **Khronos Vulkan-Headers ≥ 1.4** (vendored at build time; bullseye `libvulkan-dev` is too old for Vulkan Video). **glslang** (built from source at the Vulkan SDK tag, since bullseye's 11.1 lacks SPIR-V 1.6; FFmpeg compiles shaders at build time via `spirv_compiler`) enables **`scale_vulkan`** and other Vulkan filters — no `--enable-nonfree`.
 
 Runtime ships **`libvulkan1`** plus **Mesa Vulkan ICDs** (RADV, ANV, lavapipe). On amd64, [`scripts/install-mesa-bookworm-gpu.sh`](../scripts/install-mesa-bookworm-gpu.sh) installs **bookworm** `mesa-vulkan-drivers` (and WSL `d3d12` VA) while keeping bullseye glibc — same pattern as the WSL VA driver exception.
 

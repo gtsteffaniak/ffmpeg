@@ -4,10 +4,12 @@ ARG DEBIAN_VERSION=bullseye
 FROM debian:${DEBIAN_VERSION} AS debian-base
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/lib/pkgconfig:/usr/lib/$(uname -m)-linux-gnu/pkgconfig
+# Dockerfile ENV does not run shell substitutions, so list both multiarch dirs explicitly.
+ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/aarch64-linux-gnu/pkgconfig
 ENV CFLAGS="-O2 -fPIC"
 ENV CXXFLAGS="-O2 -fPIC"
-ENV LDFLAGS="-Wl,-z,relro,-z,now"
+# --as-needed keeps pkg-config --static Libs.private out of DT_NEEDED (runtime image stays small).
+ENV LDFLAGS="-Wl,-z,relro,-z,now -Wl,--as-needed"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
   ca-certificates \
@@ -20,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   texinfo \
   jq \
   python3 \
+  python3-pip \
   zlib1g-dev \
   libbz2-dev \
   libdrm-dev \
@@ -34,7 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libxml2-dev \
   libgnutls28-dev \
   libgmp-dev \
-  libnettle-dev \
+  nettle-dev \
   libp11-kit-dev \
   libtasn1-6-dev \
   libunistring-dev \
@@ -47,16 +50,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libvorbis-dev \
   libsoxr-dev \
   libsnappy-dev \
-  libzimg-dev \
   liblcms2-dev \
   libopenjp2-7-dev \
+  libaom-dev \
+  libmysofa-dev \
+  libvidstab-dev \
+  libvo-amrwbenc-dev \
   libnuma-dev \
   libva-dev \
   libva-drm2 \
-  libvpl-dev \
   libvulkan-dev \
   ocl-icd-opencl-dev \
   linux-libc-dev \
   && rm -rf /var/lib/apt/lists/*
+
+# bullseye cmake is 3.18; Vulkan-Headers / glslang need >= 3.22. pip wheels are manylinux (glibc 2.17),
+# so this does not raise the glibc floor of the produced binaries.
+# zimg and libvpl are not packaged for bullseye; they are built from src/ in dockerfile.full.
+RUN python3 -m pip install --no-cache-dir "cmake>=3.25,<4"
 
 WORKDIR /build
