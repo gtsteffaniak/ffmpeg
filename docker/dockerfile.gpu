@@ -22,7 +22,7 @@
 FROM debian:trixie AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig"
+ENV PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/local/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig"
 
 # Builder packages (Debian 13 trixie).
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -149,6 +149,11 @@ RUN cd xevd && \
   ln -s /usr/local/lib/xevd/libxevd.a /usr/local/lib/libxevd.a 2>/dev/null || true
 
 COPY [ "src/vvenc-*", "./vvenc" ]
+# vvenc is C++ static: its .pc keeps -lstdc++ in Libs.private, which the
+# GPU build (pkg-config-flags="") does not include. Promote -lstdc++ into
+# Libs like the libvmaf fix above (via \b — Libs has no trailing space).
+# CMake GNUInstallDirs on trixie may use the multiarch libdir, so patch
+# both possible .pc locations and fail fast if pkg-config cannot see it.
 RUN cd vvenc && \
   sed -i 's/-Werror;//' source/Lib/vvenc/CMakeLists.txt && \
   cmake \
@@ -158,7 +163,15 @@ RUN cd vvenc && \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=/usr/local && \
   cmake --build build/release-static -j && \
-  cmake --build build/release-static --target install
+  cmake --build build/release-static --target install && \
+  for pc in /usr/local/lib/pkgconfig/libvvenc.pc /usr/local/lib/x86_64-linux-gnu/pkgconfig/libvvenc.pc; do \
+    if [ -f "$pc" ]; then \
+      sed -i 's/-lvvenc\b/-lvvenc -lstdc++/g' "$pc"; \
+    fi; \
+  done && \
+  ls /usr/local/include/vvenc/vvenc.h && \
+  pkg-config --exists --print-errors "libvvenc >= 1.6.1" && \
+  pkg-config --libs libvvenc
 
 COPY [ "src/davs2-*", "./davs2" ]
 RUN cd davs2/build/linux && \
@@ -205,6 +218,7 @@ RUN cd ffmpeg && \
     --enable-openssl \
     $BASE_FLAGS \
     $FEATURES \
+  || (cat ffbuild/config.log; false) \
   && make -j"$(nproc)" install \
   && ffmpeg -version | head -1 \
   && ldd /usr/local/bin/ffmpeg

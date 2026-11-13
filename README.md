@@ -401,8 +401,10 @@ docker run --rm docker.io/yourusername/ffmpeg:8.0 -version
 
 The GitHub Actions release workflow (`.github/workflows/release.yml`) builds per-arch on native runners, then merges manifests and publishes release artifacts:
 
-- **build-amd64** (ubuntu-latest): Linux amd64 components + final, Windows components + final, Windows zip artifacts
-- **build-arm64** (ubuntu-24.04-arm): Linux arm64 components + final
+- **build** (single matrix job with `fail-fast: true` — the first failing leg cancels the others):
+  - `amd64` (ubuntu-latest): Linux amd64 components + final, Windows components + final, Windows zip artifacts
+  - `arm64` (ubuntu-24.04-arm): Linux arm64 components + final
+  - `gpu` (ubuntu-latest, linux/amd64 only): Debian GPU image (`docker/dockerfile.gpu`) + smoke check + push
 - **release**: Merge Docker manifests, package Linux tarballs, attach Windows zips to GitHub release
 
 ```bash
@@ -595,7 +597,7 @@ working unchanged.
 | Image | Base | Link model | Platforms | Published by |
 |---|---|---|---|---|
 | `ffmpeg` | Alpine (scratch runtime) | `--enable-static`, no GPU shared libs | linux/amd64, linux/arm64 | `.github/workflows/release.yml` |
-| `ffmpeg` with `-gpu` tag | Debian 13 trixie builder → `trixie-slim` runtime | Mostly-static codecs + dynamic GPU glue (`libva`, `libvpl`, `libvulkan`, OpenCL, NVIDIA headers from `nv-codec-headers`, AMD headers from the AMF SDK) | linux/amd64 only | `.github/workflows/release.yml` (same `build-gpu` job as the release) |
+| `ffmpeg` with `-gpu` tag | Debian 13 trixie builder → `trixie-slim` runtime | Mostly-static codecs + dynamic GPU glue (`libva`, `libvpl`, `libvulkan`, OpenCL, NVIDIA headers from `nv-codec-headers`, AMD headers from the AMF SDK) | linux/amd64 only | `.github/workflows/release.yml` (same `build` job, `gpu` leg) |
 
 ### Tags
 
@@ -624,7 +626,7 @@ env var in `build-gpu.sh` only controls the tag and which sources
 `fetch-sources` downloads; it must match the catalog.
 
 The GPU image is built on every release: `.github/workflows/release.yml`
-runs a `build-gpu` job (linux/amd64 only) alongside the static jobs,
+runs a `build` matrix leg `gpu` (linux/amd64 only, fail-fast) alongside the
 fetches sources, builds `docker/dockerfile.gpu`, runs
 `scripts/check-gpu.sh`, and pushes `gtstef/ffmpeg:<version>-gpu`. The
 `release` job then copies that tag to GHCR.

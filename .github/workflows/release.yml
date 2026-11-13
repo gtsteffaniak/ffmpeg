@@ -79,257 +79,32 @@ jobs:
           echo "Resolved FFmpeg version=${VERSION} publish tag=${TAG} prerelease=${PRERELEASE} make_latest=${MAKE_LATEST}"
           go run -C tools/catalog . validate
 
-  build-amd64:
-    name: Build amd64 (Linux + Windows)
+  build:
+    name: Build (${{ matrix.arch }})
     needs: resolve-version
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 360
-    env:
-      # Single version for tags, source fetch, Docker build-args, and GitHub release.
-      FFMPEG_VERSION: ${{ needs.resolve-version.outputs.version }}
-      TAG: ${{ needs.resolve-version.outputs.tag }}
-      PLATFORM: linux/amd64
-      FULL_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.tag }}-amd64
-      DECODE_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.tag }}-decode-amd64
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: tools/catalog/go.mod
-
-      - name: Verify release version
-        run: |
-          echo "FFMPEG_VERSION=${FFMPEG_VERSION}"
-          test -n "${FFMPEG_VERSION}"
-
-      - name: Fetch sources
-        run: make fetch-sources DECODE_ONLY=false
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # --- Linux amd64 components (full) ---
-
-      - name: Build base
-        run: make ci-build-component COMPONENT=base DECODE_ONLY=false
-
-      - name: Build graphics
-        run: make ci-build-component COMPONENT=graphics DECODE_ONLY=false
-
-      - name: Build av1
-        run: make ci-build-component COMPONENT=av1 DECODE_ONLY=false
-
-      - name: Build x264-x265
-        run: make ci-build-component COMPONENT=x264-x265 DECODE_ONLY=false
-
-      - name: Build modern-codecs
-        run: make ci-build-component COMPONENT=modern-codecs DECODE_ONLY=false
-
-      - name: Build vpx-avs
-        run: make ci-build-component COMPONENT=vpx-avs DECODE_ONLY=false
-
-      - name: Build image-formats
-        run: make ci-build-component COMPONENT=image-formats DECODE_ONLY=false
-
-      - name: Build audio
-        run: make ci-build-component COMPONENT=audio DECODE_ONLY=false
-
-      - name: Build vaapi
-        run: make ci-build-component COMPONENT=vaapi DECODE_ONLY=false
-
-      - name: Build processing
-        run: make ci-build-component COMPONENT=processing DECODE_ONLY=false
-
-      # --- Final releases (full) ---
-
-      - name: Build final release linux amd64
-        run: make ci-build-component COMPONENT=final DECODE_ONLY=false CI_FINAL_IMAGE=${{ env.FULL_IMAGE }}
-
-      - name: Build windows components
-        run: make ci-build-component COMPONENT=windows-components DECODE_ONLY=false
-
-      - name: Build final release windows
-        run: make ci-build-component COMPONENT=windows DECODE_ONLY=false
-
-      - name: Package Windows (full)
-        run: make ci-package-windows-release TAG=${{ needs.resolve-version.outputs.tag }}
-
-      # --- Linux amd64 components (decode) ---
-
-      - name: Build base (decode)
-        run: make ci-build-component COMPONENT=base DECODE_ONLY=true
-
-      - name: Build graphics (decode)
-        run: make ci-build-component COMPONENT=graphics DECODE_ONLY=true
-
-      - name: Build av1 (decode)
-        run: make ci-build-component COMPONENT=av1 DECODE_ONLY=true
-
-      - name: Build x264-x265 (decode)
-        run: make ci-build-component COMPONENT=x264-x265 DECODE_ONLY=true
-
-      - name: Build modern-codecs (decode)
-        run: make ci-build-component COMPONENT=modern-codecs DECODE_ONLY=true
-
-      - name: Build vpx-avs (decode)
-        run: make ci-build-component COMPONENT=vpx-avs DECODE_ONLY=true
-
-      - name: Build image-formats (decode)
-        run: make ci-build-component COMPONENT=image-formats DECODE_ONLY=true
-
-      - name: Build audio (decode)
-        run: make ci-build-component COMPONENT=audio DECODE_ONLY=true
-
-      - name: Build vaapi (decode)
-        run: make ci-build-component COMPONENT=vaapi DECODE_ONLY=true
-
-      - name: Build processing (decode)
-        run: make ci-build-component COMPONENT=processing DECODE_ONLY=true
-
-      # --- Final releases (decode) ---
-
-      - name: Build final release linux amd64 (decode)
-        run: make ci-build-component COMPONENT=final DECODE_ONLY=true CI_FINAL_IMAGE=${{ env.DECODE_IMAGE }}
-
-      - name: Build windows components (decode)
-        run: make ci-build-component COMPONENT=windows-components DECODE_ONLY=true
-
-      - name: Build final release windows (decode)
-        run: make ci-build-component COMPONENT=windows DECODE_ONLY=true
-
-      - name: Package Windows (decode)
-        run: make ci-package-windows-release-decode TAG=${{ needs.resolve-version.outputs.tag }}
-
-      - name: Upload Windows release artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-release-artifacts
-          path: release-artifacts/*-windows-*.zip
-          retention-days: 7
-
-  build-arm64:
-    name: Build arm64 (Linux)
-    needs: resolve-version
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 360
+    # Fail-fast matrix: the first failing leg cancels the others.
+    # GitHub Actions only supports fail-fast across matrix legs.
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+          - arch: gpu
+            runner: ubuntu-latest
+            platform: linux/amd64
     env:
       FFMPEG_VERSION: ${{ needs.resolve-version.outputs.version }}
       TAG: ${{ needs.resolve-version.outputs.tag }}
-      PLATFORM: linux/arm64
-      FULL_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.tag }}-arm64
-      DECODE_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.tag }}-decode-arm64
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: tools/catalog/go.mod
-
-      - name: Verify release version
-        run: |
-          echo "FFMPEG_VERSION=${FFMPEG_VERSION}"
-          test -n "${FFMPEG_VERSION}"
-
-      - name: Fetch sources
-        run: make fetch-sources DECODE_ONLY=false
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # --- Linux arm64 components (full) ---
-
-      - name: Build base
-        run: make ci-build-component COMPONENT=base DECODE_ONLY=false
-
-      - name: Build graphics
-        run: make ci-build-component COMPONENT=graphics DECODE_ONLY=false
-
-      - name: Build av1
-        run: make ci-build-component COMPONENT=av1 DECODE_ONLY=false
-
-      - name: Build x264-x265
-        run: make ci-build-component COMPONENT=x264-x265 DECODE_ONLY=false
-
-      - name: Build modern-codecs
-        run: make ci-build-component COMPONENT=modern-codecs DECODE_ONLY=false
-
-      - name: Build vpx-avs
-        run: make ci-build-component COMPONENT=vpx-avs DECODE_ONLY=false
-
-      - name: Build image-formats
-        run: make ci-build-component COMPONENT=image-formats DECODE_ONLY=false
-
-      - name: Build audio
-        run: make ci-build-component COMPONENT=audio DECODE_ONLY=false
-
-      - name: Build vaapi
-        run: make ci-build-component COMPONENT=vaapi DECODE_ONLY=false
-
-      - name: Build processing
-        run: make ci-build-component COMPONENT=processing DECODE_ONLY=false
-
-      # --- Final release (full) ---
-
-      - name: Build final release linux arm64
-        run: make ci-build-component COMPONENT=final DECODE_ONLY=false CI_FINAL_IMAGE=${{ env.FULL_IMAGE }}
-
-      # --- Linux arm64 components (decode) ---
-
-      - name: Build base (decode)
-        run: make ci-build-component COMPONENT=base DECODE_ONLY=true
-
-      - name: Build graphics (decode)
-        run: make ci-build-component COMPONENT=graphics DECODE_ONLY=true
-
-      - name: Build av1 (decode)
-        run: make ci-build-component COMPONENT=av1 DECODE_ONLY=true
-
-      - name: Build x264-x265 (decode)
-        run: make ci-build-component COMPONENT=x264-x265 DECODE_ONLY=true
-
-      - name: Build modern-codecs (decode)
-        run: make ci-build-component COMPONENT=modern-codecs DECODE_ONLY=true
-
-      - name: Build vpx-avs (decode)
-        run: make ci-build-component COMPONENT=vpx-avs DECODE_ONLY=true
-
-      - name: Build image-formats (decode)
-        run: make ci-build-component COMPONENT=image-formats DECODE_ONLY=true
-
-      - name: Build audio (decode)
-        run: make ci-build-component COMPONENT=audio DECODE_ONLY=true
-
-      - name: Build vaapi (decode)
-        run: make ci-build-component COMPONENT=vaapi DECODE_ONLY=true
-
-      - name: Build processing (decode)
-        run: make ci-build-component COMPONENT=processing DECODE_ONLY=true
-
-      # --- Final release (decode) ---
-
-      - name: Build final release linux arm64 (decode)
-        run: make ci-build-component COMPONENT=final DECODE_ONLY=true CI_FINAL_IMAGE=${{ env.DECODE_IMAGE }}
-
-  build-gpu:
-    name: Build GPU image (linux/amd64)
-    needs: resolve-version
-    runs-on: ubuntu-latest
-    timeout-minutes: 360
-    env:
-      FFMPEG_VERSION: ${{ needs.resolve-version.outputs.version }}
-      TAG: ${{ needs.resolve-version.outputs.tag }}
-      PLATFORM: linux/amd64
+      PLATFORM: ${{ matrix.platform }}
+      FULL_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.tag }}-${{ matrix.arch }}
+      DECODE_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.tag }}-decode-${{ matrix.arch }}
       GPU_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.tag }}-gpu
     steps:
       - name: Checkout
@@ -349,6 +124,7 @@ jobs:
         run: make fetch-sources DECODE_ONLY=false
 
       - name: Set up Docker Buildx
+        if: matrix.arch == 'gpu'
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
@@ -358,18 +134,147 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build GPU image (amd64 only)
-        run: |
-          docker buildx build --platform linux/amd64 -f docker/dockerfile.gpu -t "$GPU_IMAGE" --load .
+        if: matrix.arch == 'gpu'
+        run: docker buildx build --platform linux/amd64 -f docker/dockerfile.gpu -t "$GPU_IMAGE" --load .
 
       - name: Smoke check
+        if: matrix.arch == 'gpu'
         run: ./scripts/check-gpu.sh "$GPU_IMAGE"
 
       - name: Push GPU image
+        if: matrix.arch == 'gpu'
         run: docker push "$GPU_IMAGE"
 
+      - name: Build base
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=base DECODE_ONLY=false
+
+      - name: Build graphics
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=graphics DECODE_ONLY=false
+
+      - name: Build av1
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=av1 DECODE_ONLY=false
+
+      - name: Build x264-x265
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=x264-x265 DECODE_ONLY=false
+
+      - name: Build modern-codecs
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=modern-codecs DECODE_ONLY=false
+
+      - name: Build vpx-avs
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=vpx-avs DECODE_ONLY=false
+
+      - name: Build image-formats
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=image-formats DECODE_ONLY=false
+
+      - name: Build audio
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=audio DECODE_ONLY=false
+
+      - name: Build vaapi
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=vaapi DECODE_ONLY=false
+
+      - name: Build processing
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=processing DECODE_ONLY=false
+
+      - name: Build final release linux amd64
+        if: matrix.arch == 'amd64'
+        run: make ci-build-component COMPONENT=final DECODE_ONLY=false CI_FINAL_IMAGE=${{ env.FULL_IMAGE }}
+
+      - name: Build final release linux arm64
+        if: matrix.arch == 'arm64'
+        run: make ci-build-component COMPONENT=final DECODE_ONLY=false CI_FINAL_IMAGE=${{ env.FULL_IMAGE }}
+
+      - name: Build windows components
+        if: matrix.arch == 'amd64'
+        run: make ci-build-component COMPONENT=windows-components DECODE_ONLY=false
+
+      - name: Build final release windows
+        if: matrix.arch == 'amd64'
+        run: make ci-build-component COMPONENT=windows DECODE_ONLY=false
+
+      - name: Package Windows (full)
+        if: matrix.arch == 'amd64'
+        run: make ci-package-windows-release TAG=${{ needs.resolve-version.outputs.tag }}
+
+      - name: Build base (decode)
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=base DECODE_ONLY=true
+
+      - name: Build graphics (decode)
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=graphics DECODE_ONLY=true
+
+      - name: Build av1 (decode)
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=av1 DECODE_ONLY=true
+
+      - name: Build x264-x265 (decode)
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=x264-x265 DECODE_ONLY=true
+
+      - name: Build modern-codecs (decode)
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=modern-codecs DECODE_ONLY=true
+
+      - name: Build vpx-avs (decode)
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=vpx-avs DECODE_ONLY=true
+
+      - name: Build image-formats (decode)
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=image-formats DECODE_ONLY=true
+
+      - name: Build audio (decode)
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=audio DECODE_ONLY=true
+
+      - name: Build vaapi (decode)
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=vaapi DECODE_ONLY=true
+
+      - name: Build processing (decode)
+        if: matrix.arch != 'gpu'
+        run: make ci-build-component COMPONENT=processing DECODE_ONLY=true
+
+      - name: Build final release linux amd64 (decode)
+        if: matrix.arch == 'amd64'
+        run: make ci-build-component COMPONENT=final DECODE_ONLY=true CI_FINAL_IMAGE=${{ env.DECODE_IMAGE }}
+
+      - name: Build final release linux arm64 (decode)
+        if: matrix.arch == 'arm64'
+        run: make ci-build-component COMPONENT=final DECODE_ONLY=true CI_FINAL_IMAGE=${{ env.DECODE_IMAGE }}
+
+      - name: Build windows components (decode)
+        if: matrix.arch == 'amd64'
+        run: make ci-build-component COMPONENT=windows-components DECODE_ONLY=true
+
+      - name: Build final release windows (decode)
+        if: matrix.arch == 'amd64'
+        run: make ci-build-component COMPONENT=windows DECODE_ONLY=true
+
+      - name: Package Windows (decode)
+        if: matrix.arch == 'amd64'
+        run: make ci-package-windows-release-decode TAG=${{ needs.resolve-version.outputs.tag }}
+
+      - name: Upload Windows release artifacts
+        if: matrix.arch == 'amd64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-artifacts
+          path: release-artifacts/*-windows-*.zip
+          retention-days: 7
   release:
     name: Merge manifests and publish release
-    needs: [resolve-version, build-amd64, build-arm64, build-gpu]
+    needs: [resolve-version, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
