@@ -1,12 +1,12 @@
 #!/bin/bash
-# check-gpu.sh — verify a Track G (Debian GPU) image exposes GPU features.
+# check-gpu.sh — verify a Debian GPU image exposes GPU features.
 #
 # Usage:
 #   ./scripts/check-gpu.sh [IMAGE]        # IMAGE defaults to gtstef/ffmpeg:9.0.2-gpu
 #   IMAGE=gtstef/ffmpeg:9.0.2-gpu ./scripts/check-gpu.sh
 #
 # Runs against `docker run --rm <image>` (also works with a local
-# binary if FFMPEG_BIN is set). Asserts, per brief:
+# binary if FFMPEG_BIN is set). Asserts:
 #   ldd shows libva.so / libvpl.so (Vulkan is dlopen'd by FFmpeg 9,
 #   so its loader presence is checked separately, not via ldd)
 #   ffmpeg -hwaccels lists vaapi, cuda, vulkan (opencl where present)
@@ -46,7 +46,7 @@ if [ -z "$FFMPEG_BIN" ]; then
   command -v docker >/dev/null 2>&1 || { echo "docker required for check-gpu.sh (or set FFMPEG_BIN to a local binary)" >&2; exit 1; }
 fi
 
-echo "== Track G smoke: $IMAGE =="
+echo "== GPU smoke: $IMAGE =="
 
 run_cmd -version | head -3 || fail "ffmpeg -version failed"
 ok "ffmpeg -version"
@@ -90,4 +90,4 @@ echo "$filt" | grep -q scale_vulkan || fail "-filters missing scale_vulkan"
 echo "$filt" | grep -q scale_vaapi || fail "-filters missing scale_vaapi"
 ok "-filters has scale_vulkan/scale_vaapi"
 
-echo "All Track G checks passed"
+echo "All GPU checks passed"

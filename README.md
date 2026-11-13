@@ -586,28 +586,28 @@ make info                     # Show configuration
 make help                     # Show all commands
 ```
 
-## Track G (GPU) vs Track S (static)
+## GPU image (x86_64, Debian)
 
-This repo ships two additive tracks. Track S is the default static build described
-above; Track G is a parallel Debian image for x86_64 hardware acceleration.
-The static track keeps working untouched.
+This repo ships the static Alpine FFmpeg described above plus a parallel
+Debian image for x86_64 hardware acceleration. The static image keeps
+working unchanged.
 
-| Track | Image | Base | Link model | Platforms | Published by |
-|---|---|---|---|---|---|
-| Track S (static) | `ffmpeg` | Alpine (scratch runtime) | `--enable-static`, no GPU shared libs | linux/amd64, linux/arm64 | `.github/workflows/release.yml` (push + dispatch) |
-| Track G (GPU, x86_64 only) | `ffmpeg` with `-gpu` tag | Debian 13 Trixie builder → `trixie-slim` runtime | Mostly-static codecs + dynamic GPU glue (`libva`, `libvpl`, `libvulkan`, OpenCL, NVIDIA headers from `nv-codec-headers`, AMD headers from the AMF SDK) | linux/amd64 only | `.github/workflows/gpu.yml` (`workflow_dispatch` only) |
+| Image | Base | Link model | Platforms | Published by |
+|---|---|---|---|---|
+| `ffmpeg` | Alpine (scratch runtime) | `--enable-static`, no GPU shared libs | linux/amd64, linux/arm64 | `.github/workflows/release.yml` |
+| `ffmpeg` with `-gpu` tag | Debian 13 trixie builder → `trixie-slim` runtime | Mostly-static codecs + dynamic GPU glue (`libva`, `libvpl`, `libvulkan`, OpenCL, NVIDIA headers from `nv-codec-headers`, AMD headers from the AMF SDK) | linux/amd64 only | `.github/workflows/release.yml` (same `build-gpu` job as the release) |
 
 ### Tags
 
-- `gtstef/ffmpeg:<version>` — Track S static, multi-arch
-- `gtstef/ffmpeg:<version>-gpu` — Track G Debian GPU image, **linux/amd64 only** (e.g. `9.0.2-gpu`)
-- `gtstef/ffmpeg:<version>-decode` — Track S decode-only (unchanged)
+- `gtstef/ffmpeg:<version>` — static, multi-arch
+- `gtstef/ffmpeg:<version>-gpu` — Debian GPU image, **linux/amd64 only** (e.g. `9.0.2-gpu`)
+- `gtstef/ffmpeg:<version>-decode` — decode-only static (unchanged)
 
-Track G is **x86_64 only**. Raspberry Pi VAAPI / V4L2-M2M workflows use the
-static Alpine image (`Track S`), not the GPU image. Arm64 is intentionally
-not built for Track G.
+The GPU image is **x86_64 only**. Raspberry Pi VAAPI / V4L2-M2M workflows
+use the static Alpine image, not the GPU image. Arm64 is intentionally
+not built for the GPU image.
 
-### Building Track G
+### Building
 
 ```bash
 # Local build (fetches sources, builds docker/dockerfile.gpu, runs smoke checks)
@@ -615,23 +615,29 @@ not built for Track G.
 
 # Build + push
 PUSH=true ./scripts/build-gpu.sh
-
-# CI (manual workflow run, source of truth for published -gpu tags)
-#   .github/workflows/gpu.yml — workflow_dispatch ONLY, runs-on: ubuntu-latest
-#   fetch via make fetch-sources, buildx docker/dockerfile.gpu, check-gpu.sh,
-#   push gtstef/ffmpeg:<version>-gpu. No arm64, does not touch release.yml.
 ```
 
 Version comes from `sources.json` `release.ffmpeg_version` (same catalog
-logic as `release.yml`).
+logic as `release.yml`). The Dockerfile reads `sources.json` directly
+with `jq` — there are no `--build-arg` flags to set. The `FFMPEG_VERSION`
+env var in `build-gpu.sh` only controls the tag and which sources
+`fetch-sources` downloads; it must match the catalog.
+
+The GPU image is built on every release: `.github/workflows/release.yml`
+runs a `build-gpu` job (linux/amd64 only) alongside the static jobs,
+fetches sources, builds `docker/dockerfile.gpu`, runs
+`scripts/check-gpu.sh`, and pushes `gtstef/ffmpeg:<version>-gpu`. The
+`release` job then copies that tag to GHCR. A `workflow_dispatch` run
+must use the catalog version (enforced by `resolve-version`), otherwise
+the run fails.
 
 ### Smoke checks
 
 `scripts/check-gpu.sh` asserts ldd shows `libva.so`/`libvpl.so` (Vulkan is
 `dlopen`'d by FFmpeg 9, so its loader is checked separately),
 `ffmpeg -hwaccels` contains `vaapi`/`cuda`/`vulkan`, `-encoders` contains
-`h264_nvenc`/`h264_vaapi`/`h264_vulkan`/`libx264`, and `-filters` contains
-`scale_vulkan`/`scale_vaapi`. Run it after a local build:
+`h264_nvenc`/`h264_vaapi`/`h264_vulkan`/`libx264`, and `-filters`
+contains `scale_vulkan`/`scale_vaapi`. Run it after a local build:
 
 ```bash
 docker run --rm gtstef/ffmpeg:9.0.2-gpu -hwaccels | grep -E "vaapi|cuda|vulkan|opencl"
@@ -659,10 +665,10 @@ docker run --rm --device=/dev/dri/renderD128 gtstef/ffmpeg:9.0.2-gpu \
 
 ### Consumer: Filebrowser media image
 
-Filebrowser uses Track G as its media runtime base (see
+Filebrowser uses the GPU image as its media runtime base (see
 `gtsteffaniak/filebrowser` `_docker/Dockerfile.media`, which switches to
 `FROM gtstef/ffmpeg:<version>-gpu`). The Pi production setup stays on the
-static Alpine `Dockerfile`.
+static Alpine image.
 
 ### Compose snippets
 
@@ -699,68 +705,43 @@ services:
 
 ### Size
 
-Track G runtime is `debian:trixie-slim` + GPU userspace + codec shared
+The GPU runtime is `debian:trixie-slim` + GPU userspace + codec shared
 libs. The builder (`FROM debian:trixie`) is discarded.
 
 | Image | Runtime base | Size (after first build) | Notes |
 |---|---|---|---|
 | `ffmpeg:<ver>-gpu` | `debian:trixie-slim` | ~600–900 MB (estimate — fill from `docker images` after first CI build) | Includes mesa/va drivers + codec shared libs; builder discarded |
-| `ffmpeg:<ver>` (Track S) | scratch | ~30–70 MB (see `make info` / `docker images`) | Static, no drivers |
+| `ffmpeg:<ver>` | scratch | ~30–70 MB (see `make info` / `docker images`) | Static, no drivers |
 
 After the first CI build, record the real size from `docker images
 gtstef/ffmpeg:<version>-gpu` here.
 
-### Debian base: Trixie
+### Debian base
 
-Track G is based on Debian 13 Trixie (stable since 2025-08), selected via
-`ARG DEBIAN_VERSION=trixie` in `docker/dockerfile.gpu` (pass
-`--build-arg DEBIAN_VERSION=bookworm` to test the old base as a fallback).
-Trixie ships Mesa 25.0.7, libva 2.22.0, intel-media-va-driver 25.2.3,
-libvpl 2.14.0 and Vulkan headers 1.4.309, which FFmpeg 9.0's configure
-accepts for Vulkan (`vulkan >= 1.3.277`; the stricter optional
-`vulkan_1_4 >= 1.4.317` feature stays off — it does not affect
-`scale_vulkan` / `h264_vulkan`). Bookworm's Mesa 22.3 / Vulkan 1.3.239
-failed that Vulkan floor outright.
+The GPU image is hardcoded to Debian 13 trixie
+(`FROM debian:trixie` / `FROM debian:trixie-slim` in
+`docker/dockerfile.gpu`). Trixie ships Mesa 25.0.7, libva 2.22.0,
+intel-media-va-driver 25.2.3, libvpl 2.14.0 and Vulkan headers 1.4.309,
+which FFmpeg 9.0's configure accepts for Vulkan. Older stable's Mesa 22.3
+and Vulkan headers were too old for current Intel Arc / Arrow Lake /
+AMD iGPUs, and forky (testing) is not suitable for release images.
 
-#### Trixie package notes
+`libvmaf` is not packaged in trixie, so it is built from the `src/vmaf-*`
+tarball (3.2.1 ≥ FFmpeg 9's `>= 2.0.0`). `libxeve`, `libxevd`,
+`libvvenc`, `libdavs2` and `libuavs3d` also have no trixie `-dev`
+packages and are built from their `src/*` tarballs. `libplacebo` is
+disabled: trixie ships 7.349.0 but FFmpeg 9 requires `>= 7.351.0`.
 
-Package names were re-validated against the Trixie main Packages index
-(not a blind `FROM` swap). Renames vs Bookworm:
+### Configure flags
 
-- Builder: `libsvtav1-dev` → `libsvtav1enc-dev` (SVT-AV1 2.3);
-  `libva-drm-dev` dropped — it never existed in Bookworm or Trixie,
-  `libva-dev` ships `va/va_drm.h`. All other `-dev` names unchanged.
-- Runtime: `libmfx1` → `libmfx-gen1.2` (Intel VPL GPU Runtime);
-  `libvpx7` → `libvpx9`; `libsvtav1enc1` → `libsvtav1enc2`
-  (`libsvtav1dec1` dropped — SVT-AV1 2.x merges enc/dec);
-  `librav1e0` → `librav1e0.7`; `libx265-199` → `libx265-215`;
-  `libjxl0.7` → `libjxl0.11`; `libpng16-16` → `libpng16-16t64`
-  (time64 transition). `libdav1d7` is unchanged — and now correct
-  (Bookworm's runtime was `libdav1d6`). GPU-glue SONAMEs
-  (`libva.so.2`, `libvpl.so.2`, `libvulkan.so.1`) are unchanged,
-  so `scripts/check-gpu.sh` expectations hold as-is.
-
-`libvmaf` is still not packaged in Trixie (no `libvmaf*` in the Trixie
-index), so it is still built from `src/vmaf-*` (3.2.1 ≥ FFmpeg 9's
-`>= 2.0.0`). `libplacebo` is still skipped: Trixie ships 7.349.0,
-FFmpeg 9.0 requires `>= 7.351.0` — revisit when Debian passes 7.351.
-
-### Configure flags (Track G)
-
-`scripts/version-gates.sh` `build_gpu_configure_flags()` mirrors the Track S
-codec list and adds `--enable-vaapi --enable-libvpl --enable-libdrm
+`scripts/version-gates.sh` `build_gpu_configure_flags()` mirrors the
+static codec list and adds `--enable-vaapi --enable-libvpl --enable-libdrm
 --enable-vulkan --enable-opencl --enable-ffnvcodec --enable-nvenc
 --enable-nvdec --enable-cuvid --enable-amf --enable-v4l2-m2m`, reusing the
 same `append_if_supported()` / `needs_*()` helpers. It never emits
 `--enable-static` / `--disable-shared` / `--enable-shared`. Unit tests in
 `scripts/test-version-gates.sh` cover GPU flags plus codec parity
 (x264, x265, SVT-AV1, dav1d, aom, vpx, etc.).
-
-Codec `-dev` packages come from Trixie. `libvmaf` is **not** in Trixie
-at all (no `libvmaf*` package in the index) so the builder compiles it
-from the existing `src/vmaf-*` tarball when present; `libplacebo` is
-intentionally not enabled (Trixie ships 7.349.0, FFmpeg 9 requires
-`>= 7.351.0`).
 
 ### Verification
 
@@ -769,7 +750,6 @@ make test-version-gates   # version-gates + GPU flags (CI: ./scripts/test-versio
 ./scripts/check-gpu.sh gtstef/ffmpeg:9.0.2-gpu   # after docker build (env smoke above)
 ```
 
-If a codec is unavailable on Trixie, the `append_if_supported()` pattern
-skips it instead of failing the build — mirror Track S behavior, do not
-fork the codec list.
-
+If a codec is unavailable on trixie, the `append_if_supported()` pattern
+skips it instead of failing the build — mirror the static behavior, do
+not fork the codec list.
