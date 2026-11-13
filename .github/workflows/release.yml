@@ -105,7 +105,7 @@ jobs:
       PLATFORM: ${{ matrix.platform }}
       FULL_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.tag }}-${{ matrix.arch }}
       DECODE_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.tag }}-decode-${{ matrix.arch }}
-      GPU_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.tag }}-gpu
+      GPU_IMAGE: docker.io/gtstef/ffmpeg-gpu:${{ needs.resolve-version.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -315,8 +315,13 @@ jobs:
           publish_tag() {
             tag="$1"
             platform="$2"
-            src="${REGISTRY}/${IMAGE_NAME}:${tag}"
-            dest="${GHCR_IMAGE}:${tag}"
+            image_name="${3:-${IMAGE_NAME}}"
+            src="${REGISTRY}/${image_name}:${tag}"
+            if [ "${image_name}" = "${IMAGE_NAME}" ]; then
+              dest="${GHCR_IMAGE}:${tag}"
+            else
+              dest="ghcr.io/$(echo "${GITHUB_REPOSITORY}" | cut -d/ -f1 | tr '[:upper:]' '[:lower:]')/${image_name}:${tag}"
+            fi
             echo "Publishing ${src} -> ${dest}"
             docker buildx imagetools create -t "${dest}" "${src}"
             inspect="$(docker buildx imagetools inspect "${dest}")"
@@ -330,8 +335,8 @@ jobs:
           publish_tag "${TAG}-arm64" linux/arm64
           publish_tag "${TAG}-decode-amd64" linux/amd64
           publish_tag "${TAG}-decode-arm64" linux/arm64
-          # GPU image is single-arch (linux/amd64); copy its tag as-is.
-          publish_tag "${TAG}-gpu" linux/amd64
+          # GPU image is in its own repo (ffmpeg-gpu), single-arch (linux/amd64); copy its tag as-is.
+          publish_tag "${TAG}" linux/amd64 ffmpeg-gpu
 
       - name: Merge multi-arch manifests
         run: |

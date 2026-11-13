@@ -272,4 +272,19 @@ for _rs in gpu decode amd64 arm64 decode-amd64 decode-arm64; do
   run_resolver_fail "resolve reserved INPUT=catalog-$_rs" "${RCATALOG}-${_rs}" "" "collides with an image-variant tag"
 done
 
+# GPU image must live in its own ffmpeg-gpu repo (breaking rename from ffmpeg:<ver>-gpu)
+RELROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+if grep -q 'GPU_IMAGE: docker.io/gtstef/ffmpeg-gpu:' "${RELROOT}/.github/workflows/release.yml"; then
+  echo "OK: release.yml GPU_IMAGE is ffmpeg-gpu repo"
+else
+  echo "FAIL: release.yml GPU_IMAGE is not ffmpeg-gpu repo" >&2; exit 1
+fi
+if grep -Fq 'publish_tag "${TAG}" linux/amd64 ffmpeg-gpu' "${RELROOT}/.github/workflows/release.yml"; then
+  echo "OK: release.yml publishes ffmpeg-gpu tag to GHCR"
+else
+  echo "FAIL: release.yml GHCR publish for ffmpeg-gpu missing" >&2; exit 1
+fi
+if grep -Fq 'ffmpeg:${FFMPEG_VERSION}-gpu' "${RELROOT}/scripts/build-gpu.sh"; then
+  echo "FAIL: build-gpu.sh still uses ffmpeg:<ver>-gpu" >&2; exit 1
+fi
 echo "All version-gates checks passed"

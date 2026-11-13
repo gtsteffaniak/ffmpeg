@@ -2,8 +2,8 @@
 # check-gpu.sh — verify a Debian GPU image exposes GPU features.
 #
 # Usage:
-#   ./scripts/check-gpu.sh [IMAGE]        # IMAGE defaults to gtstef/ffmpeg:9.0.2-gpu
-#   IMAGE=gtstef/ffmpeg:9.0.2-gpu ./scripts/check-gpu.sh
+#   ./scripts/check-gpu.sh [IMAGE]        # IMAGE defaults to gtstef/ffmpeg-gpu:9.0.2
+#   IMAGE=gtstef/ffmpeg-gpu:9.0.2 ./scripts/check-gpu.sh
 #
 # Runs against `docker run --rm <image>` (also works with a local
 # binary if FFMPEG_BIN is set). Asserts:
@@ -16,7 +16,7 @@
 # are manual and documented in README.md — CI runners have no GPU.
 set -euo pipefail
 
-IMAGE="${1:-${IMAGE:-gtstef/ffmpeg:9.0.2-gpu}}"
+IMAGE="${1:-${IMAGE:-gtstef/ffmpeg-gpu:9.0.2}}"
 : "${FFMPEG_BIN:=}"
 
 fail() {

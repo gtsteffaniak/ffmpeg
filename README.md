@@ -597,17 +597,25 @@ working unchanged.
 | Image | Base | Link model | Platforms | Published by |
 |---|---|---|---|---|
 | `ffmpeg` | Alpine (scratch runtime) | `--enable-static`, no GPU shared libs | linux/amd64, linux/arm64 | `.github/workflows/release.yml` |
-| `ffmpeg` with `-gpu` tag | Debian 13 trixie builder → `trixie-slim` runtime | Mostly-static codecs + dynamic GPU glue (`libva`, `libvpl`, `libvulkan`, OpenCL, NVIDIA headers from `nv-codec-headers`, AMD headers from the AMF SDK) | linux/amd64 only | `.github/workflows/release.yml` (same `build` job, `gpu` leg) |
+| `ffmpeg-gpu` (separate repo) | Debian 13 trixie builder → `trixie-slim` runtime | Mostly-static codecs + dynamic GPU glue (`libva`, `libvpl`, `libvulkan`, OpenCL, NVIDIA headers from `nv-codec-headers`, AMD headers from the AMF SDK) | linux/amd64 only | `.github/workflows/release.yml` (same `build` job, `gpu` leg) |
 
 ### Tags
 
 - `gtstef/ffmpeg:<version>` — static, multi-arch
-- `gtstef/ffmpeg:<version>-gpu` — Debian GPU image, **linux/amd64 only** (e.g. `9.0.2-gpu`)
+- `gtstef/ffmpeg-gpu:<version>` — Debian GPU image, **linux/amd64 only** (e.g. `gtstef/ffmpeg-gpu:9.0.2`)
 - `gtstef/ffmpeg:<version>-decode` — decode-only static (unchanged)
 
 The GPU image is **x86_64 only**. Raspberry Pi VAAPI / V4L2-M2M workflows
 use the static Alpine image, not the GPU image. Arm64 is intentionally
 not built for the GPU image.
+
+**Breaking change — GPU image repo rename:** the GPU image moved from
+the `ffmpeg` repo to its own `ffmpeg-gpu` repo.
+Old: `gtstef/ffmpeg:9.0.2-gpu` (Docker Hub) / `ghcr.io/gtsteffaniak/ffmpeg:9.0.2-gpu` (GHCR).
+New: `gtstef/ffmpeg-gpu:9.0.2` (Docker Hub) / `ghcr.io/gtsteffaniak/ffmpeg-gpu:9.0.2` (GHCR).
+Consumers must update `FROM` / pull paths from `ffmpeg:<version>-gpu` to `ffmpeg-gpu:<version>`.
+The old `ffmpeg:<version>-gpu` tag is left for historical pulls but is no longer published;
+the full static image stays `gtstef/ffmpeg:<version>` and decode stays `gtstef/ffmpeg:<version>-decode`.
 
 ### Building
 
@@ -628,8 +636,8 @@ env var in `build-gpu.sh` only controls the tag and which sources
 The GPU image is built on every release: `.github/workflows/release.yml`
 runs a `build` matrix leg `gpu` (linux/amd64 only, fail-fast) alongside the
 fetches sources, builds `docker/dockerfile.gpu`, runs
-`scripts/check-gpu.sh`, and pushes `gtstef/ffmpeg:<version>-gpu`. The
-`release` job then copies that tag to GHCR.
+`scripts/check-gpu.sh`, and pushes `gtstef/ffmpeg-gpu:<version>`. The
+`release` job then copies that tag to GHCR as `ghcr.io/gtsteffaniak/ffmpeg-gpu:<version>`.
 
 ### Branch / pre-release runs (`tag_suffix`)
 
@@ -644,12 +652,18 @@ nor `<catalog>-<suffix>` fails, as does a mismatched `tag_suffix`.
 
 Reserved suffixes (rejected with `collides with an image-variant tag`):
 `gpu`, `decode`, `amd64`, `arm64`, `decode-amd64`, `decode-arm64`.
-A suffixed tag is `<catalog>-<suffix>` (e.g. `9.0.2-gpu`); these would
-equal image-variant tags the same workflow publishes for the bare catalog
-version (`release.yml`: `FULL_IMAGE :<tag>-<arch>`, `DECODE_IMAGE
-:<tag>-decode-<arch>`, `GPU_IMAGE :<tag>-gpu`, merged manifests `:<tag>`
-and `:<tag>-decode`), so a run would overwrite a variant's image on
-Docker Hub and GHCR. The check applies whether the suffix comes from
+A suffixed tag is `<catalog>-<suffix>`; the reserved suffixes cover
+image-variant tags the workflow publishes for the bare catalog version
+(`release.yml`: `FULL_IMAGE :<tag>-<arch>`, `DECODE_IMAGE
+:<tag>-decode-<arch>`, `GPU_IMAGE` = `ffmpeg-gpu:<tag>` (separate repo),
+merged manifests `:<tag>` and `:<tag>-decode`). `decode`, `amd64`,
+`arm64`, `decode-amd64` and `decode-arm64` would equal those variant
+tags on the `ffmpeg` repo, so a run would overwrite a variant's image on
+Docker Hub and GHCR. `gpu` is still reserved after the GPU rename: a
+`9.0.2-gpu` suffixed tag would land on the `ffmpeg` repo as
+`ffmpeg:9.0.2-gpu` and recreate the pre-rename GPU tag name, which looks
+like the old GPU image and would confuse consumers (the actual GPU image
+is now `ffmpeg-gpu:9.0.2`). The check applies whether the suffix comes from
 `tag_suffix` or is implied by `version` (e.g. `version=9.0.2-gpu` also
 fails). `full-gpu` and `rc1` are not reserved.
 
@@ -662,8 +676,8 @@ fails). `full-gpu` and `rc1` are not reserved.
 contains `scale_vulkan`/`scale_vaapi`. Run it after a local build:
 
 ```bash
-docker run --rm gtstef/ffmpeg:9.0.2-gpu -hwaccels | grep -E "vaapi|cuda|vulkan|opencl"
-./scripts/check-gpu.sh gtstef/ffmpeg:9.0.2-gpu
+docker run --rm gtstef/ffmpeg-gpu:9.0.2 -hwaccels | grep -E "vaapi|cuda|vulkan|opencl"
+./scripts/check-gpu.sh gtstef/ffmpeg-gpu:9.0.2
 ```
 
 Device smoke tests need real hardware (not available on CI runners) and are
@@ -671,16 +685,16 @@ manual:
 
 ```bash
 # Intel/AMD VAAPI (need /dev/dri on host)
-docker run --rm --device=/dev/dri/renderD128 gtstef/ffmpeg:9.0.2-gpu \
+docker run --rm --device=/dev/dri/renderD128 gtstef/ffmpeg-gpu:9.0.2 \
   -vaapi_device /dev/dri/renderD128 -f lavfi -i testsrc=size=640x480:rate=1 \
   -vf 'format=nv12,hwupload' -c:v h264_vaapi -t 1 -f null -
 
 # NVIDIA NVENC (need NVIDIA toolkit on host)
-docker run --rm --gpus all gtstef/ffmpeg:9.0.2-gpu \
+docker run --rm --gpus all gtstef/ffmpeg-gpu:9.0.2 \
   -f lavfi -i testsrc=size=640x480:rate=1 -c:v h264_nvenc -t 1 -f null -
 
 # Vulkan (need /dev/dri)
-docker run --rm --device=/dev/dri/renderD128 gtstef/ffmpeg:9.0.2-gpu \
+docker run --rm --device=/dev/dri/renderD128 gtstef/ffmpeg-gpu:9.0.2 \
   -init_hw_device vulkan=vk:0 -filter_hw_device vk \
   -f lavfi -i testsrc=size=640x480:rate=1 -vf format=nv12,hwupload -c:v h264_vulkan -t 1 -f null -
 ```
@@ -689,7 +703,7 @@ docker run --rm --device=/dev/dri/renderD128 gtstef/ffmpeg:9.0.2-gpu \
 
 Filebrowser uses the GPU image as its media runtime base (see
 `gtsteffaniak/filebrowser` `_docker/Dockerfile.media`, which switches to
-`FROM gtstef/ffmpeg:<version>-gpu`). The Pi production setup stays on the
+`FROM gtstef/ffmpeg-gpu:<version>`). The Pi production setup stays on the
 static Alpine image.
 
 ### Compose snippets
@@ -732,11 +746,11 @@ libs. The builder (`FROM debian:trixie`) is discarded.
 
 | Image | Runtime base | Size (after first build) | Notes |
 |---|---|---|---|
-| `ffmpeg:<ver>-gpu` | `debian:trixie-slim` | ~600–900 MB (estimate — fill from `docker images` after first CI build) | Includes mesa/va drivers + codec shared libs; builder discarded |
+| `ffmpeg-gpu:<ver>` | `debian:trixie-slim` | ~600–900 MB (estimate — fill from `docker images` after first CI build) | Includes mesa/va drivers + codec shared libs; builder discarded |
 | `ffmpeg:<ver>` | scratch | ~30–70 MB (see `make info` / `docker images`) | Static, no drivers |
 
 After the first CI build, record the real size from `docker images
-gtstef/ffmpeg:<version>-gpu` here.
+gtstef/ffmpeg-gpu:<version>` here.
 
 ### Debian base
 
@@ -769,7 +783,7 @@ same `append_if_supported()` / `needs_*()` helpers. It never emits
 
 ```bash
 make test-version-gates   # version-gates + GPU flags (CI: ./scripts/test-version-gates.sh)
-./scripts/check-gpu.sh gtstef/ffmpeg:9.0.2-gpu   # after docker build (env smoke above)
+./scripts/check-gpu.sh gtstef/ffmpeg-gpu:9.0.2   # after docker build (env smoke above)
 ```
 
 If a codec is unavailable on trixie, the `append_if_supported()` pattern

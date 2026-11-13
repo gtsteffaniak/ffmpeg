@@ -1,9 +1,9 @@
 #!/bin/bash
 # build-gpu.sh — local helper for the Debian GPU image (x86_64 only).
 #
-#   ./scripts/build-gpu.sh                 # build gtstef/ffmpeg:<ver>-gpu locally
+#   ./scripts/build-gpu.sh                 # build gtstef/ffmpeg-gpu:<ver> locally
 #   PUSH=true ./scripts/build-gpu.sh       # build + push to docker.io/gtstef
-#   IMAGE=docker.io/gtstef/ffmpeg:9.0.2-gpu ./scripts/build-gpu.sh
+#   IMAGE=docker.io/gtstef/ffmpeg-gpu:9.0.2 ./scripts/build-gpu.sh
 #   FFMPEG_VERSION=9.0.2 ./scripts/build-gpu.sh
 #
 # The image version comes from sources.json (release.ffmpeg_version);
@@ -33,7 +33,7 @@ export FFMPEG_VERSION
 echo "Fetching sources (FFMPEG_VERSION=$FFMPEG_VERSION, DECODE_ONLY=false)..."
 make fetch-sources DECODE_ONLY=false
 
-IMAGE="${IMAGE:-docker.io/gtstef/ffmpeg:${FFMPEG_VERSION}-gpu}"
+IMAGE="${IMAGE:-docker.io/gtstef/ffmpeg-gpu:${FFMPEG_VERSION}}"
 echo "Building GPU image (Debian trixie, linux/amd64) -> $IMAGE (builder discarded; runtime trixie-slim)"
 docker build \
   -f docker/dockerfile.gpu \

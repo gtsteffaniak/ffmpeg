@@ -5,7 +5,7 @@
 # nv-codec-headers (ffnvcodec.pc); AMD AMF headers from the GPUOpen
 # AMF SDK (AMF/core/Version.h) — neither ships with FFmpeg 9.
 #
-#   docker build -f docker/dockerfile.gpu -t gtstef/ffmpeg:<ver>-gpu .
+#   docker build -f docker/dockerfile.gpu -t gtstef/ffmpeg-gpu:<ver> .
 #
 # Version comes from sources.json (release.ffmpeg_version), parsed
 # with jq inside the build — no --build-arg needed. Base is hardcoded

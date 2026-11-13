@@ -14,9 +14,14 @@ TAG_SUFFIX="${TAG_SUFFIX:-}"
 # would overwrite that variant's image on Docker Hub and GHCR.
 #   release.yml FULL_IMAGE      -> :<tag>-<amd64|arm64>
 #   release.yml DECODE_IMAGE    -> :<tag>-decode-<amd64|arm64>
-#   release.yml GPU_IMAGE       -> :<tag>-gpu
+#   release.yml GPU_IMAGE       -> ffmpeg-gpu:<tag>  (separate repo)
 #   release.yml merge manifests -> :<tag> and :<tag>-decode
 #   Makefile ci-merge-manifest-decode -> :<tag>-decode
+# `gpu` is still reserved: since the GPU image moved to its own
+# ffmpeg-gpu repo, tag_suffix=gpu would no longer overwrite the GPU image,
+# but it would recreate ffmpeg:<catalog>-gpu -- the legacy GPU tag name --
+# which looks like the old GPU image and would confuse consumers. The
+# other reserved suffixes (decode/arch) still overwrite real variant tags.
 is_reserved_suffix() {
   local s="$1"
   case "$s" in
