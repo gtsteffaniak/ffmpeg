@@ -199,6 +199,109 @@ build_ffmpeg_configure_flags() {
   fi
 }
 
+# Populate BASE_FLAGS and FEATURES for Track G (Debian GPU) FFmpeg configure.
+# x86_64-only dynamic build: full codec parity with Track S static
+# (same BASE/FEATURE lists as build_ffmpeg_configure_flags() when
+# decode_only=false) PLUS hardware acceleration. Must NOT emit
+# --enable-static / --disable-shared / --enable-shared (dynamic GPU glue
+# links libva/libvpl/libvulkan at run time).
+# Must be called from the ffmpeg source directory (or pass configure path).
+build_gpu_configure_flags() {
+  local configure=${1:-./configure}
+  local ffmpeg_version=$2
+  local decode_only=$3
+
+  BASE_FLAGS=""
+  FEATURES=""
+
+  append_if_supported "$configure" BASE_FLAGS "--disable-doc"
+
+  # Same base list as Track S (filters, subtitles, images, color).
+  local base_flag
+  for base_flag in \
+    --enable-libzimg \
+    --enable-fontconfig \
+    --enable-gray \
+    --enable-iconv \
+    --enable-lcms2 \
+    --enable-libxml2 \
+    --enable-libdav1d \
+    --enable-libass \
+    --enable-libfreetype \
+    --enable-libfribidi \
+    --enable-libharfbuzz \
+    --enable-libsoxr \
+    --enable-libsnappy; do
+    append_if_supported "$configure" BASE_FLAGS "$base_flag"
+  done
+
+  # Full-parity conditional features (same gates as Track S).
+  if needs_libvpx "$ffmpeg_version" "$decode_only" && [ "$(uname -m)" != "armv7l" ]; then
+    append_if_supported "$configure" FEATURES "--enable-libvpx"
+  fi
+  if needs_libaom "$ffmpeg_version" "$decode_only"; then
+    append_if_supported "$configure" FEATURES "--enable-libaom"
+  fi
+  if needs_openjpeg "$ffmpeg_version" "$decode_only"; then
+    append_if_supported "$configure" FEATURES "--enable-libopenjpeg"
+  fi
+  if needs_libvorbis "$ffmpeg_version" "$decode_only"; then
+    append_if_supported "$configure" FEATURES "--enable-libvorbis"
+  fi
+  if needs_libwebp "$ffmpeg_version" "$decode_only"; then
+    append_if_supported "$configure" FEATURES "--enable-libwebp"
+  fi
+
+  # Full-parity encode features (identical list to Track S; Track G is
+  # full-only, so decode_only=true simply skips the same set).
+  if [ "$decode_only" != "true" ]; then
+    local encode_flag
+    for encode_flag in \
+      --enable-nonfree \
+      --enable-libx264 \
+      --enable-librav1e \
+      --enable-libsvtav1 \
+      --enable-libx265 \
+      --enable-libxeve \
+      --enable-libxevd \
+      --enable-libvvenc \
+      --enable-libdavs2 \
+      --enable-libmysofa \
+      --enable-libuavs3d \
+      --enable-libvidstab \
+      --enable-libvmaf \
+      --enable-libvo-amrwbenc \
+      --enable-libmp3lame; do
+      append_if_supported "$configure" FEATURES "$encode_flag"
+    done
+  fi
+
+  # GPU hwaccels (Track G only). libvpl is version-gated; the rest use
+  # append_if_supported() like Track S. Autodetect features
+  # (--enable-vaapi, --enable-vulkan, --enable-ffnvcodec, ...) do not
+  # always appear in configure --help text, but autodetect keeps them
+  # on when the Debian -dev packages are installed.
+  local gpu_flag
+  for gpu_flag in \
+    --enable-vaapi \
+    --enable-libdrm \
+    --enable-vulkan \
+    --enable-opencl \
+    --enable-ffnvcodec \
+    --enable-nvenc \
+    --enable-nvdec \
+    --enable-cuvid \
+    --enable-amf; do
+    append_if_supported "$configure" BASE_FLAGS "$gpu_flag"
+  done
+  if needs_libvpl_build "$ffmpeg_version"; then
+    append_if_supported "$configure" BASE_FLAGS "--enable-libvpl"
+  fi
+  if needs_v4l2_m2m_build; then
+    append_if_supported "$configure" BASE_FLAGS "--enable-v4l2-m2m"
+  fi
+}
+
 # Populate BASE_FLAGS and FEATURES for Windows cross-compile configure.
 build_windows_configure_flags() {
   local configure=${1:-./configure}
