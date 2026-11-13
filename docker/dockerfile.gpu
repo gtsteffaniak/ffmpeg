@@ -154,12 +154,16 @@ COPY [ "src/vvenc-*", "./vvenc" ]
 # Libs like the libvmaf fix above (via \b — Libs has no trailing space).
 # CMake GNUInstallDirs on trixie may use the multiarch libdir, so patch
 # both possible .pc locations and fail fast if pkg-config cannot see it.
+# Also disable LTO: GCC LTO objects need -flto at final link, but FFmpeg's
+# pkg-config link test and ./configure use plain cc. (Slim LTO is the
+# default when VVENC_ENABLE_LINK_TIME_OPT=ON.)
 RUN cd vvenc && \
   sed -i 's/-Werror;//' source/Lib/vvenc/CMakeLists.txt && \
   cmake \
     -S . \
     -B build/release-static \
     -DVVENC_ENABLE_WERROR=OFF \
+    -DVVENC_ENABLE_LINK_TIME_OPT=OFF \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=/usr/local && \
   cmake --build build/release-static -j && \
