@@ -642,6 +642,17 @@ Sources still come from the catalog `release.ffmpeg_version`;
 forced off). An explicit `version` that is neither the catalog version
 nor `<catalog>-<suffix>` fails, as does a mismatched `tag_suffix`.
 
+Reserved suffixes (rejected with `collides with an image-variant tag`):
+`gpu`, `decode`, `amd64`, `arm64`, `decode-amd64`, `decode-arm64`.
+A suffixed tag is `<catalog>-<suffix>` (e.g. `9.0.2-gpu`); these would
+equal image-variant tags the same workflow publishes for the bare catalog
+version (`release.yml`: `FULL_IMAGE :<tag>-<arch>`, `DECODE_IMAGE
+:<tag>-decode-<arch>`, `GPU_IMAGE :<tag>-gpu`, merged manifests `:<tag>`
+and `:<tag>-decode`), so a run would overwrite a variant's image on
+Docker Hub and GHCR. The check applies whether the suffix comes from
+`tag_suffix` or is implied by `version` (e.g. `version=9.0.2-gpu` also
+fails). `full-gpu` and `rc1` are not reserved.
+
 ### Smoke checks
 
 `scripts/check-gpu.sh` asserts ldd shows `libva.so`/`libvpl.so` (Vulkan is

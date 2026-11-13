@@ -203,4 +203,71 @@ EOF
   assert "needs_svtav1_api_patch skips new API" 1 needs_svtav1_api_patch
 )
 
+# ---- resolve-release-version.sh: reserved suffix + a-f cases ----
+# A suffixed TAG is <catalog>-<suffix>. If it equals an image-variant tag
+# of the bare catalog version, the release would overwrite that variant's
+# image (see resolve-release-version.sh comments). Reserved suffixes must
+# fail via tag_suffix AND via a suffix implied by INPUT_VERSION.
+RESOLVER="${SCRIPT_DIR}/resolve-release-version.sh"
+RCATALOG="9.0.2"
+
+run_resolver_ok() {
+  local desc="$1" input="$2" suffix="$3" exp_version="$4" exp_tag="$5" exp_pre="$6"
+  local out
+  out="$(CATALOG_VERSION="$RCATALOG" INPUT_VERSION="$input" TAG_SUFFIX="$suffix" GITHUB_OUTPUT= "$RESOLVER")" || {
+    echo "FAIL: $desc (resolver exited nonzero)" >&2
+    return 1
+  }
+  local got_version got_tag got_pre
+  got_version="$(printf '%s\n' "$out" | sed -n '1p')"
+  got_tag="$(printf '%s\n' "$out" | sed -n '2p')"
+  got_pre="$(printf '%s\n' "$out" | sed -n '3p')"
+  if [ "$got_version" != "$exp_version" ] || [ "$got_tag" != "$exp_tag" ] || [ "$got_pre" != "$exp_pre" ]; then
+    echo "FAIL: $desc (got version=$got_version tag=$got_tag prerelease=$got_pre, want $exp_version $exp_tag $exp_pre)" >&2
+    return 1
+  fi
+  echo "OK: $desc (version=$got_version tag=$got_tag prerelease=$got_pre)"
+}
+
+run_resolver_fail() {
+  local desc="$1" input="$2" suffix="$3" err_substr="$4"
+  local err
+  if err="$(CATALOG_VERSION="$RCATALOG" INPUT_VERSION="$input" TAG_SUFFIX="$suffix" GITHUB_OUTPUT= "$RESOLVER" 2>&1)"; then
+    echo "FAIL: $desc (resolver unexpectedly succeeded)" >&2
+    return 1
+  fi
+  case "$err" in
+    *"$err_substr"*) echo "OK: $desc (failed as expected: $err_substr)" ;;
+    *) echo "FAIL: $desc (error missing '$err_substr', got: $err)" >&2; return 1 ;;
+  esac
+}
+
+# (a) no INPUT -> version=catalog tag=catalog prerelease=false
+run_resolver_ok "resolve (a) no input" "" "" "$RCATALOG" "$RCATALOG" "false"
+# (b) INPUT=catalog -> ok
+run_resolver_ok "resolve (b) input=catalog" "$RCATALOG" "" "$RCATALOG" "$RCATALOG" "false"
+# (c) INPUT=catalog-full-gpu -> version=catalog tag=catalog-full-gpu prerelease=true
+# full-gpu is the documented branch-test suffix; verified not a real
+# published tag (Docker Hub 9.0.2-full-gpu is absent; only transient
+# per-arch staging tags briefly existed), and it collides with no variant.
+run_resolver_ok "resolve (c) input=catalog-full-gpu" "${RCATALOG}-full-gpu" "" "$RCATALOG" "${RCATALOG}-full-gpu" "true"
+# (c2) tag_suffix=full-gpu (explicit) -> ok
+run_resolver_ok "resolve (c2) tag_suffix=full-gpu" "" "full-gpu" "$RCATALOG" "${RCATALOG}-full-gpu" "true"
+# (c3) tag_suffix=rc1 -> ok
+run_resolver_ok "resolve (c3) tag_suffix=rc1" "" "rc1" "$RCATALOG" "${RCATALOG}-rc1" "true"
+# (d) INPUT=catalog-full-gpu with mismatched TAG_SUFFIX=other -> fails
+run_resolver_fail "resolve (d) suffix mismatch" "${RCATALOG}-full-gpu" "other" "implies suffix"
+# (e) INPUT=9.9.9 -> fails with 'does not match catalog'
+run_resolver_fail "resolve (e) unknown version" "9.9.9" "" "does not match catalog"
+# (f) TAG_SUFFIX=-leading -> fails
+run_resolver_fail "resolve (f) leading hyphen suffix" "" "-leading" "must not start with a hyphen"
+# Reserved suffixes via tag_suffix must fail
+for _rs in gpu decode amd64 arm64 decode-amd64 decode-arm64; do
+  run_resolver_fail "resolve reserved tag_suffix=$_rs" "" "$_rs" "collides with an image-variant tag"
+done
+# Reserved suffixes implied by INPUT_VERSION must also fail (no bypass)
+for _rs in gpu decode amd64 arm64 decode-amd64 decode-arm64; do
+  run_resolver_fail "resolve reserved INPUT=catalog-$_rs" "${RCATALOG}-${_rs}" "" "collides with an image-variant tag"
+done
+
 echo "All version-gates checks passed"

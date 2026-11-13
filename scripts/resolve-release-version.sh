@@ -8,6 +8,25 @@ CATALOG_VERSION="${CATALOG_VERSION:?CATALOG_VERSION required}"
 INPUT_VERSION="${INPUT_VERSION:-}"
 TAG_SUFFIX="${TAG_SUFFIX:-}"
 
+# Suffixes that collide with image-variant tags published for the bare
+# catalog version (see release.yml / Makefile). A suffixed TAG is
+# <catalog>-<suffix>; if that equals any variant of <catalog>, the release
+# would overwrite that variant's image on Docker Hub and GHCR.
+#   release.yml FULL_IMAGE      -> :<tag>-<amd64|arm64>
+#   release.yml DECODE_IMAGE    -> :<tag>-decode-<amd64|arm64>
+#   release.yml GPU_IMAGE       -> :<tag>-gpu
+#   release.yml merge manifests -> :<tag> and :<tag>-decode
+#   Makefile ci-merge-manifest-decode -> :<tag>-decode
+is_reserved_suffix() {
+  local s="$1"
+  case "$s" in
+    amd64|arm64|gpu|decode|decode-amd64|decode-arm64)
+      return 0 ;;
+    *)
+      return 1 ;;
+  esac
+}
+
 validate_tag_suffix() {
   local s="$1"
   if [ -z "$s" ]; then
@@ -18,6 +37,11 @@ validate_tag_suffix() {
   esac
   if ! printf '%s' "$s" | grep -Eq '^[0-9A-Za-z][0-9A-Za-z.-]*$'; then
     echo "Invalid tag_suffix ${s}: use only [0-9A-Za-z.-] with no leading hyphen" >&2
+    return 1
+  fi
+  if is_reserved_suffix "$s"; then
+    echo "tag_suffix '${s}' collides with an image-variant tag" >&2
+    echo "Reserved suffixes: amd64 arm64 gpu decode decode-amd64 decode-arm64" >&2
     return 1
   fi
 }
@@ -47,6 +71,20 @@ PRERELEASE=false
 if [ -n "$TAG_SUFFIX" ]; then
   TAG="${VERSION}-${TAG_SUFFIX}"
   PRERELEASE=true
+fi
+
+# Defense in depth: the resolved TAG itself must not equal a variant tag
+# of the bare catalog version, regardless of how it was derived.
+# (This catches both explicit TAG_SUFFIX and suffixes implied by
+# INPUT_VERSION; validate_tag_suffix above already rejects those, but the
+# TAG check guards any future code path that bypasses it.)
+if [ -n "$TAG_SUFFIX" ]; then
+  for _variant in "-gpu" "-decode" "-amd64" "-arm64" "-decode-amd64" "-decode-arm64"; do
+    if [ "$TAG" = "${VERSION}${_variant}" ]; then
+      echo "tag ${TAG} collides with an image-variant tag" >&2
+      exit 1
+    fi
+  done
 fi
 
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
