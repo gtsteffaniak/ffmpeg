@@ -149,9 +149,15 @@ RUN cd xevd && \
   ln -s /usr/local/lib/xevd/libxevd.a /usr/local/lib/libxevd.a 2>/dev/null || true
 
 COPY [ "src/vvenc-*", "./vvenc" ]
-# vvenc is C++ static: its .pc keeps -lstdc++ in Libs.private, which the
-# GPU build (pkg-config-flags="") does not include. Promote -lstdc++ into
-# Libs like the libvmaf fix above (via \b — Libs has no trailing space).
+# vvenc is C++ static: its .pc keeps -lstdc++ AND -lm in Libs.private
+# (vvenc 1.14.0 generates `Libs.private: -lstdc++ -lm -lgcc -lgcc`),
+# which the GPU build (pkg-config-flags="") does not include. Promote
+# both into Libs like the libvmaf fix above (via \b — Libs has no
+# trailing space). Promoting only -lstdc++ is not enough: libvvenc.a
+# uses exp() from libm (EncCu.cpp.o), so FFmpeg's libvvenc configure
+# test fails with `undefined reference to symbol 'exp@@GLIBC_2.29'` /
+# `DSO missing from command line` (libm.so.6) when -lm is absent.
+# -lgcc stays in Libs.private: the gcc driver adds it implicitly.
 # CMake GNUInstallDirs on trixie may use the multiarch libdir, so patch
 # both possible .pc locations and fail fast if pkg-config cannot see it.
 # Also disable LTO: GCC LTO objects need -flto at final link, but FFmpeg's
@@ -170,12 +176,14 @@ RUN cd vvenc && \
   cmake --build build/release-static --target install && \
   for pc in /usr/local/lib/pkgconfig/libvvenc.pc /usr/local/lib/x86_64-linux-gnu/pkgconfig/libvvenc.pc; do \
     if [ -f "$pc" ]; then \
-      sed -i 's/-lvvenc\b/-lvvenc -lstdc++/g' "$pc"; \
+      sed -i 's/-lvvenc\b/-lvvenc -lstdc++ -lm/g' "$pc"; \
     fi; \
   done && \
   ls /usr/local/include/vvenc/vvenc.h && \
   pkg-config --exists --print-errors "libvvenc >= 1.6.1" && \
-  pkg-config --libs libvvenc
+  pkg-config --libs libvvenc && \
+  pkg-config --libs libvvenc | grep -q -- "-lstdc++" && \
+  pkg-config --libs libvvenc | grep -q -- "-lm"
 
 COPY [ "src/davs2-*", "./davs2" ]
 RUN cd davs2/build/linux && \
@@ -214,6 +222,7 @@ RUN cd ffmpeg && \
     --pkg-config-flags="" \
     --extra-cflags="-O3" \
     --extra-cxxflags="-O3" \
+    --extra-libs="-lm" \
     --disable-ffplay \
     --disable-doc \
     --enable-gpl \
