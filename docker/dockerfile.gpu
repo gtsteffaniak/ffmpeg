@@ -1,48 +1,30 @@
 # syntax=docker/dockerfile:1.4
-# Track G — Debian GPU FFmpeg (x86_64 only).
+# Debian 13 (trixie) GPU FFmpeg for linux/amd64.
+# Mostly-static codecs + dynamically linked GPU glue (libva, libvpl,
+# libvulkan, OpenCL). NVIDIA NVENC/NVDEC/CUDA headers come from
+# nv-codec-headers (ffnvcodec.pc); AMD AMF headers from the GPUOpen
+# AMF SDK (AMF/core/Version.h) — neither ships with FFmpeg 9.
 #
-# Mostly-static codecs + dynamically-linked GPU glue (libva, libvpl,
-# libvulkan, OpenCL, NVIDIA headers from nv-codec-headers, AMD headers
-# from the AMF SDK,
-# published as gtstef/ffmpeg:<ver>-gpu. Additive only: the Alpine static
-# track (Track S) in docker/dockerfile.* is untouched.
+#   docker build -f docker/dockerfile.gpu -t gtstef/ffmpeg-gpu:<ver> .
 #
-#   docker build -f docker/dockerfile.gpu --build-arg FFMPEG_VERSION=9.0.2 -t gtstef/ffmpeg:9.0.2-gpu .
+# Version comes from sources.json (release.ffmpeg_version), parsed
+# with jq inside the build — no --build-arg needed. Base is hardcoded
+# to Debian 13 trixie (builder debian:trixie, runtime
+# debian:trixie-slim): Mesa 25.0, libva 2.22, intel-media-va-driver
+# 25.2, libvpl 2.14. Trixie is chosen for current
+# Intel Arc / Arrow Lake / AMD support; forky (testing) is not used
+# for release images.
 #
-# Base is Debian 13 Trixie (ARG DEBIAN_VERSION, default trixie):
-# Mesa 25.0, libva 2.22, intel-media-va-driver 25.2, libvpl 2.14,
-# Vulkan headers 1.4.309 — fresh enough for current Intel Arc /
-# Arrow Lake / AMD iGPUs. Override with e.g.
-# --build-arg DEBIAN_VERSION=bookworm to test the old base as a
-# fallback if Trixie blocks the build (package lists below are
-# Trixie names; the bookworm names differ for a few SONAME packages,
-# see README "Trixie package notes").
-# NVENC/NVDEC/AMF headers are installed below from nv-codec-headers
-# (FFmpeg/nv-codec-headers, provides ffnvcodec.pc) and the AMD AMF SDK
-# (GPUOpen-LibrariesAndSDKs/AMF, AMF/core/Version.h). FFmpeg 9 does not
-# ship them; its configure requires the external ffnvcodec pkg-config
-# package (>= 12.1.14.0) and AMF headers (>= AMF 1.5.0.2.0.0).
+# libvmaf, xeve, xevd, vvenc, davs2, uavs3d have no trixie -dev
+# packages, so they are built from src/* tarballs. libplacebo is
+# disabled: trixie ships 7.349.0 but FFmpeg 9 requires >= 7.351.0.
 
-ARG DEBIAN_VERSION=trixie
-
-FROM debian:${DEBIAN_VERSION} AS builder
+FROM debian:trixie AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig"
+ENV PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/local/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig"
 
-# Builder -dev packages, re-validated against Debian Trixie
-# (packages.debian.org / trixie main Packages index, 2026-11-13).
-# Changes vs the old Bookworm list:
-#   libva-drm-dev  DROPPED — never existed in Bookworm or Trixie;
-#                  trixie libva-dev ships va/va_drm.h + libva-drm.pc
-#                  (verified in libva-dev_2.22.0-3_amd64.deb).
-#   libsvtav1-dev -> libsvtav1enc-dev (SVT-AV1 2.3 in Trixie; the
-#                  Debian package was renamed and now Replaces:
-#                  libsvtav1-dev. Ships EbSvtAv1Enc.h + SvtAv1Enc.pc,
-#                  matching FFmpeg 9's require_pkg_config "SvtAv1Enc >= 0.9.0").
-# All other names exist unchanged in Trixie (versions bumped, e.g.
-# dav1d 1.5.1, aom 3.12.1, x265 4.1, rav1e 0.7.1, glslang 15.1,
-# Vulkan headers 1.4.309).
+# Builder packages (Debian 13 trixie).
 RUN apt-get update && apt-get install -y --no-install-recommends \
   build-essential \
   yasm \
@@ -110,18 +92,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   xxd \
   && rm -rf /var/lib/apt/lists/*
 
-# --- NVIDIA (NVENC/NVDEC/CUDA) + AMD AMF headers ----------------------
-# FFmpeg 9.0.2 configure checks:
-#   check_pkg_config ffnvcodec "ffnvcodec >= 12.1.14.0" ... plus
-#   check_type "ffnvcodec/nvEncodeAPI.h" / dynlink headers, and
-#   check_cpp_condition amf "AMF/core/Version.h" version >= 0x1000500020000
-# Neither ships with the FFmpeg tarball. Install both header-only SDKs
-# before configure:
-#   nv-codec-headers n13.1.15.0 — headers + ffnvcodec.pc (make install)
-#   AMF v1.5.3 — AMF/core/Version.h (1.5.3.0 >= 1.5.0.2.0.0) copied to
-#                /usr/local/include/AMF/{core,components,...}
-# Runtime CUDA/NV driver libs stay on the host (NVIDIA container
-# toolkit); these header-only installs add no runtime dependency.
+# NVIDIA + AMD headers: FFmpeg 9 requires the external ffnvcodec
+# pkg-config package (>= 12.1.14.0) and AMF headers
+# (>= AMF 1.5.0.2.0.0). Install both header-only SDKs before configure.
 RUN git clone --depth 1 --branch n13.1.15.0 https://github.com/FFmpeg/nv-codec-headers /tmp/nv-codec-headers \
   && make -C /tmp/nv-codec-headers install PREFIX=/usr/local \
   && git clone --depth 1 --branch v1.5.3 https://github.com/GPUOpen-LibrariesAndSDKs/AMF /tmp/AMF \
@@ -130,22 +103,9 @@ RUN git clone --depth 1 --branch n13.1.15.0 https://github.com/FFmpeg/nv-codec-h
   && test -f /usr/local/include/AMF/core/Version.h \
   && test -f /usr/local/lib/pkgconfig/ffnvcodec.pc
 
-# libvmaf: still not packaged in Trixie (verified: packages.debian.org
-# search "vmaf" in trixie returns no results; Package index has no
-# libvmaf*). Build it from the existing src/* tarball when present
-# (same source as the static track's docker/dockerfile.processing),
-# static into /usr/local. FFmpeg 9 requires libvmaf >= 2.0.0; the
-# sources.json vmaf is 3.2.1. If src/vmaf-* is absent,
-# build_gpu_configure_flags() still tries --enable-libvmaf via
-# append_if_supported() and skips cleanly when the .pc file is missing.
-#
-# libplacebo: intentionally NOT enabled. Trixie ships libplacebo-dev
-# 7.349.0, but FFmpeg 9.0's configure requires
-# 'libplacebo >= 7.351.0' (require_pkg_config ... pl_vulkan_create),
-# so Trixie's version fails the check — same skip as Bookworm, for a
-# different (closer) reason. scale_vulkan does not need it:
-# scale_vulkan_filter_deps="vulkan spirv_compiler swscale" in FFmpeg 9.
-# Revisit when Debian ships >= 7.351.
+# libvmaf is not packaged in Debian. Build it from the src/vmaf-*
+# tarball when present, static into /usr/local. FFmpeg 9 requires
+# libvmaf >= 2.0.0; sources.json ships 3.2.1.
 COPY [ "src/vmaf-*", "./vmaf" ]
 RUN if [ -f vmaf/libvmaf/meson.build ]; then \
   cd vmaf/libvmaf && \
@@ -161,16 +121,8 @@ RUN if [ -f vmaf/libvmaf/meson.build ]; then \
     && ldd /usr/local/lib/libvmaf.a >/dev/null 2>&1 || true; \
   fi
 
-# --- Modern-codec source builds (full parity with Track S) -------------
-# Trixie ships NO libxeve/libxevd/libvvenc/libdavs2/libuavs3d -dev
-# packages (verified: trixie main index has no such Package: entries),
-# but build_gpu_configure_flags() emits --enable-libxeve/-libxevd/
-# -libvvenc/-libdavs2/-libuavs3d, and FFmpeg 9 configure then requires
-# their pkg-config metadata — without these builds configure fails.
-# Build them from the same fetch-sources tarballs Track S uses
-# (docker/dockerfile.modern-codecs + docker/dockerfile.codecs),
-# static into /usr/local like the other codecs. fetch-sources has
-# already populated src/ (build-gpu.sh / gpu.yml run it first).
+# xeve, xevd, vvenc, davs2, uavs3d have no trixie -dev packages.
+# Build them from the src/* tarballs populated by fetch-sources.
 
 COPY [ "src/xeve-*", "./xeve" ]
 RUN cd xeve && \
@@ -197,16 +149,41 @@ RUN cd xevd && \
   ln -s /usr/local/lib/xevd/libxevd.a /usr/local/lib/libxevd.a 2>/dev/null || true
 
 COPY [ "src/vvenc-*", "./vvenc" ]
+# vvenc is C++ static: its .pc keeps -lstdc++ AND -lm in Libs.private
+# (vvenc 1.14.0 generates `Libs.private: -lstdc++ -lm -lgcc -lgcc`),
+# which the GPU build (pkg-config-flags="") does not include. Promote
+# both into Libs like the libvmaf fix above (via \b — Libs has no
+# trailing space). Promoting only -lstdc++ is not enough: libvvenc.a
+# uses exp() from libm (EncCu.cpp.o), so FFmpeg's libvvenc configure
+# test fails with `undefined reference to symbol 'exp@@GLIBC_2.29'` /
+# `DSO missing from command line` (libm.so.6) when -lm is absent.
+# -lgcc stays in Libs.private: the gcc driver adds it implicitly.
+# CMake GNUInstallDirs on trixie may use the multiarch libdir, so patch
+# both possible .pc locations and fail fast if pkg-config cannot see it.
+# Also disable LTO: GCC LTO objects need -flto at final link, but FFmpeg's
+# pkg-config link test and ./configure use plain cc. (Slim LTO is the
+# default when VVENC_ENABLE_LINK_TIME_OPT=ON.)
 RUN cd vvenc && \
   sed -i 's/-Werror;//' source/Lib/vvenc/CMakeLists.txt && \
   cmake \
     -S . \
     -B build/release-static \
     -DVVENC_ENABLE_WERROR=OFF \
+    -DVVENC_ENABLE_LINK_TIME_OPT=OFF \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=/usr/local && \
   cmake --build build/release-static -j && \
-  cmake --build build/release-static --target install
+  cmake --build build/release-static --target install && \
+  for pc in /usr/local/lib/pkgconfig/libvvenc.pc /usr/local/lib/x86_64-linux-gnu/pkgconfig/libvvenc.pc; do \
+    if [ -f "$pc" ]; then \
+      sed -i 's/-lvvenc\b/-lvvenc -lstdc++ -lm/g' "$pc"; \
+    fi; \
+  done && \
+  ls /usr/local/include/vvenc/vvenc.h && \
+  pkg-config --exists --print-errors "libvvenc >= 1.6.1" && \
+  pkg-config --libs libvvenc && \
+  pkg-config --libs libvvenc | grep -q -- "-lstdc++" && \
+  pkg-config --libs libvvenc | grep -q -- "-lm"
 
 COPY [ "src/davs2-*", "./davs2" ]
 RUN cd davs2/build/linux && \
@@ -229,12 +206,13 @@ RUN cd uavs3d && \
     ../.. && \
   make -j$(nproc) install
 
-ARG FFMPEG_VERSION=9.0.2
-
+COPY sources.json /tmp/sources.json
 COPY scripts/version-gates.sh /tmp/version-gates.sh
 
 COPY [ "src/ffmpeg*", "./ffmpeg" ]
 RUN cd ffmpeg && \
+  FFMPEG_VERSION="$(jq -r .release.ffmpeg_version /tmp/sources.json)" && \
+  test -n "$FFMPEG_VERSION" && test "$FFMPEG_VERSION" != "null" && \
   . /tmp/version-gates.sh && \
   apply_svtav1_api_patch && \
   build_gpu_configure_flags ./configure "$FFMPEG_VERSION" "false" && \
@@ -244,6 +222,7 @@ RUN cd ffmpeg && \
     --pkg-config-flags="" \
     --extra-cflags="-O3" \
     --extra-cxxflags="-O3" \
+    --extra-libs="-lm" \
     --disable-ffplay \
     --disable-doc \
     --enable-gpl \
@@ -252,11 +231,12 @@ RUN cd ffmpeg && \
     --enable-openssl \
     $BASE_FLAGS \
     $FEATURES \
+  || (cat ffbuild/config.log; false) \
   && make -j"$(nproc)" install \
   && ffmpeg -version | head -1 \
   && ldd /usr/local/bin/ffmpeg
 
-FROM debian:${DEBIAN_VERSION}-slim AS runtime
+FROM debian:trixie-slim AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive \
   NVIDIA_VISIBLE_DEVICES=all \
@@ -264,31 +244,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
   PATH="/usr/local/bin:$PATH"
 
 # Runtime libs: GPU userspace drivers + codec shared libs.
-# Trixie names, re-validated against the trixie main Packages index.
-# Renames vs Bookworm (SONAME bumps / Trixie t64 transition):
-#   libmfx1          REMOVED in Trixie -> libmfx-gen1.2 (Intel VPL GPU
-#                    Runtime, the oneVPL implementation backend for
-#                    Intel iGPUs; FFmpeg's --enable-libvpl links libvpl,
-#                    not legacy libmfx, so no FFmpeg binary needs it
-#                    directly, but QSV on Intel needs the impl lib)
-#   libvpx7        -> libvpx9        (libvpx 1.15)
-#   libsvtav1enc1  -> libsvtav1enc2  (SVT-AV1 2.3; enc/dec merged,
-#   libsvtav1dec1     dropped — that name never existed in Bookworm
-#                    either; 2.x ships a single libsvtav1enc2)
-#   librav1e0      -> librav1e0.7    (rav1e 0.7.1)
-#   libx265-199    -> libx265-215    (x265 4.1)
-#   libjxl0.7      -> libjxl0.11     (JPEG XL 0.11.2)
-#   libpng16-16    -> libpng16-16t64 (Trixie time64 transition)
-#   libdav1d7        unchanged — and now actually correct: Bookworm's
-#                    runtime was libdav1d6, so the old list's
-#                    libdav1d7 would have failed on Bookworm too.
-# All other names exist unchanged in Trixie (libva2, libvpl2,
-# libvulkan1, mesa-va-drivers 25.0, intel-media-va-driver 25.2,
-# libharfbuzz0b, libopenjp2-7 (.7 did NOT bump), libass9, ...).
-# ldd in builder prints NEEDED entries; adjust this list from that
-# output when recording size. SONAMEs for the GPU glue
-# (libva.so.2, libvpl.so.2, libvulkan.so.1) are unchanged, so
-# scripts/check-gpu.sh expectations hold as-is.
+# GPU glue SONAMEs (libva.so.2, libvpl.so.2, libvulkan.so.1) are
+# expected by scripts/check-gpu.sh.
 RUN apt-get update && apt-get install -y --no-install-recommends \
   ca-certificates \
   tzdata \

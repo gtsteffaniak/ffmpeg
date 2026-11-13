@@ -14,11 +14,12 @@ on:
         required: false
         type: boolean
         default: false
+      tag_suffix:
+        description: Optional suffix for test/pre-release tags (e.g. full-gpu, rc1). Docker and GitHub tags become version-suffix; sources still use the catalog FFmpeg version.
+        required: false
 
-# Same explicit version (workflow_dispatch) queues; does not cancel in-progress runs.
-# Push / dispatch without version uses run_id so each run is independent.
 concurrency:
-  group: release-${{ github.workflow }}-${{ github.event.inputs.version || github.run_id }}
+  group: release-${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && format('{0}{1}', github.event.inputs.version || github.run_id, github.event.inputs.tag_suffix && format('-{0}', github.event.inputs.tag_suffix) || '') || github.run_id }}
   cancel-in-progress: false
 
 env:
@@ -31,6 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
       make_latest: ${{ steps.version.outputs.make_latest }}
     steps:
       - name: Checkout
@@ -43,51 +46,66 @@ jobs:
 
       - name: Determine version
         id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          TAG_SUFFIX: ${{ github.event.inputs.tag_suffix }}
         run: |
           CATALOG_VERSION="$(go run -C tools/catalog . read release.ffmpeg_version)"
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-            if [ "$VERSION" != "$CATALOG_VERSION" ]; then
-              echo "Manual version ${VERSION} does not match catalog ${CATALOG_VERSION}" >&2
-              echo "Update sources.json or release the catalog version." >&2
-              exit 1
-            fi
-          else
-            VERSION="$CATALOG_VERSION"
-          fi
-
-          if [ -z "$VERSION" ]; then
-            echo "Could not determine FFMPEG_VERSION" >&2
-            exit 1
-          fi
+          mapfile -t resolved < <(
+            CATALOG_VERSION="$CATALOG_VERSION" \
+            INPUT_VERSION="${INPUT_VERSION}" \
+            TAG_SUFFIX="${TAG_SUFFIX}" \
+            GITHUB_OUTPUT= \
+            ./scripts/resolve-release-version.sh
+          )
+          VERSION="${resolved[0]}"
+          TAG="${resolved[1]}"
+          PRERELEASE="${resolved[2]}"
+          {
+            echo "version=${VERSION}"
+            echo "tag=${TAG}"
+            echo "prerelease=${PRERELEASE}"
+          } >> "$GITHUB_OUTPUT"
 
           MAKE_LATEST=false
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            if [ "${{ github.event.inputs.update_latest }}" = "true" ]; then
-              MAKE_LATEST=true
-            fi
+          if [ "$PRERELEASE" = true ]; then
+            MAKE_LATEST=false
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            [ "${{ github.event.inputs.update_latest }}" = "true" ] && MAKE_LATEST=true
           elif [ "$(go run -C tools/catalog . read release.mark_github_latest)" = "true" ]; then
             MAKE_LATEST=true
           fi
-
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "make_latest=${MAKE_LATEST}" >> "$GITHUB_OUTPUT"
-          echo "Building version ${VERSION} from ${{ github.ref_name }} (make_latest=${MAKE_LATEST})"
-
+          echo "Resolved FFmpeg version=${VERSION} publish tag=${TAG} prerelease=${PRERELEASE} make_latest=${MAKE_LATEST}"
           go run -C tools/catalog . validate
 
-  build-amd64:
-    name: Build amd64 (Linux + Windows)
+  build:
+    name: Build (${{ matrix.arch }})
     needs: resolve-version
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 360
+    # Fail-fast matrix: the first failing leg cancels the others.
+    # GitHub Actions only supports fail-fast across matrix legs.
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+          - arch: gpu
+            runner: ubuntu-latest
+            platform: linux/amd64
     env:
-      # Single version for tags, source fetch, Docker build-args, and GitHub release.
       FFMPEG_VERSION: ${{ needs.resolve-version.outputs.version }}
-      TAG: ${{ needs.resolve-version.outputs.version }}
-      PLATFORM: linux/amd64
-      FULL_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-amd64
-      DECODE_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-decode-amd64
+      TAG: ${{ needs.resolve-version.outputs.tag }}
+      PLATFORM: ${{ matrix.platform }}
+      FULL_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.tag }}-${{ matrix.arch }}
+      DECODE_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.tag }}-decode-${{ matrix.arch }}
+      GPU_IMAGE: docker.io/gtstef/ffmpeg-gpu:${{ needs.resolve-version.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -105,229 +123,165 @@ jobs:
       - name: Fetch sources
         run: make fetch-sources DECODE_ONLY=false
 
+      - name: Set up Docker Buildx
+        if: matrix.arch == 'gpu'
+        uses: docker/setup-buildx-action@v3
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # --- Linux amd64 components (full) ---
+      - name: Build GPU image (amd64 only)
+        if: matrix.arch == 'gpu'
+        run: docker buildx build --platform linux/amd64 -f docker/dockerfile.gpu -t "$GPU_IMAGE" --load .
+
+      - name: Smoke check
+        if: matrix.arch == 'gpu'
+        run: ./scripts/check-gpu.sh "$GPU_IMAGE"
+
+      - name: Push GPU image
+        if: matrix.arch == 'gpu'
+        run: docker push "$GPU_IMAGE"
 
       - name: Build base
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=base DECODE_ONLY=false
 
       - name: Build graphics
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=graphics DECODE_ONLY=false
 
       - name: Build av1
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=av1 DECODE_ONLY=false
 
       - name: Build x264-x265
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=x264-x265 DECODE_ONLY=false
 
       - name: Build modern-codecs
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=modern-codecs DECODE_ONLY=false
 
       - name: Build vpx-avs
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=vpx-avs DECODE_ONLY=false
 
       - name: Build image-formats
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=image-formats DECODE_ONLY=false
 
       - name: Build audio
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=audio DECODE_ONLY=false
 
       - name: Build vaapi
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=vaapi DECODE_ONLY=false
 
       - name: Build processing
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=processing DECODE_ONLY=false
 
-      # --- Final releases (full) ---
-
       - name: Build final release linux amd64
+        if: matrix.arch == 'amd64'
+        run: make ci-build-component COMPONENT=final DECODE_ONLY=false CI_FINAL_IMAGE=${{ env.FULL_IMAGE }}
+
+      - name: Build final release linux arm64
+        if: matrix.arch == 'arm64'
         run: make ci-build-component COMPONENT=final DECODE_ONLY=false CI_FINAL_IMAGE=${{ env.FULL_IMAGE }}
 
       - name: Build windows components
+        if: matrix.arch == 'amd64'
         run: make ci-build-component COMPONENT=windows-components DECODE_ONLY=false
 
       - name: Build final release windows
+        if: matrix.arch == 'amd64'
         run: make ci-build-component COMPONENT=windows DECODE_ONLY=false
 
       - name: Package Windows (full)
-        run: make ci-package-windows-release TAG=${{ needs.resolve-version.outputs.version }}
-
-      # --- Linux amd64 components (decode) ---
+        if: matrix.arch == 'amd64'
+        run: make ci-package-windows-release TAG=${{ needs.resolve-version.outputs.tag }}
 
       - name: Build base (decode)
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=base DECODE_ONLY=true
 
       - name: Build graphics (decode)
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=graphics DECODE_ONLY=true
 
       - name: Build av1 (decode)
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=av1 DECODE_ONLY=true
 
       - name: Build x264-x265 (decode)
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=x264-x265 DECODE_ONLY=true
 
       - name: Build modern-codecs (decode)
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=modern-codecs DECODE_ONLY=true
 
       - name: Build vpx-avs (decode)
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=vpx-avs DECODE_ONLY=true
 
       - name: Build image-formats (decode)
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=image-formats DECODE_ONLY=true
 
       - name: Build audio (decode)
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=audio DECODE_ONLY=true
 
       - name: Build vaapi (decode)
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=vaapi DECODE_ONLY=true
 
       - name: Build processing (decode)
+        if: matrix.arch != 'gpu'
         run: make ci-build-component COMPONENT=processing DECODE_ONLY=true
 
-      # --- Final releases (decode) ---
-
       - name: Build final release linux amd64 (decode)
+        if: matrix.arch == 'amd64'
+        run: make ci-build-component COMPONENT=final DECODE_ONLY=true CI_FINAL_IMAGE=${{ env.DECODE_IMAGE }}
+
+      - name: Build final release linux arm64 (decode)
+        if: matrix.arch == 'arm64'
         run: make ci-build-component COMPONENT=final DECODE_ONLY=true CI_FINAL_IMAGE=${{ env.DECODE_IMAGE }}
 
       - name: Build windows components (decode)
+        if: matrix.arch == 'amd64'
         run: make ci-build-component COMPONENT=windows-components DECODE_ONLY=true
 
       - name: Build final release windows (decode)
+        if: matrix.arch == 'amd64'
         run: make ci-build-component COMPONENT=windows DECODE_ONLY=true
 
       - name: Package Windows (decode)
-        run: make ci-package-windows-release-decode TAG=${{ needs.resolve-version.outputs.version }}
+        if: matrix.arch == 'amd64'
+        run: make ci-package-windows-release-decode TAG=${{ needs.resolve-version.outputs.tag }}
 
       - name: Upload Windows release artifacts
+        if: matrix.arch == 'amd64'
         uses: actions/upload-artifact@v4
         with:
           name: windows-release-artifacts
           path: release-artifacts/*-windows-*.zip
           retention-days: 7
-
-  build-arm64:
-    name: Build arm64 (Linux)
-    needs: resolve-version
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 360
-    env:
-      FFMPEG_VERSION: ${{ needs.resolve-version.outputs.version }}
-      TAG: ${{ needs.resolve-version.outputs.version }}
-      PLATFORM: linux/arm64
-      FULL_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-arm64
-      DECODE_IMAGE: docker.io/gtstef/ffmpeg:${{ needs.resolve-version.outputs.version }}-decode-arm64
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: tools/catalog/go.mod
-
-      - name: Verify release version
-        run: |
-          echo "FFMPEG_VERSION=${FFMPEG_VERSION}"
-          test -n "${FFMPEG_VERSION}"
-
-      - name: Fetch sources
-        run: make fetch-sources DECODE_ONLY=false
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # --- Linux arm64 components (full) ---
-
-      - name: Build base
-        run: make ci-build-component COMPONENT=base DECODE_ONLY=false
-
-      - name: Build graphics
-        run: make ci-build-component COMPONENT=graphics DECODE_ONLY=false
-
-      - name: Build av1
-        run: make ci-build-component COMPONENT=av1 DECODE_ONLY=false
-
-      - name: Build x264-x265
-        run: make ci-build-component COMPONENT=x264-x265 DECODE_ONLY=false
-
-      - name: Build modern-codecs
-        run: make ci-build-component COMPONENT=modern-codecs DECODE_ONLY=false
-
-      - name: Build vpx-avs
-        run: make ci-build-component COMPONENT=vpx-avs DECODE_ONLY=false
-
-      - name: Build image-formats
-        run: make ci-build-component COMPONENT=image-formats DECODE_ONLY=false
-
-      - name: Build audio
-        run: make ci-build-component COMPONENT=audio DECODE_ONLY=false
-
-      - name: Build vaapi
-        run: make ci-build-component COMPONENT=vaapi DECODE_ONLY=false
-
-      - name: Build processing
-        run: make ci-build-component COMPONENT=processing DECODE_ONLY=false
-
-      # --- Final release (full) ---
-
-      - name: Build final release linux arm64
-        run: make ci-build-component COMPONENT=final DECODE_ONLY=false CI_FINAL_IMAGE=${{ env.FULL_IMAGE }}
-
-      # --- Linux arm64 components (decode) ---
-
-      - name: Build base (decode)
-        run: make ci-build-component COMPONENT=base DECODE_ONLY=true
-
-      - name: Build graphics (decode)
-        run: make ci-build-component COMPONENT=graphics DECODE_ONLY=true
-
-      - name: Build av1 (decode)
-        run: make ci-build-component COMPONENT=av1 DECODE_ONLY=true
-
-      - name: Build x264-x265 (decode)
-        run: make ci-build-component COMPONENT=x264-x265 DECODE_ONLY=true
-
-      - name: Build modern-codecs (decode)
-        run: make ci-build-component COMPONENT=modern-codecs DECODE_ONLY=true
-
-      - name: Build vpx-avs (decode)
-        run: make ci-build-component COMPONENT=vpx-avs DECODE_ONLY=true
-
-      - name: Build image-formats (decode)
-        run: make ci-build-component COMPONENT=image-formats DECODE_ONLY=true
-
-      - name: Build audio (decode)
-        run: make ci-build-component COMPONENT=audio DECODE_ONLY=true
-
-      - name: Build vaapi (decode)
-        run: make ci-build-component COMPONENT=vaapi DECODE_ONLY=true
-
-      - name: Build processing (decode)
-        run: make ci-build-component COMPONENT=processing DECODE_ONLY=true
-
-      # --- Final release (decode) ---
-
-      - name: Build final release linux arm64 (decode)
-        run: make ci-build-component COMPONENT=final DECODE_ONLY=true CI_FINAL_IMAGE=${{ env.DECODE_IMAGE }}
-
   release:
     name: Merge manifests and publish release
-    needs: [resolve-version, build-amd64, build-arm64]
+    needs: [resolve-version, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
     env:
       FFMPEG_VERSION: ${{ needs.resolve-version.outputs.version }}
-      TAG: ${{ needs.resolve-version.outputs.version }}
+      TAG: ${{ needs.resolve-version.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -361,8 +315,13 @@ jobs:
           publish_tag() {
             tag="$1"
             platform="$2"
-            src="${REGISTRY}/${IMAGE_NAME}:${tag}"
-            dest="${GHCR_IMAGE}:${tag}"
+            image_name="${3:-${IMAGE_NAME}}"
+            src="${REGISTRY}/${image_name}:${tag}"
+            if [ "${image_name}" = "${IMAGE_NAME}" ]; then
+              dest="${GHCR_IMAGE}:${tag}"
+            else
+              dest="ghcr.io/$(echo "${GITHUB_REPOSITORY}" | cut -d/ -f1 | tr '[:upper:]' '[:lower:]')/${image_name}:${tag}"
+            fi
             echo "Publishing ${src} -> ${dest}"
             docker buildx imagetools create -t "${dest}" "${src}"
             inspect="$(docker buildx imagetools inspect "${dest}")"
@@ -376,12 +335,14 @@ jobs:
           publish_tag "${TAG}-arm64" linux/arm64
           publish_tag "${TAG}-decode-amd64" linux/amd64
           publish_tag "${TAG}-decode-arm64" linux/arm64
+          # GPU image is in its own repo (ffmpeg-gpu), single-arch (linux/amd64); copy its tag as-is.
+          publish_tag "${TAG}" linux/amd64 ffmpeg-gpu
 
       - name: Merge multi-arch manifests
         run: |
           # Per-arch tags (-amd64 / -arm64) are staging only; merge-manifest removes them after publish.
-          make ci-merge-manifest TAG=${{ needs.resolve-version.outputs.version }}
-          make ci-merge-manifest-decode TAG=${{ needs.resolve-version.outputs.version }}
+          make ci-merge-manifest TAG=${{ needs.resolve-version.outputs.tag }}
+          make ci-merge-manifest-decode TAG=${{ needs.resolve-version.outputs.tag }}
 
       - name: Publish multi-arch images to GHCR
         run: |
@@ -407,8 +368,8 @@ jobs:
 
       - name: Package Linux release binaries
         run: |
-          make ci-package-release TAG=${{ needs.resolve-version.outputs.version }}
-          make ci-package-release-decode TAG=${{ needs.resolve-version.outputs.version }}
+          make ci-package-release TAG=${{ needs.resolve-version.outputs.tag }}
+          make ci-package-release-decode TAG=${{ needs.resolve-version.outputs.tag }}
 
       - name: Download Windows release artifacts
         uses: actions/download-artifact@v4
@@ -422,10 +383,11 @@ jobs:
       - name: Create or update GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.resolve-version.outputs.version }}
-          name: FFmpeg ${{ needs.resolve-version.outputs.version }}
+          tag_name: v${{ needs.resolve-version.outputs.tag }}
+          name: FFmpeg ${{ needs.resolve-version.outputs.tag }}
           body_path: release-notes.md
           generate_release_notes: false
+          prerelease: ${{ needs.resolve-version.outputs.prerelease == 'true' }}
           make_latest: ${{ needs.resolve-version.outputs.make_latest == 'true' }}
           files: |
             release-artifacts/*-linux-*.tar.gz

@@ -109,9 +109,26 @@ eval_fetch_gate() {
 
 # Same gate names as releaseGateInDecode() in gates.go (DECODE_ONLY=true).
 
+# SVT-AV1 3.0 changed svt_av1_enc_init_handle() from 3 args
+# (handle, app-data, config) to 2 args (handle, config). Older FFmpeg
+# calls the 3-arg form unconditionally and needs the sed below when
+# building against SVT-AV1 >= 3.0.
+# FFmpeg 9.0.2 already handles this itself with an upstream guard:
+#   #if SVT_AV1_CHECK_VERSION(3, 0, 0)
+#       ... 2-arg call ...
+#   #else
+#       ... 3-arg call ...   <- line 496 in 9.0.2
+#   #endif
+# The sed must NOT run on a guarded file: it rewrites the #else
+# fallback too, so a build against SVT-AV1 < 3.0 (Debian trixie ships
+# libsvtav1enc-dev 2.3.0) then compiles the 2-arg call against the
+# 3-arg header and fails with "too few arguments to function
+# 'svt_av1_enc_init_handle'" at libsvtav1.c:496. Skip the patch when
+# the guard is present; upstream already does the right thing.
 needs_svtav1_api_patch() {
   [ -f libavcodec/libsvtav1.c ] && \
-    grep -q 'svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc,' libavcodec/libsvtav1.c
+    grep -q 'svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc,' libavcodec/libsvtav1.c && \
+    ! grep -Eq 'SVT_AV1_CHECK_VERSION\(3, *0, *0\)' libavcodec/libsvtav1.c
 }
 
 apply_svtav1_api_patch() {
@@ -199,8 +216,8 @@ build_ffmpeg_configure_flags() {
   fi
 }
 
-# Populate BASE_FLAGS and FEATURES for Track G (Debian GPU) FFmpeg configure.
-# x86_64-only dynamic build: full codec parity with Track S static
+# Populate BASE_FLAGS and FEATURES for Debian GPU FFmpeg configure.
+# x86_64-only dynamic build: full codec parity with the static build
 # (same BASE/FEATURE lists as build_ffmpeg_configure_flags() when
 # decode_only=false) PLUS hardware acceleration. Must NOT emit
 # --enable-static / --disable-shared / --enable-shared (dynamic GPU glue
@@ -216,7 +233,7 @@ build_gpu_configure_flags() {
 
   append_if_supported "$configure" BASE_FLAGS "--disable-doc"
 
-  # Same base list as Track S (filters, subtitles, images, color).
+  # Same base list as the static build (filters, subtitles, images, color).
   local base_flag
   for base_flag in \
     --enable-libzimg \
@@ -235,7 +252,7 @@ build_gpu_configure_flags() {
     append_if_supported "$configure" BASE_FLAGS "$base_flag"
   done
 
-  # Full-parity conditional features (same gates as Track S).
+  # Full-parity conditional features (same gates as the static build).
   if needs_libvpx "$ffmpeg_version" "$decode_only" && [ "$(uname -m)" != "armv7l" ]; then
     append_if_supported "$configure" FEATURES "--enable-libvpx"
   fi
@@ -252,7 +269,7 @@ build_gpu_configure_flags() {
     append_if_supported "$configure" FEATURES "--enable-libwebp"
   fi
 
-  # Full-parity encode features (identical list to Track S; Track G is
+  # Full-parity encode features (identical list to the static build; the GPU image is
   # full-only, so decode_only=true simply skips the same set).
   if [ "$decode_only" != "true" ]; then
     local encode_flag
@@ -276,8 +293,8 @@ build_gpu_configure_flags() {
     done
   fi
 
-  # GPU hwaccels (Track G only). libvpl is version-gated; the rest use
-  # append_if_supported() like Track S. Autodetect features
+  # GPU hwaccels. libvpl is version-gated; the rest use
+  # append_if_supported() like the static build. Autodetect features
   # (--enable-vaapi, --enable-vulkan, --enable-ffnvcodec, ...) do not
   # always appear in configure --help text, but autodetect keeps them
   # on when the Debian -dev packages are installed.
