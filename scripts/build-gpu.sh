@@ -21,7 +21,6 @@ fi
 source "${SCRIPT_DIR}/version-gates.sh"
 
 # shellcheck disable=SC1091
-: "${FFMPEG_VERSION:=9.0.2}"
 if [ -z "${FFMPEG_VERSION:-}" ]; then
   FFMPEG_VERSION="$(go run -C tools/catalog . read release.ffmpeg_version)"
 fi

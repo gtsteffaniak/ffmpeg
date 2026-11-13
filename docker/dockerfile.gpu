@@ -2,7 +2,8 @@
 # Track G — Debian GPU FFmpeg (x86_64 only).
 #
 # Mostly-static codecs + dynamically-linked GPU glue (libva, libvpl,
-# libvulkan, OpenCL, NVIDIA ffnvcodec headers shipped by FFmpeg itself),
+# libvulkan, OpenCL, NVIDIA headers from nv-codec-headers, AMD headers
+# from the AMF SDK,
 # published as gtstef/ffmpeg:<ver>-gpu. Additive only: the Alpine static
 # track (Track S) in docker/dockerfile.* is untouched.
 #
@@ -16,8 +17,11 @@
 # fallback if Trixie blocks the build (package lists below are
 # Trixie names; the bookworm names differ for a few SONAME packages,
 # see README "Trixie package notes").
-# NVENC/NVDEC/AMF need no extra apt headers — FFmpeg 9 bundles
-# ffnvcodec/AMF headers.
+# NVENC/NVDEC/AMF headers are installed below from nv-codec-headers
+# (FFmpeg/nv-codec-headers, provides ffnvcodec.pc) and the AMD AMF SDK
+# (GPUOpen-LibrariesAndSDKs/AMF, AMF/core/Version.h). FFmpeg 9 does not
+# ship them; its configure requires the external ffnvcodec pkg-config
+# package (>= 12.1.14.0) and AMF headers (>= AMF 1.5.0.2.0.0).
 
 ARG DEBIAN_VERSION=trixie
 
@@ -105,6 +109,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libgl-dev \
   && rm -rf /var/lib/apt/lists/*
 
+# --- NVIDIA (NVENC/NVDEC/CUDA) + AMD AMF headers ----------------------
+# FFmpeg 9.0.2 configure checks:
+#   check_pkg_config ffnvcodec "ffnvcodec >= 12.1.14.0" ... plus
+#   check_type "ffnvcodec/nvEncodeAPI.h" / dynlink headers, and
+#   check_cpp_condition amf "AMF/core/Version.h" version >= 0x1000500020000
+# Neither ships with the FFmpeg tarball. Install both header-only SDKs
+# before configure:
+#   nv-codec-headers n13.1.15.0 — headers + ffnvcodec.pc (make install)
+#   AMF v1.5.3 — AMF/core/Version.h (1.5.3.0 >= 1.5.0.2.0.0) copied to
+#                /usr/local/include/AMF/{core,components,...}
+# Runtime CUDA/NV driver libs stay on the host (NVIDIA container
+# toolkit); these header-only installs add no runtime dependency.
+RUN git clone --depth 1 --branch n13.1.15.0 https://github.com/FFmpeg/nv-codec-headers /tmp/nv-codec-headers \
+  && make -C /tmp/nv-codec-headers install PREFIX=/usr/local \
+  && git clone --depth 1 --branch v1.5.3 https://github.com/GPUOpen-LibrariesAndSDKs/AMF /tmp/AMF \
+  && install -d /usr/local/include/AMF \
+  && cp -r /tmp/AMF/amf/public/include/* /usr/local/include/AMF/ \
+  && test -f /usr/local/include/AMF/core/Version.h \
+  && test -f /usr/local/lib/pkgconfig/ffnvcodec.pc
+
 # libvmaf: still not packaged in Trixie (verified: packages.debian.org
 # search "vmaf" in trixie returns no results; Package index has no
 # libvmaf*). Build it from the existing src/* tarball when present
@@ -122,8 +146,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # scale_vulkan_filter_deps="vulkan spirv_compiler swscale" in FFmpeg 9.
 # Revisit when Debian ships >= 7.351.
 COPY [ "src/vmaf-*", "./vmaf" ]
-RUN if [ -f vmaf/meson.build ]; then \
-  cd vmaf && \
+RUN if [ -f vmaf/libvmaf/meson.build ]; then \
+  cd vmaf/libvmaf && \
   meson setup build \
     -Dbuildtype=release \
     -Ddefault_library=static \
@@ -135,6 +159,74 @@ RUN if [ -f vmaf/meson.build ]; then \
     && sed -i 's/-lvmaf /-lvmaf -lstdc++ /' /usr/local/lib/pkgconfig/libvmaf.pc \
     && ldd /usr/local/lib/libvmaf.a >/dev/null 2>&1 || true; \
   fi
+
+# --- Modern-codec source builds (full parity with Track S) -------------
+# Trixie ships NO libxeve/libxevd/libvvenc/libdavs2/libuavs3d -dev
+# packages (verified: trixie main index has no such Package: entries),
+# but build_gpu_configure_flags() emits --enable-libxeve/-libxevd/
+# -libvvenc/-libdavs2/-libuavs3d, and FFmpeg 9 configure then requires
+# their pkg-config metadata — without these builds configure fails.
+# Build them from the same fetch-sources tarballs Track S uses
+# (docker/dockerfile.modern-codecs + docker/dockerfile.codecs),
+# static into /usr/local like the other codecs. fetch-sources has
+# already populated src/ (build-gpu.sh / gpu.yml run it first).
+
+COPY [ "src/xeve-*", "./xeve" ]
+RUN cd xeve && \
+  sed -i 's/mc_filter_bilin/xevem_mc_filter_bilin/' src_main/sse/xevem_mc_sse.c && \
+  mkdir build && cd build && \
+  cmake \
+    -G"Unix Makefiles" \
+    -DARM="FALSE" \
+    -DCMAKE_BUILD_TYPE=Release \
+    .. && \
+  make -j$(nproc) install && \
+  ln -s /usr/local/lib/xeve/libxeve.a /usr/local/lib/libxeve.a 2>/dev/null || true
+
+COPY [ "src/xevd-*", "./xevd" ]
+RUN cd xevd && \
+  sed -i 's/mc_filter_bilin/xevdm_mc_filter_bilin/' src_main/sse/xevdm_mc_sse.c && \
+  mkdir build && cd build && \
+  cmake \
+    -G"Unix Makefiles" \
+    -DARM="FALSE" \
+    -DCMAKE_BUILD_TYPE=Release \
+    .. && \
+  make -j$(nproc) install && \
+  ln -s /usr/local/lib/xevd/libxevd.a /usr/local/lib/libxevd.a 2>/dev/null || true
+
+COPY [ "src/vvenc-*", "./vvenc" ]
+RUN cd vvenc && \
+  sed -i 's/-Werror;//' source/Lib/vvenc/CMakeLists.txt && \
+  cmake \
+    -S . \
+    -B build/release-static \
+    -DVVENC_ENABLE_WERROR=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr/local && \
+  cmake --build build/release-static -j && \
+  cmake --build build/release-static --target install
+
+COPY [ "src/davs2-*", "./davs2" ]
+RUN cd davs2/build/linux && \
+  ./configure \
+    --disable-asm \
+    --enable-pic \
+    --enable-strip \
+    --disable-cli && \
+  make -j$(nproc) install
+
+COPY [ "src/uavs3d-*", "./uavs3d" ]
+RUN cd uavs3d && \
+  sed -i '/armv7\.c/d' source/CMakeLists.txt 2>/dev/null || true; \
+  mkdir -p build/linux && cd build/linux && \
+  cmake \
+    -G"Unix Makefiles" \
+    -DCMAKE_VERBOSE_MAKEFILE=ON \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=OFF \
+    ../.. && \
+  make -j$(nproc) install
 
 ARG FFMPEG_VERSION=9.0.2
 

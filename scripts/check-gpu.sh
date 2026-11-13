@@ -7,7 +7,8 @@
 #
 # Runs against `docker run --rm <image>` (also works with a local
 # binary if FFMPEG_BIN is set). Asserts, per brief:
-#   ldd shows libva.so / libvpl.so / libvulkan.so
+#   ldd shows libva.so / libvpl.so (Vulkan is dlopen'd by FFmpeg 9,
+#   so its loader presence is checked separately, not via ldd)
 #   ffmpeg -hwaccels lists vaapi, cuda, vulkan (opencl where present)
 #   ffmpeg -encoders lists h264_nvenc, h264_vaapi
 #   ffmpeg -filters lists scale_vulkan, scale_vaapi
@@ -15,7 +16,7 @@
 # are manual and documented in README.md — CI runners have no GPU.
 set -euo pipefail
 
-: "${IMAGE:=gtstef/ffmpeg:9.0.2-gpu}"
+IMAGE="${1:-${IMAGE:-gtstef/ffmpeg:9.0.2-gpu}}"
 : "${FFMPEG_BIN:=}"
 
 fail() {
@@ -41,7 +42,9 @@ run_ldd() {
   fi
 }
 
-command -v docker >/dev/null 2>&1 || { echo "docker required for check-gpu.sh" >&2; exit 1; }
+if [ -z "$FFMPEG_BIN" ]; then
+  command -v docker >/dev/null 2>&1 || { echo "docker required for check-gpu.sh (or set FFMPEG_BIN to a local binary)" >&2; exit 1; }
+fi
 
 echo "== Track G smoke: $IMAGE =="
 
@@ -49,10 +52,24 @@ run_cmd -version | head -3 || fail "ffmpeg -version failed"
 ok "ffmpeg -version"
 
 ldd_out="$(run_ldd)" || fail "ldd failed"
-for lib in libva.so libvpl.so libvulkan.so; do
+# FFmpeg 9 loads libvulkan.so.1 with dlopen unless CONFIG_VULKAN_STATIC
+# (this image does not enable static Vulkan), so there is no ELF NEEDED
+# entry for it — require libva/libvpl here and check the Vulkan loader
+# separately below.
+for lib in libva.so libvpl.so; do
   echo "$ldd_out" | grep -q "$lib" || fail "ldd missing $lib"
 done
-ok "ldd shows libva/libvpl/libvulkan"
+ok "ldd shows libva/libvpl"
+if [ -n "$FFMPEG_BIN" ]; then
+  if command -v ldconfig >/dev/null 2>&1; then
+    ldconfig -p | grep -q 'libvulkan\.so\.1' || fail "Vulkan loader libvulkan.so.1 not found (ldconfig -p)"
+  else
+    echo "NOTE: ldconfig not found; skipping Vulkan loader check for local binary"
+  fi
+else
+  docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'ldconfig -p | grep -q libvulkan' || fail "Vulkan loader libvulkan.so.1 missing in image"
+fi
+ok "Vulkan loader present (dlopen path)"
 
 hw="$(run_cmd -hide_banner -hwaccels)" || fail "-hwaccels failed"
 echo "$hw" | grep -q vaapi || fail "-hwaccels missing vaapi"

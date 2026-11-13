@@ -595,7 +595,7 @@ The static track keeps working untouched.
 | Track | Image | Base | Link model | Platforms | Published by |
 |---|---|---|---|---|---|
 | Track S (static) | `ffmpeg` | Alpine (scratch runtime) | `--enable-static`, no GPU shared libs | linux/amd64, linux/arm64 | `.github/workflows/release.yml` (push + dispatch) |
-| Track G (GPU, x86_64 only) | `ffmpeg` with `-gpu` tag | Debian 13 Trixie builder → `trixie-slim` runtime | Mostly-static codecs + dynamic GPU glue (`libva`, `libvpl`, `libvulkan`, OpenCL, NVIDIA headers bundled by FFmpeg) | linux/amd64 only | `.github/workflows/gpu.yml` (`workflow_dispatch` only) |
+| Track G (GPU, x86_64 only) | `ffmpeg` with `-gpu` tag | Debian 13 Trixie builder → `trixie-slim` runtime | Mostly-static codecs + dynamic GPU glue (`libva`, `libvpl`, `libvulkan`, OpenCL, NVIDIA headers from `nv-codec-headers`, AMD headers from the AMF SDK) | linux/amd64 only | `.github/workflows/gpu.yml` (`workflow_dispatch` only) |
 
 ### Tags
 
@@ -627,7 +627,8 @@ logic as `release.yml`).
 
 ### Smoke checks
 
-`scripts/check-gpu.sh` asserts ldd shows `libva.so`/`libvpl.so`/`libvulkan.so`,
+`scripts/check-gpu.sh` asserts ldd shows `libva.so`/`libvpl.so` (Vulkan is
+`dlopen`'d by FFmpeg 9, so its loader is checked separately),
 `ffmpeg -hwaccels` contains `vaapi`/`cuda`/`vulkan`, `-encoders` contains
 `h264_nvenc`/`h264_vaapi`/`h264_vulkan`/`libx264`, and `-filters` contains
 `scale_vulkan`/`scale_vaapi`. Run it after a local build:
@@ -644,14 +645,15 @@ manual:
 # Intel/AMD VAAPI (need /dev/dri on host)
 docker run --rm --device=/dev/dri/renderD128 gtstef/ffmpeg:9.0.2-gpu \
   -vaapi_device /dev/dri/renderD128 -f lavfi -i testsrc=size=640x480:rate=1 \
-  -c:v h264_vaapi -t 1 -f null -
+  -vf 'format=nv12,hwupload' -c:v h264_vaapi -t 1 -f null -
 
 # NVIDIA NVENC (need NVIDIA toolkit on host)
 docker run --rm --gpus all gtstef/ffmpeg:9.0.2-gpu \
   -f lavfi -i testsrc=size=640x480:rate=1 -c:v h264_nvenc -t 1 -f null -
 
 # Vulkan (need /dev/dri)
-docker run --rm gtstef/ffmpeg:9.0.2-gpu \
+docker run --rm --device=/dev/dri/renderD128 gtstef/ffmpeg:9.0.2-gpu \
+  -init_hw_device vulkan=vk:0 -filter_hw_device vk \
   -f lavfi -i testsrc=size=640x480:rate=1 -vf format=nv12,hwupload -c:v h264_vulkan -t 1 -f null -
 ```
 
