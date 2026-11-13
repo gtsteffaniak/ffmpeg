@@ -27,9 +27,11 @@ env:
 jobs:
   build-gpu:
     name: Build + push GPU image (linux/amd64 only)
-    # NOTE (Bookworm Mesa limitation): Bookworm ships Mesa 22.3, which is old
-    # for newest Intel Arc / Arrow Lake iGPUs. Documented limitation for v1;
-    # follow-up is a trixie base bump. No arm64 build is offered here.
+    # Base is Debian 13 Trixie (docker/dockerfile.gpu ARG DEBIAN_VERSION,
+    # default trixie): Mesa 25.0, libva 2.22, intel-media-va-driver 25.2,
+    # libvpl 2.14, Vulkan headers 1.4.309 — current Arc / Arrow Lake /
+    # AMD iGPU support. Pass DEBIAN_VERSION=bookworm to the image build
+    # as a fallback if Trixie blocks. No arm64 build is offered here.
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:

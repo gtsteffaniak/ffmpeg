@@ -595,7 +595,7 @@ The static track keeps working untouched.
 | Track | Image | Base | Link model | Platforms | Published by |
 |---|---|---|---|---|---|
 | Track S (static) | `ffmpeg` | Alpine (scratch runtime) | `--enable-static`, no GPU shared libs | linux/amd64, linux/arm64 | `.github/workflows/release.yml` (push + dispatch) |
-| Track G (GPU, x86_64 only) | `ffmpeg` with `-gpu` tag | Debian Bookworm builder → `bookworm-slim` runtime | Mostly-static codecs + dynamic GPU glue (`libva`, `libvpl`, `libvulkan`, OpenCL, NVIDIA headers bundled by FFmpeg) | linux/amd64 only | `.github/workflows/gpu.yml` (`workflow_dispatch` only) |
+| Track G (GPU, x86_64 only) | `ffmpeg` with `-gpu` tag | Debian 13 Trixie builder → `trixie-slim` runtime | Mostly-static codecs + dynamic GPU glue (`libva`, `libvpl`, `libvulkan`, OpenCL, NVIDIA headers bundled by FFmpeg) | linux/amd64 only | `.github/workflows/gpu.yml` (`workflow_dispatch` only) |
 
 ### Tags
 
@@ -697,17 +697,51 @@ services:
 
 ### Size
 
-Track G runtime is `debian:bookworm-slim` + GPU userspace + codec shared
-libs. The builder (`FROM debian:bookworm`) is discarded.
+Track G runtime is `debian:trixie-slim` + GPU userspace + codec shared
+libs. The builder (`FROM debian:trixie`) is discarded.
 
 | Image | Runtime base | Size (after first build) | Notes |
 |---|---|---|---|
-| `ffmpeg:<ver>-gpu` | `debian:bookworm-slim` | ~600–900 MB (estimate — fill from `docker images` after first CI build) | Includes mesa/va drivers + codec shared libs; builder discarded |
+| `ffmpeg:<ver>-gpu` | `debian:trixie-slim` | ~600–900 MB (estimate — fill from `docker images` after first CI build) | Includes mesa/va drivers + codec shared libs; builder discarded |
 | `ffmpeg:<ver>` (Track S) | scratch | ~30–70 MB (see `make info` / `docker images`) | Static, no drivers |
 
 After the first CI build, record the real size from `docker images
-gtstef/ffmpeg:<version>-gpu` here. The Bookworm Mesa (22.3) limitation is
-tracked as a follow-up trixie bump (see `.github/workflows/gpu.yml`).
+gtstef/ffmpeg:<version>-gpu` here.
+
+### Debian base: Trixie
+
+Track G is based on Debian 13 Trixie (stable since 2025-08), selected via
+`ARG DEBIAN_VERSION=trixie` in `docker/dockerfile.gpu` (pass
+`--build-arg DEBIAN_VERSION=bookworm` to test the old base as a fallback).
+Trixie ships Mesa 25.0.7, libva 2.22.0, intel-media-va-driver 25.2.3,
+libvpl 2.14.0 and Vulkan headers 1.4.309, which FFmpeg 9.0's configure
+accepts for Vulkan (`vulkan >= 1.3.277`; the stricter optional
+`vulkan_1_4 >= 1.4.317` feature stays off — it does not affect
+`scale_vulkan` / `h264_vulkan`). Bookworm's Mesa 22.3 / Vulkan 1.3.239
+failed that Vulkan floor outright.
+
+#### Trixie package notes
+
+Package names were re-validated against the Trixie main Packages index
+(not a blind `FROM` swap). Renames vs Bookworm:
+
+- Builder: `libsvtav1-dev` → `libsvtav1enc-dev` (SVT-AV1 2.3);
+  `libva-drm-dev` dropped — it never existed in Bookworm or Trixie,
+  `libva-dev` ships `va/va_drm.h`. All other `-dev` names unchanged.
+- Runtime: `libmfx1` → `libmfx-gen1.2` (Intel VPL GPU Runtime);
+  `libvpx7` → `libvpx9`; `libsvtav1enc1` → `libsvtav1enc2`
+  (`libsvtav1dec1` dropped — SVT-AV1 2.x merges enc/dec);
+  `librav1e0` → `librav1e0.7`; `libx265-199` → `libx265-215`;
+  `libjxl0.7` → `libjxl0.11`; `libpng16-16` → `libpng16-16t64`
+  (time64 transition). `libdav1d7` is unchanged — and now correct
+  (Bookworm's runtime was `libdav1d6`). GPU-glue SONAMEs
+  (`libva.so.2`, `libvpl.so.2`, `libvulkan.so.1`) are unchanged,
+  so `scripts/check-gpu.sh` expectations hold as-is.
+
+`libvmaf` is still not packaged in Trixie (no `libvmaf*` in the Trixie
+index), so it is still built from `src/vmaf-*` (3.2.1 ≥ FFmpeg 9's
+`>= 2.0.0`). `libplacebo` is still skipped: Trixie ships 7.349.0,
+FFmpeg 9.0 requires `>= 7.351.0` — revisit when Debian passes 7.351.
 
 ### Configure flags (Track G)
 
@@ -720,10 +754,11 @@ same `append_if_supported()` / `needs_*()` helpers. It never emits
 `scripts/test-version-gates.sh` cover GPU flags plus codec parity
 (x264, x265, SVT-AV1, dav1d, aom, vpx, etc.).
 
-Codec `-dev` packages come from Bookworm. `libvmaf` is **not** in Bookworm
-main (only debian-multimedia) so the builder compiles it from the existing
-`src/vmaf-*` tarball when present; `libplacebo` is intentionally not
-enabled (Bookworm version is too old for FFmpeg 9's `>=7.351` requirement).
+Codec `-dev` packages come from Trixie. `libvmaf` is **not** in Trixie
+at all (no `libvmaf*` package in the index) so the builder compiles it
+from the existing `src/vmaf-*` tarball when present; `libplacebo` is
+intentionally not enabled (Trixie ships 7.349.0, FFmpeg 9 requires
+`>= 7.351.0`).
 
 ### Verification
 
@@ -732,7 +767,7 @@ make test-version-gates   # version-gates + GPU flags (CI: ./scripts/test-versio
 ./scripts/check-gpu.sh gtstef/ffmpeg:9.0.2-gpu   # after docker build (env smoke above)
 ```
 
-If a codec is unavailable on Bookworm, the `append_if_supported()` pattern
+If a codec is unavailable on Trixie, the `append_if_supported()` pattern
 skips it instead of failing the build — mirror Track S behavior, do not
 fork the codec list.
 

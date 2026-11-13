@@ -8,17 +8,37 @@
 #
 #   docker build -f docker/dockerfile.gpu --build-arg FFMPEG_VERSION=9.0.2 -t gtstef/ffmpeg:9.0.2-gpu .
 #
-# Known limitation (Bookworm): Mesa 22.3 is old for newest Intel
-# Arc / Arrow Lake; follow-up is a trixie bump. NVENC/NVDEC/AMF need
-# no extra apt headers — FFmpeg 9 bundles ffnvcodec/AMF headers.
+# Base is Debian 13 Trixie (ARG DEBIAN_VERSION, default trixie):
+# Mesa 25.0, libva 2.22, intel-media-va-driver 25.2, libvpl 2.14,
+# Vulkan headers 1.4.309 — fresh enough for current Intel Arc /
+# Arrow Lake / AMD iGPUs. Override with e.g.
+# --build-arg DEBIAN_VERSION=bookworm to test the old base as a
+# fallback if Trixie blocks the build (package lists below are
+# Trixie names; the bookworm names differ for a few SONAME packages,
+# see README "Trixie package notes").
+# NVENC/NVDEC/AMF need no extra apt headers — FFmpeg 9 bundles
+# ffnvcodec/AMF headers.
 
-ARG DEBIAN_VERSION=bookworm
+ARG DEBIAN_VERSION=trixie
 
 FROM debian:${DEBIAN_VERSION} AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig"
 
+# Builder -dev packages, re-validated against Debian Trixie
+# (packages.debian.org / trixie main Packages index, 2026-11-13).
+# Changes vs the old Bookworm list:
+#   libva-drm-dev  DROPPED — never existed in Bookworm or Trixie;
+#                  trixie libva-dev ships va/va_drm.h + libva-drm.pc
+#                  (verified in libva-dev_2.22.0-3_amd64.deb).
+#   libsvtav1-dev -> libsvtav1enc-dev (SVT-AV1 2.3 in Trixie; the
+#                  Debian package was renamed and now Replaces:
+#                  libsvtav1-dev. Ships EbSvtAv1Enc.h + SvtAv1Enc.pc,
+#                  matching FFmpeg 9's require_pkg_config "SvtAv1Enc >= 0.9.0").
+# All other names exist unchanged in Trixie (versions bumped, e.g.
+# dav1d 1.5.1, aom 3.12.1, x265 4.1, rav1e 0.7.1, glslang 15.1,
+# Vulkan headers 1.4.309).
 RUN apt-get update && apt-get install -y --no-install-recommends \
   build-essential \
   yasm \
@@ -37,7 +57,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   ca-certificates \
   linux-libc-dev \
   libva-dev \
-  libva-drm-dev \
   libdrm-dev \
   libvulkan-dev \
   spirv-headers \
@@ -52,7 +71,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libdav1d-dev \
   libaom-dev \
   libvpx-dev \
-  libsvtav1-dev \
+  libsvtav1enc-dev \
   librav1e-dev \
   libvorbis-dev \
   libopus-dev \
@@ -86,12 +105,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libgl-dev \
   && rm -rf /var/lib/apt/lists/*
 
-# libvmaf is not in Bookworm main (only debian-multimedia). Build it
-# from the existing src/* tarball when present (same source as the
-# static track's docker/dockerfile.processing), static into /usr/local.
-# If src/vmaf-* is absent (e.g. a distro package is used instead),
+# libvmaf: still not packaged in Trixie (verified: packages.debian.org
+# search "vmaf" in trixie returns no results; Package index has no
+# libvmaf*). Build it from the existing src/* tarball when present
+# (same source as the static track's docker/dockerfile.processing),
+# static into /usr/local. FFmpeg 9 requires libvmaf >= 2.0.0; the
+# sources.json vmaf is 3.2.1. If src/vmaf-* is absent,
 # build_gpu_configure_flags() still tries --enable-libvmaf via
 # append_if_supported() and skips cleanly when the .pc file is missing.
+#
+# libplacebo: intentionally NOT enabled. Trixie ships libplacebo-dev
+# 7.349.0, but FFmpeg 9.0's configure requires
+# 'libplacebo >= 7.351.0' (require_pkg_config ... pl_vulkan_create),
+# so Trixie's version fails the check — same skip as Bookworm, for a
+# different (closer) reason. scale_vulkan does not need it:
+# scale_vulkan_filter_deps="vulkan spirv_compiler swscale" in FFmpeg 9.
+# Revisit when Debian ships >= 7.351.
 COPY [ "src/vmaf-*", "./vmaf" ]
 RUN if [ -f vmaf/meson.build ]; then \
   cd vmaf && \
@@ -134,16 +163,39 @@ RUN cd ffmpeg && \
   && ffmpeg -version | head -1 \
   && ldd /usr/local/bin/ffmpeg
 
-FROM debian:bookworm-slim AS runtime
+FROM debian:${DEBIAN_VERSION}-slim AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive \
   NVIDIA_VISIBLE_DEVICES=all \
   NVIDIA_DRIVER_CAPABILITIES=compute,utility,video,graphics \
   PATH="/usr/local/bin:$PATH"
 
-# Runtime libs: GPU userspace userspace drivers + codec shared libs
-# (Bookworm names). ldd in builder prints NEEDED entries; adjust this
-# list from that output when recording size.
+# Runtime libs: GPU userspace drivers + codec shared libs.
+# Trixie names, re-validated against the trixie main Packages index.
+# Renames vs Bookworm (SONAME bumps / Trixie t64 transition):
+#   libmfx1          REMOVED in Trixie -> libmfx-gen1.2 (Intel VPL GPU
+#                    Runtime, the oneVPL implementation backend for
+#                    Intel iGPUs; FFmpeg's --enable-libvpl links libvpl,
+#                    not legacy libmfx, so no FFmpeg binary needs it
+#                    directly, but QSV on Intel needs the impl lib)
+#   libvpx7        -> libvpx9        (libvpx 1.15)
+#   libsvtav1enc1  -> libsvtav1enc2  (SVT-AV1 2.3; enc/dec merged,
+#   libsvtav1dec1     dropped — that name never existed in Bookworm
+#                    either; 2.x ships a single libsvtav1enc2)
+#   librav1e0      -> librav1e0.7    (rav1e 0.7.1)
+#   libx265-199    -> libx265-215    (x265 4.1)
+#   libjxl0.7      -> libjxl0.11     (JPEG XL 0.11.2)
+#   libpng16-16    -> libpng16-16t64 (Trixie time64 transition)
+#   libdav1d7        unchanged — and now actually correct: Bookworm's
+#                    runtime was libdav1d6, so the old list's
+#                    libdav1d7 would have failed on Bookworm too.
+# All other names exist unchanged in Trixie (libva2, libvpl2,
+# libvulkan1, mesa-va-drivers 25.0, intel-media-va-driver 25.2,
+# libharfbuzz0b, libopenjp2-7 (.7 did NOT bump), libass9, ...).
+# ldd in builder prints NEEDED entries; adjust this list from that
+# output when recording size. SONAMEs for the GPU glue
+# (libva.so.2, libvpl.so.2, libvulkan.so.1) are unchanged, so
+# scripts/check-gpu.sh expectations hold as-is.
 RUN apt-get update && apt-get install -y --no-install-recommends \
   ca-certificates \
   tzdata \
@@ -157,16 +209,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   mesa-va-drivers \
   mesa-vulkan-drivers \
   intel-media-va-driver \
-  libmfx1 \
+  libmfx-gen1.2 \
   ocl-icd-libopencl1 \
   libdav1d7 \
   libaom3 \
-  libvpx7 \
-  libsvtav1enc1 \
-  libsvtav1dec1 \
-  librav1e0 \
+  libvpx9 \
+  libsvtav1enc2 \
+  librav1e0.7 \
   libx264-164 \
-  libx265-199 \
+  libx265-215 \
   libmp3lame0 \
   libvorbisenc2 \
   libvorbis0a \
@@ -191,9 +242,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libsrt1.5-openssl \
   librubberband2 \
   libtwolame0 \
-  libjxl0.7 \
+  libjxl0.11 \
   libgsm1 \
-  libpng16-16 \
+  libpng16-16t64 \
   libjpeg62-turbo \
   libepoxy0 \
   libgl1 \

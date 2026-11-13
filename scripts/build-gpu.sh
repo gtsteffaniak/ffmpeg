@@ -31,7 +31,7 @@ echo "Fetching sources (FFMPEG_VERSION=$FFMPEG_VERSION, DECODE_ONLY=false)..."
 make fetch-sources DECODE_ONLY=false
 
 IMAGE="${IMAGE:-docker.io/gtstef/ffmpeg:${FFMPEG_VERSION}-gpu}"
-echo "Building Track G (Debian GPU, linux/amd64) -> $IMAGE (builder discarded; runtime bookworm-slim)"
+echo "Building Track G (Debian GPU, linux/amd64) -> $IMAGE (builder discarded; runtime trixie-slim (DEBIAN_VERSION arg in dockerfile.gpu, default trixie))"
 docker build \
   -f docker/dockerfile.gpu \
   --platform linux/amd64 \
