@@ -109,9 +109,26 @@ eval_fetch_gate() {
 
 # Same gate names as releaseGateInDecode() in gates.go (DECODE_ONLY=true).
 
+# SVT-AV1 3.0 changed svt_av1_enc_init_handle() from 3 args
+# (handle, app-data, config) to 2 args (handle, config). Older FFmpeg
+# calls the 3-arg form unconditionally and needs the sed below when
+# building against SVT-AV1 >= 3.0.
+# FFmpeg 9.0.2 already handles this itself with an upstream guard:
+#   #if SVT_AV1_CHECK_VERSION(3, 0, 0)
+#       ... 2-arg call ...
+#   #else
+#       ... 3-arg call ...   <- line 496 in 9.0.2
+#   #endif
+# The sed must NOT run on a guarded file: it rewrites the #else
+# fallback too, so a build against SVT-AV1 < 3.0 (Debian trixie ships
+# libsvtav1enc-dev 2.3.0) then compiles the 2-arg call against the
+# 3-arg header and fails with "too few arguments to function
+# 'svt_av1_enc_init_handle'" at libsvtav1.c:496. Skip the patch when
+# the guard is present; upstream already does the right thing.
 needs_svtav1_api_patch() {
   [ -f libavcodec/libsvtav1.c ] && \
-    grep -q 'svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc,' libavcodec/libsvtav1.c
+    grep -q 'svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc,' libavcodec/libsvtav1.c && \
+    ! grep -Eq 'SVT_AV1_CHECK_VERSION\(3, *0, *0\)' libavcodec/libsvtav1.c
 }
 
 apply_svtav1_api_patch() {

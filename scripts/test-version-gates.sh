@@ -203,6 +203,27 @@ EOF
   assert "needs_svtav1_api_patch skips new API" 1 needs_svtav1_api_patch
 )
 
+# FFmpeg 9.0.2 already has the upstream guard, so the patch must not
+# run: it would rewrite the #else fallback (3-arg call, line 496) to
+# the 2-arg form, breaking builds against SVT-AV1 < 3.0 (trixie 2.3.0)
+# with "too few arguments to function 'svt_av1_enc_init_handle'".
+cat >"${TMPDIR}/ffmpeg/libavcodec/libsvtav1.c" <<'EOF'
+#if SVT_AV1_CHECK_VERSION(3, 0, 0)
+    svt_ret = svt_av1_enc_init_handle(&svt_enc->svt_handle, &svt_enc->enc_params);
+#else
+    svt_ret = svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc, &svt_enc->enc_params);
+#endif
+EOF
+(
+  cd "${TMPDIR}/ffmpeg"
+  assert "needs_svtav1_api_patch skips guarded FFmpeg 9.0.2" 1 needs_svtav1_api_patch
+  apply_svtav1_api_patch
+  grep -q 'svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc, &svt_enc->enc_params)' libavcodec/libsvtav1.c || {
+    echo "FAIL: apply_svtav1_api_patch rewrote the guarded #else fallback" >&2
+    exit 1
+  }
+)
+
 # ---- resolve-release-version.sh: reserved suffix + a-f cases ----
 # A suffixed TAG is <catalog>-<suffix>. If it equals an image-variant tag
 # of the bare catalog version, the release would overwrite that variant's
