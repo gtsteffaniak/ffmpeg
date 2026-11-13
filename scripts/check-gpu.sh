@@ -62,12 +62,12 @@ done
 ok "ldd shows libva/libvpl"
 if [ -n "$FFMPEG_BIN" ]; then
   if command -v ldconfig >/dev/null 2>&1; then
-    ldconfig -p | grep -q 'libvulkan\.so\.1' || fail "Vulkan loader libvulkan.so.1 not found (ldconfig -p)"
+    ldconfig -p | grep 'libvulkan\.so\.1' >/dev/null || fail "Vulkan loader libvulkan.so.1 not found (ldconfig -p)"
   else
     echo "NOTE: ldconfig not found; skipping Vulkan loader check for local binary"
   fi
 else
-  docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'ldconfig -p | grep -q libvulkan' || fail "Vulkan loader libvulkan.so.1 missing in image"
+  docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'ldconfig -p | grep libvulkan >/dev/null' || fail "Vulkan loader libvulkan.so.1 missing in image"
 fi
 ok "Vulkan loader present (dlopen path)"
 

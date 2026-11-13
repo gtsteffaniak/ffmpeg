@@ -107,6 +107,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libssl-dev \
   libepoxy-dev \
   libgl-dev \
+  xxd \
   && rm -rf /var/lib/apt/lists/*
 
 # --- NVIDIA (NVENC/NVDEC/CUDA) + AMD AMF headers ----------------------
@@ -347,6 +348,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /usr/local/bin/
 COPY --from=builder /usr/local/lib/ /usr/local/lib/
 COPY --from=builder /usr/local/share/ffmpeg/ /usr/local/share/ffmpeg/
+
+RUN ldconfig
 
 RUN ffmpeg -version && ffprobe -version
 
