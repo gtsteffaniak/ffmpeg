@@ -586,3 +586,153 @@ make info                     # Show configuration
 make help                     # Show all commands
 ```
 
+## Track G (GPU) vs Track S (static)
+
+This repo ships two additive tracks. Track S is the default static build described
+above; Track G is a parallel Debian image for x86_64 hardware acceleration.
+The static track keeps working untouched.
+
+| Track | Image | Base | Link model | Platforms | Published by |
+|---|---|---|---|---|---|
+| Track S (static) | `ffmpeg` | Alpine (scratch runtime) | `--enable-static`, no GPU shared libs | linux/amd64, linux/arm64 | `.github/workflows/release.yml` (push + dispatch) |
+| Track G (GPU, x86_64 only) | `ffmpeg` with `-gpu` tag | Debian Bookworm builder → `bookworm-slim` runtime | Mostly-static codecs + dynamic GPU glue (`libva`, `libvpl`, `libvulkan`, OpenCL, NVIDIA headers bundled by FFmpeg) | linux/amd64 only | `.github/workflows/gpu.yml` (`workflow_dispatch` only) |
+
+### Tags
+
+- `gtstef/ffmpeg:<version>` — Track S static, multi-arch
+- `gtstef/ffmpeg:<version>-gpu` — Track G Debian GPU image, **linux/amd64 only** (e.g. `9.0.2-gpu`)
+- `gtstef/ffmpeg:<version>-decode` — Track S decode-only (unchanged)
+
+Track G is **x86_64 only**. Raspberry Pi VAAPI / V4L2-M2M workflows use the
+static Alpine image (`Track S`), not the GPU image. Arm64 is intentionally
+not built for Track G.
+
+### Building Track G
+
+```bash
+# Local build (fetches sources, builds docker/dockerfile.gpu, runs smoke checks)
+./scripts/build-gpu.sh
+
+# Build + push
+PUSH=true ./scripts/build-gpu.sh
+
+# CI (manual workflow run, source of truth for published -gpu tags)
+#   .github/workflows/gpu.yml — workflow_dispatch ONLY, runs-on: ubuntu-latest
+#   fetch via make fetch-sources, buildx docker/dockerfile.gpu, check-gpu.sh,
+#   push gtstef/ffmpeg:<version>-gpu. No arm64, does not touch release.yml.
+```
+
+Version comes from `sources.json` `release.ffmpeg_version` (same catalog
+logic as `release.yml`).
+
+### Smoke checks
+
+`scripts/check-gpu.sh` asserts ldd shows `libva.so`/`libvpl.so`/`libvulkan.so`,
+`ffmpeg -hwaccels` contains `vaapi`/`cuda`/`vulkan`, `-encoders` contains
+`h264_nvenc`/`h264_vaapi`/`h264_vulkan`/`libx264`, and `-filters` contains
+`scale_vulkan`/`scale_vaapi`. Run it after a local build:
+
+```bash
+docker run --rm gtstef/ffmpeg:9.0.2-gpu -hwaccels | grep -E "vaapi|cuda|vulkan|opencl"
+./scripts/check-gpu.sh gtstef/ffmpeg:9.0.2-gpu
+```
+
+Device smoke tests need real hardware (not available on CI runners) and are
+manual:
+
+```bash
+# Intel/AMD VAAPI (need /dev/dri on host)
+docker run --rm --device=/dev/dri/renderD128 gtstef/ffmpeg:9.0.2-gpu \
+  -vaapi_device /dev/dri/renderD128 -f lavfi -i testsrc=size=640x480:rate=1 \
+  -c:v h264_vaapi -t 1 -f null -
+
+# NVIDIA NVENC (need NVIDIA toolkit on host)
+docker run --rm --gpus all gtstef/ffmpeg:9.0.2-gpu \
+  -f lavfi -i testsrc=size=640x480:rate=1 -c:v h264_nvenc -t 1 -f null -
+
+# Vulkan (need /dev/dri)
+docker run --rm gtstef/ffmpeg:9.0.2-gpu \
+  -f lavfi -i testsrc=size=640x480:rate=1 -vf format=nv12,hwupload -c:v h264_vulkan -t 1 -f null -
+```
+
+### Consumer: Filebrowser media image
+
+Filebrowser uses Track G as its media runtime base (see
+`gtsteffaniak/filebrowser` `_docker/Dockerfile.media`, which switches to
+`FROM gtstef/ffmpeg:<version>-gpu`). The Pi production setup stays on the
+static Alpine `Dockerfile`.
+
+### Compose snippets
+
+```yaml
+# Intel / AMD VAAPI (x86 host with /dev/dri/renderD128)
+services:
+  filebrowser:
+    image: filebrowser-media:latest
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    group_add:
+      - "122"  # render group GID — `getent group render` on the host
+    # no runtime: nvidia needed
+
+# NVIDIA NVENC/NVDEC (host needs NVIDIA driver + nvidia-container-toolkit)
+services:
+  filebrowser:
+    image: filebrowser-media:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,video,graphics
+    # or simpler: `docker run --gpus all` / `runtime: nvidia`
+
+# Pi 4 V4L2 — NOT this image; use the static Alpine Dockerfile
+# (h264_v4l2m2m via kernel V4L2, /dev/video10 or /dev/video11)
+```
+
+### Size
+
+Track G runtime is `debian:bookworm-slim` + GPU userspace + codec shared
+libs. The builder (`FROM debian:bookworm`) is discarded.
+
+| Image | Runtime base | Size (after first build) | Notes |
+|---|---|---|---|
+| `ffmpeg:<ver>-gpu` | `debian:bookworm-slim` | ~600–900 MB (estimate — fill from `docker images` after first CI build) | Includes mesa/va drivers + codec shared libs; builder discarded |
+| `ffmpeg:<ver>` (Track S) | scratch | ~30–70 MB (see `make info` / `docker images`) | Static, no drivers |
+
+After the first CI build, record the real size from `docker images
+gtstef/ffmpeg:<version>-gpu` here. The Bookworm Mesa (22.3) limitation is
+tracked as a follow-up trixie bump (see `.github/workflows/gpu.yml`).
+
+### Configure flags (Track G)
+
+`scripts/version-gates.sh` `build_gpu_configure_flags()` mirrors the Track S
+codec list and adds `--enable-vaapi --enable-libvpl --enable-libdrm
+--enable-vulkan --enable-opencl --enable-ffnvcodec --enable-nvenc
+--enable-nvdec --enable-cuvid --enable-amf --enable-v4l2-m2m`, reusing the
+same `append_if_supported()` / `needs_*()` helpers. It never emits
+`--enable-static` / `--disable-shared` / `--enable-shared`. Unit tests in
+`scripts/test-version-gates.sh` cover GPU flags plus codec parity
+(x264, x265, SVT-AV1, dav1d, aom, vpx, etc.).
+
+Codec `-dev` packages come from Bookworm. `libvmaf` is **not** in Bookworm
+main (only debian-multimedia) so the builder compiles it from the existing
+`src/vmaf-*` tarball when present; `libplacebo` is intentionally not
+enabled (Bookworm version is too old for FFmpeg 9's `>=7.351` requirement).
+
+### Verification
+
+```bash
+make test-version-gates   # version-gates + GPU flags (CI: ./scripts/test-version-gates.sh)
+./scripts/check-gpu.sh gtstef/ffmpeg:9.0.2-gpu   # after docker build (env smoke above)
+```
+
+If a codec is unavailable on Bookworm, the `append_if_supported()` pattern
+skips it instead of failing the build — mirror Track S behavior, do not
+fork the codec list.
+

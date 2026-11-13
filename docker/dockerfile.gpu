@@ -1,0 +1,210 @@
+# syntax=docker/dockerfile:1.4
+# Track G — Debian GPU FFmpeg (x86_64 only).
+#
+# Mostly-static codecs + dynamically-linked GPU glue (libva, libvpl,
+# libvulkan, OpenCL, NVIDIA ffnvcodec headers shipped by FFmpeg itself),
+# published as gtstef/ffmpeg:<ver>-gpu. Additive only: the Alpine static
+# track (Track S) in docker/dockerfile.* is untouched.
+#
+#   docker build -f docker/dockerfile.gpu --build-arg FFMPEG_VERSION=9.0.2 -t gtstef/ffmpeg:9.0.2-gpu .
+#
+# Known limitation (Bookworm): Mesa 22.3 is old for newest Intel
+# Arc / Arrow Lake; follow-up is a trixie bump. NVENC/NVDEC/AMF need
+# no extra apt headers — FFmpeg 9 bundles ffnvcodec/AMF headers.
+
+ARG DEBIAN_VERSION=bookworm
+
+FROM debian:${DEBIAN_VERSION} AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  build-essential \
+  yasm \
+  nasm \
+  cmake \
+  meson \
+  ninja-build \
+  pkg-config \
+  libtool \
+  autoconf \
+  automake \
+  git \
+  curl \
+  jq \
+  python3 \
+  ca-certificates \
+  linux-libc-dev \
+  libva-dev \
+  libva-drm-dev \
+  libdrm-dev \
+  libvulkan-dev \
+  spirv-headers \
+  glslang-dev \
+  glslang-tools \
+  ocl-icd-opencl-dev \
+  libvpl-dev \
+  libvdpau-dev \
+  libx264-dev \
+  libx265-dev \
+  libmp3lame-dev \
+  libdav1d-dev \
+  libaom-dev \
+  libvpx-dev \
+  libsvtav1-dev \
+  librav1e-dev \
+  libvorbis-dev \
+  libopus-dev \
+  libass-dev \
+  libfreetype-dev \
+  libfribidi-dev \
+  libharfbuzz-dev \
+  libfontconfig-dev \
+  libsoxr-dev \
+  libsnappy-dev \
+  libmysofa-dev \
+  libvidstab-dev \
+  libwebp-dev \
+  libopenjp2-7-dev \
+  libzimg-dev \
+  liblcms2-dev \
+  libxml2-dev \
+  libvo-amrwbenc-dev \
+  libbluray-dev \
+  libsrt-openssl-dev \
+  librubberband-dev \
+  libtwolame-dev \
+  libjxl-dev \
+  libgsm1-dev \
+  libogg-dev \
+  libpng-dev \
+  libjpeg62-turbo-dev \
+  zlib1g-dev \
+  libssl-dev \
+  libepoxy-dev \
+  libgl-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+# libvmaf is not in Bookworm main (only debian-multimedia). Build it
+# from the existing src/* tarball when present (same source as the
+# static track's docker/dockerfile.processing), static into /usr/local.
+# If src/vmaf-* is absent (e.g. a distro package is used instead),
+# build_gpu_configure_flags() still tries --enable-libvmaf via
+# append_if_supported() and skips cleanly when the .pc file is missing.
+COPY [ "src/vmaf-*", "./vmaf" ]
+RUN if [ -f vmaf/meson.build ]; then \
+  cd vmaf && \
+  meson setup build \
+    -Dbuildtype=release \
+    -Ddefault_library=static \
+    -Dbuilt_in_models=true \
+    -Denable_tests=false \
+    -Denable_docs=false \
+    -Dlibdir=lib \
+    && ninja -j"$(nproc)" -C build install \
+    && sed -i 's/-lvmaf /-lvmaf -lstdc++ /' /usr/local/lib/pkgconfig/libvmaf.pc \
+    && ldd /usr/local/lib/libvmaf.a >/dev/null 2>&1 || true; \
+  fi
+
+ARG FFMPEG_VERSION=9.0.2
+
+COPY scripts/version-gates.sh /tmp/version-gates.sh
+
+COPY [ "src/ffmpeg*", "./ffmpeg" ]
+RUN cd ffmpeg && \
+  . /tmp/version-gates.sh && \
+  apply_svtav1_api_patch && \
+  build_gpu_configure_flags ./configure "$FFMPEG_VERSION" "false" && \
+  echo "GPU configure flags: BASE_FLAGS=$BASE_FLAGS FEATURES=$FEATURES" && \
+  ./configure \
+    --prefix=/usr/local \
+    --pkg-config-flags="" \
+    --extra-cflags="-O3" \
+    --extra-cxxflags="-O3" \
+    --disable-ffplay \
+    --disable-doc \
+    --enable-gpl \
+    --enable-version3 \
+    --enable-nonfree \
+    --enable-openssl \
+    $BASE_FLAGS \
+    $FEATURES \
+  && make -j"$(nproc)" install \
+  && ffmpeg -version | head -1 \
+  && ldd /usr/local/bin/ffmpeg
+
+FROM debian:bookworm-slim AS runtime
+
+ENV DEBIAN_FRONTEND=noninteractive \
+  NVIDIA_VISIBLE_DEVICES=all \
+  NVIDIA_DRIVER_CAPABILITIES=compute,utility,video,graphics \
+  PATH="/usr/local/bin:$PATH"
+
+# Runtime libs: GPU userspace userspace drivers + codec shared libs
+# (Bookworm names). ldd in builder prints NEEDED entries; adjust this
+# list from that output when recording size.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  ca-certificates \
+  tzdata \
+  fonts-dejavu-core \
+  fontconfig \
+  libva2 \
+  libva-drm2 \
+  libdrm2 \
+  libvpl2 \
+  libvulkan1 \
+  mesa-va-drivers \
+  mesa-vulkan-drivers \
+  intel-media-va-driver \
+  libmfx1 \
+  ocl-icd-libopencl1 \
+  libdav1d7 \
+  libaom3 \
+  libvpx7 \
+  libsvtav1enc1 \
+  libsvtav1dec1 \
+  librav1e0 \
+  libx264-164 \
+  libx265-199 \
+  libmp3lame0 \
+  libvorbisenc2 \
+  libvorbis0a \
+  libopus0 \
+  libogg0 \
+  libass9 \
+  libfreetype6 \
+  libfribidi0 \
+  libharfbuzz0b \
+  libfontconfig1 \
+  libsoxr0 \
+  libsnappy1v5 \
+  libmysofa1 \
+  libvidstab1.1 \
+  libwebp7 \
+  libopenjp2-7 \
+  libzimg2 \
+  liblcms2-2 \
+  libxml2 \
+  libvo-amrwbenc0 \
+  libbluray2 \
+  libsrt1.5-openssl \
+  librubberband2 \
+  libtwolame0 \
+  libjxl0.7 \
+  libgsm1 \
+  libpng16-16 \
+  libjpeg62-turbo \
+  libepoxy0 \
+  libgl1 \
+  libstdc++6 \
+  && rm -rf /var/lib/apt/lists/* \
+  && ldconfig
+
+COPY --from=builder /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /usr/local/bin/
+COPY --from=builder /usr/local/lib/ /usr/local/lib/
+COPY --from=builder /usr/local/share/ffmpeg/ /usr/local/share/ffmpeg/
+
+RUN ffmpeg -version && ffprobe -version
+
+ENTRYPOINT ["/usr/local/bin/ffmpeg"]

@@ -1,0 +1,105 @@
+name: GPU
+
+# Track G — Debian GPU FFmpeg (x86_64 only).
+# One-off/manual workflow ("one-off process"): workflow_dispatch ONLY.
+# The static Track S in release.yml is untouched.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: FFmpeg version (default from sources.json release.ffmpeg_version)
+        required: false
+      push:
+        description: Push gtstef/ffmpeg:<version>-gpu (default true for manual runs)
+        required: false
+        type: boolean
+        default: true
+
+# Same explicit version queues; manual re-dispatch never cancels in-progress.
+concurrency:
+  group: gpu-${{ github.workflow }}-${{ github.event.inputs.version || github.run_id }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: docker.io/gtstef
+  IMAGE_NAME: ffmpeg
+
+jobs:
+  build-gpu:
+    name: Build + push GPU image (linux/amd64 only)
+    # NOTE (Bookworm Mesa limitation): Bookworm ships Mesa 22.3, which is old
+    # for newest Intel Arc / Arrow Lake iGPUs. Documented limitation for v1;
+    # follow-up is a trixie base bump. No arm64 build is offered here.
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/catalog/go.mod
+
+      - name: Resolve version
+        id: version
+        run: |
+          CATALOG_VERSION="$(go run -C tools/catalog . read release.ffmpeg_version)"
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            if [ "$VERSION" != "$CATALOG_VERSION" ]; then
+              echo "Manual version ${VERSION} does not match catalog ${CATALOG_VERSION}" >&2
+              echo "Update sources.json or release the catalog version." >&2
+              exit 1
+            fi
+          else
+            VERSION="$CATALOG_VERSION"
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "Could not determine FFMPEG_VERSION" >&2
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building GPU version ${VERSION} from ${{ github.ref_name }}"
+
+      - name: Verify release version
+        env:
+          FFMPEG_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          echo "FFMPEG_VERSION=${FFMPEG_VERSION}"
+          test -n "${FFMPEG_VERSION}"
+
+      - name: Fetch sources
+        env:
+          FFMPEG_VERSION: ${{ steps.version.outputs.version }}
+        run: make fetch-sources DECODE_ONLY=false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build GPU image (amd64 only)
+        env:
+          FFMPEG_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          IMAGE="${REGISTRY}/${IMAGE_NAME}:${FFMPEG_VERSION}-gpu"
+          echo "IMAGE=${IMAGE}" >> "$GITHUB_ENV"
+          docker buildx build \
+            --platform linux/amd64 \
+            -f docker/dockerfile.gpu \
+            --build-arg "FFMPEG_VERSION=${FFMPEG_VERSION}" \
+            -t "$IMAGE" \
+            --load \
+            .
+
+      - name: Smoke check
+        run: ./scripts/check-gpu.sh "$IMAGE"
+
+      - name: Push GPU image
+        if: ${{ github.event.inputs.push != 'false' }}
+        run: docker push "$IMAGE"

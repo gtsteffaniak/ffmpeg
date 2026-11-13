@@ -118,6 +118,74 @@ case "$BASE_FLAGS $FEATURES" in
 esac
 echo "OK: build_ffmpeg_configure_flags for 6.1.3"
 
+cat >"${TMPDIR}/configure-gpu" <<'EOF'
+#!/bin/sh
+echo "  --disable-doc"
+echo "  --enable-vaapi"
+echo "  --enable-libvpl"
+echo "  --enable-libdrm"
+echo "  --enable-vulkan"
+echo "  --enable-opencl"
+echo "  --enable-ffnvcodec"
+echo "  --enable-nvenc"
+echo "  --enable-nvdec"
+echo "  --enable-cuvid"
+echo "  --enable-amf"
+echo "  --enable-v4l2-m2m"
+echo "  --enable-libzimg"
+echo "  --enable-fontconfig"
+echo "  --enable-gray"
+echo "  --enable-iconv"
+echo "  --enable-lcms2"
+echo "  --enable-libxml2"
+echo "  --enable-libdav1d"
+echo "  --enable-libass"
+echo "  --enable-libfreetype"
+echo "  --enable-libfribidi"
+echo "  --enable-libharfbuzz"
+echo "  --enable-libsoxr"
+echo "  --enable-libsnappy"
+echo "  --enable-libvpx"
+echo "  --enable-libaom"
+echo "  --enable-libopenjpeg"
+echo "  --enable-libvorbis"
+echo "  --enable-libwebp"
+echo "  --enable-nonfree"
+echo "  --enable-libx264"
+echo "  --enable-librav1e"
+echo "  --enable-libsvtav1"
+echo "  --enable-libx265"
+echo "  --enable-libxeve"
+echo "  --enable-libxevd"
+echo "  --enable-libvvenc"
+echo "  --enable-libdavs2"
+echo "  --enable-libmysofa"
+echo "  --enable-libuavs3d"
+echo "  --enable-libvidstab"
+echo "  --enable-libvmaf"
+echo "  --enable-libvo-amrwbenc"
+echo "  --enable-libmp3lame"
+echo "  --enable-static"
+EOF
+chmod +x "${TMPDIR}/configure-gpu"
+
+build_gpu_configure_flags "${TMPDIR}/configure-gpu" "9.0.1" "false"
+case "$BASE_FLAGS $FEATURES" in
+  *"--enable-vaapi"*) ;;
+  *) echo "FAIL: GPU configure should enable vaapi" >&2; exit 1 ;;
+esac
+case "$BASE_FLAGS $FEATURES" in
+  *"--enable-static"*) echo "FAIL: GPU configure must not emit --enable-static" >&2; exit 1 ;;
+  *) ;;
+esac
+for _gpu_flag in --enable-libvpl --enable-vulkan --enable-opencl --enable-ffnvcodec --enable-nvenc --enable-nvdec --enable-amf --enable-libx264 --enable-libx265 --enable-libsvtav1 --enable-libdav1d; do
+  case "$BASE_FLAGS $FEATURES" in
+    *"$_gpu_flag"*) ;;
+    *) echo "FAIL: GPU configure should enable $_gpu_flag" >&2; exit 1 ;;
+  esac
+done
+echo "OK: build_gpu_configure_flags for 9.0.1"
+
 mkdir -p "${TMPDIR}/ffmpeg/libavcodec"
 cat >"${TMPDIR}/ffmpeg/libavcodec/libsvtav1.c" <<'EOF'
 svt_av1_enc_init_handle(&svt_enc->svt_handle, svt_enc, &svt_enc->enc_params);
