@@ -627,9 +627,18 @@ The GPU image is built on every release: `.github/workflows/release.yml`
 runs a `build-gpu` job (linux/amd64 only) alongside the static jobs,
 fetches sources, builds `docker/dockerfile.gpu`, runs
 `scripts/check-gpu.sh`, and pushes `gtstef/ffmpeg:<version>-gpu`. The
-`release` job then copies that tag to GHCR. A `workflow_dispatch` run
-must use the catalog version (enforced by `resolve-version`), otherwise
-the run fails.
+`release` job then copies that tag to GHCR.
+
+### Branch / pre-release runs (`tag_suffix`)
+
+A `workflow_dispatch` run can publish a suffixed tag without changing
+`sources.json`: pass `version` as `<catalog>-<suffix>` (e.g.
+`9.0.2-full-gpu`) or set the `tag_suffix` input (e.g. `full-gpu`, `rc1`).
+Sources still come from the catalog `release.ffmpeg_version`;
+`scripts/resolve-release-version.sh` resolves `version` + `tag` +
+`prerelease`, and suffixed runs are GitHub pre-releases (`make_latest`
+forced off). An explicit `version` that is neither the catalog version
+nor `<catalog>-<suffix>` fails, as does a mismatched `tag_suffix`.
 
 ### Smoke checks
 
