@@ -261,6 +261,8 @@ run_resolver_fail "resolve (d) suffix mismatch" "${RCATALOG}-full-gpu" "other" "
 run_resolver_fail "resolve (e) unknown version" "9.9.9" "" "does not match catalog"
 # (f) TAG_SUFFIX=-leading -> fails
 run_resolver_fail "resolve (f) leading hyphen suffix" "" "-leading" "must not start with a hyphen"
+# Multiline suffix must fail (would otherwise smuggle positional outputs)
+run_resolver_fail "resolve (g) multiline suffix" "" "$(printf 'rc1\nfalse')" "Invalid tag_suffix"
 # Reserved suffixes via tag_suffix must fail
 for _rs in gpu decode amd64 arm64 decode-amd64 decode-arm64; do
   run_resolver_fail "resolve reserved tag_suffix=$_rs" "" "$_rs" "collides with an image-variant tag"

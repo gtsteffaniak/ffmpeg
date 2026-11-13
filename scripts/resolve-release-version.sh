@@ -35,7 +35,9 @@ validate_tag_suffix() {
   case "$s" in
     -*) echo "tag_suffix must not start with a hyphen: ${s}" >&2; return 1 ;;
   esac
-  if ! printf '%s' "$s" | grep -Eq '^[0-9A-Za-z][0-9A-Za-z.-]*$'; then
+  # Validate the entire Bash string (not per-line like grep -Eq) so a
+  # multiline suffix cannot smuggle extra positional outputs.
+  if [[ ! "$s" =~ ^[0-9A-Za-z][0-9A-Za-z.-]*$ ]]; then
     echo "Invalid tag_suffix ${s}: use only [0-9A-Za-z.-] with no leading hyphen" >&2
     return 1
   fi
