@@ -255,6 +255,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # Runtime libs: GPU userspace drivers + codec shared libs.
 # GPU glue SONAMEs (libva.so.2, libvpl.so.2, libvulkan.so.1) are
 # expected by scripts/check-gpu.sh.
+# X11/VDPAU glue must be listed explicitly: ffmpeg links
+# libva-x11.so.2 and libvdpau.so.1 (plus libX11/libxcb/libXfixes),
+# which the builder resolves via libva-dev/libvdpau-dev but the slim
+# runtime image lacks. The loader only reports the first missing
+# SONAME, so list them all at once instead of one per rebuild.
 RUN apt-get update && apt-get install -y --no-install-recommends \
   ca-certificates \
   tzdata \
@@ -262,6 +267,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   fontconfig \
   libva2 \
   libva-drm2 \
+  libva-x11-2 \
+  libvdpau1 \
+  libx11-6 \
+  libxcb1 \
+  libx11-xcb1 \
+  libxcb-dri3-0 \
+  libxfixes3 \
+  libatomic1 \
   libdrm2 \
   libvpl2 \
   libvulkan1 \
@@ -317,6 +330,11 @@ COPY --from=builder /usr/local/lib/ /usr/local/lib/
 COPY --from=builder /usr/local/share/ffmpeg/ /usr/local/share/ffmpeg/
 
 RUN ldconfig
+
+# Fail fast with the full list of missing shared libs: ffmpeg -version
+# only reports the first missing SONAME, which turns each rebuild into
+# one library. ldd prints every "not found" entry at once.
+RUN if ldd /usr/local/bin/ffmpeg | grep -q "not found"; then ldd /usr/local/bin/ffmpeg; ldd /usr/local/bin/ffprobe; exit 1; fi
 
 RUN ffmpeg -version && ffprobe -version
 
