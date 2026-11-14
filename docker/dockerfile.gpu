@@ -123,6 +123,12 @@ RUN if [ -f vmaf/libvmaf/meson.build ]; then \
 
 # xeve, xevd, vvenc, davs2, uavs3d have no trixie -dev packages.
 # Build them from the src/* tarballs populated by fetch-sources.
+# xeve/xevd install shared libs (libxeve.so.0, libxevd.so.0) to
+# /usr/local/lib, so ldconfig must run after install: without it the
+# loader cache does not list them and ffmpeg fails at runtime with
+# "libxevd.so.0: cannot open shared object file" even though the
+# files exist. (The static .a lives in /usr/local/lib/xeve/,
+# hence the symlink below; the .so is directly in /usr/local/lib/.)
 
 COPY [ "src/xeve-*", "./xeve" ]
 RUN cd xeve && \
@@ -134,7 +140,8 @@ RUN cd xeve && \
     -DCMAKE_BUILD_TYPE=Release \
     .. && \
   make -j$(nproc) install && \
-  ln -s /usr/local/lib/xeve/libxeve.a /usr/local/lib/libxeve.a 2>/dev/null || true
+  (ln -s /usr/local/lib/xeve/libxeve.a /usr/local/lib/libxeve.a 2>/dev/null || true) && \
+  ldconfig
 
 COPY [ "src/xevd-*", "./xevd" ]
 RUN cd xevd && \
@@ -146,7 +153,8 @@ RUN cd xevd && \
     -DCMAKE_BUILD_TYPE=Release \
     .. && \
   make -j$(nproc) install && \
-  ln -s /usr/local/lib/xevd/libxevd.a /usr/local/lib/libxevd.a 2>/dev/null || true
+  (ln -s /usr/local/lib/xevd/libxevd.a /usr/local/lib/libxevd.a 2>/dev/null || true) && \
+  ldconfig
 
 COPY [ "src/vvenc-*", "./vvenc" ]
 # vvenc is C++ static: its .pc keeps -lstdc++ AND -lm in Libs.private
@@ -233,7 +241,8 @@ RUN cd ffmpeg && \
     $FEATURES \
   || (cat ffbuild/config.log; false) \
   && make -j"$(nproc)" install \
-  && ffmpeg -version | head -1 \
+  && ldconfig \
+  && ffmpeg -version \
   && ldd /usr/local/bin/ffmpeg
 
 FROM debian:trixie-slim AS runtime
@@ -283,6 +292,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libmysofa1 \
   libvidstab1.1 \
   libwebp7 \
+  libwebpmux3 \
   libopenjp2-7 \
   libzimg2 \
   liblcms2-2 \
