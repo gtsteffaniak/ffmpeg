@@ -1,12 +1,12 @@
 #!/bin/bash
-# check-gpu.sh — verify a Track G (Debian GPU) image exposes GPU features.
+# check-gpu.sh — verify a Debian GPU image exposes GPU features.
 #
 # Usage:
-#   ./scripts/check-gpu.sh [IMAGE]        # IMAGE defaults to gtstef/ffmpeg:9.0.2-gpu
-#   IMAGE=gtstef/ffmpeg:9.0.2-gpu ./scripts/check-gpu.sh
+#   ./scripts/check-gpu.sh [IMAGE]        # IMAGE defaults to gtstef/ffmpeg-gpu:9.0.2
+#   IMAGE=gtstef/ffmpeg-gpu:9.0.2 ./scripts/check-gpu.sh
 #
 # Runs against `docker run --rm <image>` (also works with a local
-# binary if FFMPEG_BIN is set). Asserts, per brief:
+# binary if FFMPEG_BIN is set). Asserts:
 #   ldd shows libva.so / libvpl.so (Vulkan is dlopen'd by FFmpeg 9,
 #   so its loader presence is checked separately, not via ldd)
 #   ffmpeg -hwaccels lists vaapi, cuda, vulkan (opencl where present)
@@ -16,7 +16,7 @@
 # are manual and documented in README.md — CI runners have no GPU.
 set -euo pipefail
 
-IMAGE="${1:-${IMAGE:-gtstef/ffmpeg:9.0.2-gpu}}"
+IMAGE="${1:-${IMAGE:-gtstef/ffmpeg-gpu:9.0.2}}"
 : "${FFMPEG_BIN:=}"
 
 fail() {
@@ -46,7 +46,7 @@ if [ -z "$FFMPEG_BIN" ]; then
   command -v docker >/dev/null 2>&1 || { echo "docker required for check-gpu.sh (or set FFMPEG_BIN to a local binary)" >&2; exit 1; }
 fi
 
-echo "== Track G smoke: $IMAGE =="
+echo "== GPU smoke: $IMAGE =="
 
 run_cmd -version | head -3 || fail "ffmpeg -version failed"
 ok "ffmpeg -version"
@@ -83,11 +83,12 @@ echo "$enc" | grep -q h264_nvenc || fail "-encoders missing h264_nvenc"
 echo "$enc" | grep -q h264_vaapi || fail "-encoders missing h264_vaapi"
 echo "$enc" | grep -q h264_vulkan || fail "-encoders missing h264_vulkan"
 echo "$enc" | grep -q libx264 || fail "-encoders missing libx264 (codec parity)"
-ok "-encoders has h264_nvenc/h264_vaapi/h264_vulkan/libx264"
+echo "$enc" | grep -q libvvenc || fail "-encoders missing libvvenc (GPU build must link static vvenc, needs -lm)"
+ok "-encoders has h264_nvenc/h264_vaapi/h264_vulkan/libx264/libvvenc"
 
 filt="$(run_cmd -hide_banner -filters)" || fail "-filters failed"
 echo "$filt" | grep -q scale_vulkan || fail "-filters missing scale_vulkan"
 echo "$filt" | grep -q scale_vaapi || fail "-filters missing scale_vaapi"
 ok "-filters has scale_vulkan/scale_vaapi"
 
-echo "All Track G checks passed"
+echo "All GPU checks passed"

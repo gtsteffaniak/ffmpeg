@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/catalog/go.mod
+      - name: Validate catalog
+        run: go run -C tools/catalog . validate
+      - name: Go tests
+        run: go test -C tools/catalog . -count=1
+      - name: Version gates
+        run: make test-version-gates
+      - name: Fetch validation
+        run: make test-fetch

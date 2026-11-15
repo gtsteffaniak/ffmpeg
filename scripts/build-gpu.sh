@@ -1,11 +1,15 @@
 #!/bin/bash
-# build-gpu.sh — local helper for Track G (Debian GPU FFmpeg, x86_64 only).
+# build-gpu.sh — local helper for the Debian GPU image (x86_64 only).
 #
-# Standalone: does not touch scripts/build.sh static orchestrator.
-#   ./scripts/build-gpu.sh                 # build gtstef/ffmpeg:<ver>-gpu locally
+#   ./scripts/build-gpu.sh                 # build gtstef/ffmpeg-gpu:<ver> locally
 #   PUSH=true ./scripts/build-gpu.sh       # build + push to docker.io/gtstef
-#   IMAGE=docker.io/gtstef/ffmpeg:9.0.2-gpu ./scripts/build-gpu.sh
+#   IMAGE=docker.io/gtstef/ffmpeg-gpu:9.0.2 ./scripts/build-gpu.sh
 #   FFMPEG_VERSION=9.0.2 ./scripts/build-gpu.sh
+#
+# The image version comes from sources.json (release.ffmpeg_version);
+# the Dockerfile reads it directly — no build args. Set FFMPEG_VERSION
+# here only to control which sources fetch-sources downloads and which
+# image tag to build locally; it must match the catalog.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,7 +17,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$REPO_ROOT"
 
 if ! command -v docker >/dev/null 2>&1; then
-  echo "docker is required for Track G builds" >&2
+  echo "docker is required for GPU image builds" >&2
   exit 1
 fi
 
@@ -29,12 +33,11 @@ export FFMPEG_VERSION
 echo "Fetching sources (FFMPEG_VERSION=$FFMPEG_VERSION, DECODE_ONLY=false)..."
 make fetch-sources DECODE_ONLY=false
 
-IMAGE="${IMAGE:-docker.io/gtstef/ffmpeg:${FFMPEG_VERSION}-gpu}"
-echo "Building Track G (Debian GPU, linux/amd64) -> $IMAGE (builder discarded; runtime trixie-slim (DEBIAN_VERSION arg in dockerfile.gpu, default trixie))"
+IMAGE="${IMAGE:-docker.io/gtstef/ffmpeg-gpu:${FFMPEG_VERSION}}"
+echo "Building GPU image (Debian trixie, linux/amd64) -> $IMAGE (builder discarded; runtime trixie-slim)"
 docker build \
   -f docker/dockerfile.gpu \
   --platform linux/amd64 \
-  --build-arg "FFMPEG_VERSION=${FFMPEG_VERSION}" \
   -t "$IMAGE" \
   .
 
@@ -47,4 +50,4 @@ if [ "${PUSH:-false}" = "true" ]; then
 fi
 
 echo "Done: $IMAGE"
-echo "  Track G is x86_64 only; Pi stays on the static Alpine track (Track S)."
+echo "  The GPU image is x86_64 only; Pi stays on the static Alpine image."
