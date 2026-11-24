@@ -95,7 +95,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # NVIDIA + AMD headers: FFmpeg 9 requires the external ffnvcodec
 # pkg-config package (>= 12.1.14.0) and AMF headers
 # (>= AMF 1.5.0.2.0.0). Install both header-only SDKs before configure.
-RUN git clone --depth 1 --branch n13.1.15.0 https://github.com/FFmpeg/nv-codec-headers /tmp/nv-codec-headers \
+#
+# nv-codec-headers is pinned to the NVENC API 13.0 line (n13.0.x, drivers
+# >= 570). The NVENC API version is baked into ffmpeg at build time: building
+# against n13.1.x makes h264_nvenc/hevc_nvenc fail at runtime on any driver
+# older than 610 with "Driver does not support the required nvenc API
+# version. Required: 13.1 Found: 13.0" (for example Windows driver 581.x on
+# WSL2). Only move this pin forward once drivers with the newer NVENC API
+# are widely deployed.
+RUN git clone --depth 1 --branch n13.0.19.1 https://github.com/FFmpeg/nv-codec-headers /tmp/nv-codec-headers \
   && make -C /tmp/nv-codec-headers install PREFIX=/usr/local \
   && git clone --depth 1 --branch v1.5.3 https://github.com/GPUOpen-LibrariesAndSDKs/AMF /tmp/AMF \
   && install -d /usr/local/include/AMF \
