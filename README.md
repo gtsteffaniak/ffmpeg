@@ -688,7 +688,7 @@ version`, even though `-encoders` lists it. `-encoders` only shows what was
 compiled in, so `check-gpu.sh` can optionally run a real NVENC encode:
 
 ```bash
-GPU_RUNTIME=1 ./scripts/check-gpu.sh gtstef/ffmpeg-gpu:9.0.2   # needs --gpus all capable host
+GPU_RUNTIME=1 ./scripts/check-gpu.sh gtstef/ffmpeg-gpu:9.1   # needs --gpus all capable host
 ```
 
 Device smoke tests need real hardware (not available on CI runners) and are
