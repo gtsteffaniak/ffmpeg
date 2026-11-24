@@ -1,6 +1,6 @@
 {
   "release": {
-    "ffmpeg_version": "9.0.2",
+    "ffmpeg_version": "9.1",
     "mark_github_latest": false
   },
   "build": {
@@ -12,7 +12,7 @@
       "id": "ffmpeg",
       "name": "FFmpeg",
       "enabled": true,
-      "version": "9.0.2",
+      "version": "9.1",
       "fetch": {
         "method": "archive",
         "url": "https://ffmpeg.org/releases/ffmpeg-{version}.tar.bz2",
@@ -490,7 +490,7 @@
       "id": "harfbuzz",
       "name": "harfbuzz",
       "enabled": true,
-      "version": "15.1.0",
+      "version": "15.2.0",
       "fetch": {
         "method": "archive",
         "url": "https://github.com/harfbuzz/harfbuzz/releases/download/{version}/harfbuzz-{version}.tar.xz",
