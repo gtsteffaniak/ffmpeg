@@ -91,4 +91,22 @@ echo "$filt" | grep -q scale_vulkan || fail "-filters missing scale_vulkan"
 echo "$filt" | grep -q scale_vaapi || fail "-filters missing scale_vaapi"
 ok "-filters has scale_vulkan/scale_vaapi"
 
+# Optional runtime NVENC check. -encoders only proves h264_nvenc was compiled
+# in; a build whose nv-codec-headers NVENC API is newer than the host driver
+# fails here with "Driver does not support the required nvenc API version".
+# Needs a host with an NVIDIA GPU and the NVIDIA container runtime, so it is
+# opt-in (CI runners have no GPU): GPU_RUNTIME=1 ./scripts/check-gpu.sh
+if [ "${GPU_RUNTIME:-0}" = "1" ]; then
+  if [ -n "$FFMPEG_BIN" ]; then
+    nv_out="$("$FFMPEG_BIN" -hide_banner -loglevel error -f lavfi -i testsrc=duration=1:size=640x360:rate=30 -c:v h264_nvenc -f null - 2>&1)" && nv_rc=0 || nv_rc=$?
+  else
+    nv_out="$(docker run --rm --gpus all "$IMAGE" -hide_banner -loglevel error -f lavfi -i testsrc=duration=1:size=640x360:rate=30 -c:v h264_nvenc -f null - 2>&1)" && nv_rc=0 || nv_rc=$?
+  fi
+  if echo "$nv_out" | grep -qi "required nvenc API version"; then
+    fail "h264_nvenc: host driver is older than the NVENC API this build requires (pin nv-codec-headers lower): $nv_out"
+  fi
+  [ "$nv_rc" -eq 0 ] || fail "h264_nvenc runtime encode failed (rc=$nv_rc): $nv_out"
+  ok "h264_nvenc runtime encode works"
+fi
+
 echo "All GPU checks passed"

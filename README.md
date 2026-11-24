@@ -680,6 +680,17 @@ docker run --rm gtstef/ffmpeg-gpu:9.0.2 -hwaccels | grep -E "vaapi|cuda|vulkan|o
 ./scripts/check-gpu.sh gtstef/ffmpeg-gpu:9.0.2
 ```
 
+NVENC driver requirement: `nv-codec-headers` is pinned to `n13.0.19.1`
+(NVENC API 13.0), so NVENC works with NVIDIA drivers 570 or newer. The API
+level is fixed at build time; headers newer than the host driver make
+`h264_nvenc` fail with `Driver does not support the required nvenc API
+version`, even though `-encoders` lists it. `-encoders` only shows what was
+compiled in, so `check-gpu.sh` can optionally run a real NVENC encode:
+
+```bash
+GPU_RUNTIME=1 ./scripts/check-gpu.sh gtstef/ffmpeg-gpu:9.1   # needs --gpus all capable host
+```
+
 Device smoke tests need real hardware (not available on CI runners) and are
 manual:
 
